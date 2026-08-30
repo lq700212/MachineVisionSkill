@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 备份/临时文件
+*.bak
+*.tmp
+*.log
+~$*
+
+# 运行时输出
+output/
