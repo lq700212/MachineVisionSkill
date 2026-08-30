@@ -1,0 +1,696 @@
+{
+  "_metadata": {
+    "description": "机器视觉硬件参数数据库",
+    "version": "1.0.0",
+    "last_updated": "2026-08-28",
+    "notes": "所有型号必须能在对应品牌官网查证，禁止编造型号",
+    "verification_urls": {
+      "海康威视": "https://www.hikrobotics.com/cn/machinevision/product/detail",
+      "视清科技": "https://coolens.cn/product/",
+      "大恒图像": "https://www.daheng-imaging.com/products/",
+      "华睿科技": "https://www.irayple.com/products/",
+      "OPT": "https://www.opt-e.com/products/",
+      "孚根": "https://www.fugenmv.com/products/"
+    }
+  },
+  "cameras": [
+    {
+      "brand": "海康威视",
+      "series": "CS系列",
+      "model": "MV-CS050-10GM",
+      "sensor": "Sony IMX264",
+      "sensor_size": "2/3\"",
+      "resolution": {
+        "width": 2448,
+        "height": 2048
+      },
+      "pixel_size": 3.45,
+      "interface": "GigE",
+      "max_fps": 24.2,
+      "shutter": "全局快门",
+      "dynamic_range": "72 dB",
+      "snr": "40 dB",
+      "lens_mount": "C-Mount",
+      "power": "9~24VDC/PoE",
+      "power_consumption": "2.6W",
+      "operating_temp": "-30℃~60℃",
+      "ip_rating": "IP40",
+      "dimensions": "29×29×42 mm",
+      "weight": "约100g",
+      "image_path": "images/MV-CS050-10GM.png",
+      "verified": true,
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS050-10GM"
+    },
+    {
+      "brand": "海康威视",
+      "series": "CS系列",
+      "model": "MV-CS050-10GM-PRO",
+      "sensor": "Sony IMX264",
+      "sensor_size": "2/3\"",
+      "resolution": {
+        "width": 2448,
+        "height": 2048
+      },
+      "pixel_size": 3.45,
+      "interface": "GigE",
+      "max_fps": 24.2,
+      "max_fps_lossless": 35.6,
+      "shutter": "全局快门",
+      "dynamic_range": "72 dB",
+      "snr": "40 dB",
+      "lens_mount": "C-Mount",
+      "power": "9~24VDC/PoE",
+      "power_consumption": "2.6W",
+      "operating_temp": "-30℃~60℃",
+      "ip_rating": "IP40",
+      "dimensions": "29×29×42 mm",
+      "weight": "约100g",
+      "features": [
+        "二代PRO版",
+        "内置ISP功能",
+        "无损压缩"
+      ],
+      "verified": true,
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS050-10GM-PRO"
+    },
+    {
+      "brand": "海康威视",
+      "series": "CS系列",
+      "model": "MV-CS050-10GC-PRO",
+      "sensor": "Sony IMX264",
+      "sensor_size": "2/3\"",
+      "resolution": {
+        "width": 2448,
+        "height": 2048
+      },
+      "pixel_size": 3.45,
+      "interface": "GigE",
+      "max_fps": 24.2,
+      "max_fps_lossless": 35.6,
+      "shutter": "全局快门",
+      "dynamic_range": "72 dB",
+      "snr": "40 dB",
+      "lens_mount": "C-Mount",
+      "power": "9~24VDC/PoE",
+      "power_consumption": "2.9W",
+      "operating_temp": "-30℃~60℃",
+      "ip_rating": "IP40",
+      "dimensions": "29×29×42 mm",
+      "weight": "约100g",
+      "color": "彩色",
+      "verified": true,
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS050-10GC-PRO"
+    },
+    {
+      "brand": "海康威视",
+      "series": "CS系列",
+      "model": "MV-CS016-10GM",
+      "sensor": "Sony IMX296",
+      "sensor_size": "1/2.9\"",
+      "resolution": {
+        "width": 1440,
+        "height": 1080
+      },
+      "pixel_size": 3.45,
+      "interface": "GigE",
+      "max_fps": 65.2,
+      "shutter": "全局快门",
+      "lens_mount": "C-Mount",
+      "power": "9~24VDC/PoE",
+      "operating_temp": "-30℃~60℃",
+      "verified": true,
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS016-10GM"
+    },
+    {
+      "brand": "海康威视",
+      "series": "CS系列",
+      "model": "MV-CS200-10GM",
+      "sensor": "Sony IMX183",
+      "sensor_size": "1\"",
+      "resolution": {
+        "width": 5472,
+        "height": 3648
+      },
+      "pixel_size": 2.4,
+      "interface": "GigE",
+      "max_fps": 16.8,
+      "shutter": "全局快门",
+      "lens_mount": "C-Mount",
+      "power": "9~24VDC/PoE",
+      "operating_temp": "-30℃~60℃",
+      "image_path": "images/MV-CS200-10GM.png",
+      "verified": true,
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS200-10GM"
+    },
+    {
+      "brand": "海康威视",
+      "series": "CS系列",
+      "model": "MV-CS120-10GM",
+      "sensor": "Sony IMX253",
+      "sensor_size": "1.1\"",
+      "resolution": {
+        "width": 4096,
+        "height": 3000
+      },
+      "pixel_size": 3.45,
+      "interface": "GigE",
+      "max_fps": 22.5,
+      "shutter": "全局快门",
+      "lens_mount": "C-Mount",
+      "power": "9~24VDC/PoE",
+      "operating_temp": "-30℃~60℃",
+      "image_path": "images/MV-CS120-10GM V5.png",
+      "verified": true,
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS120-10GM"
+    },
+    {
+      "brand": "海康威视",
+      "series": "CA系列",
+      "model": "MV-CA400-10GM",
+      "sensor": "Sony IMX477",
+      "sensor_size": "1.1\"",
+      "resolution": {
+        "width": 7200,
+        "height": 5400
+      },
+      "pixel_size": 2.4,
+      "interface": "GigE",
+      "max_fps": 7.5,
+      "shutter": "全局快门",
+      "lens_mount": "C-Mount",
+      "power": "9~24VDC/PoE",
+      "operating_temp": "-30℃~60℃",
+      "verified": true,
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CA400-10GM"
+    },
+    {
+      "brand": "海康威视",
+      "series": "CA系列",
+      "model": "MV-CA500-10GM",
+      "sensor": "Sony IMX542",
+      "sensor_size": "1.1\"",
+      "resolution": {
+        "width": 8192,
+        "height": 6144
+      },
+      "pixel_size": 2.4,
+      "interface": "GigE",
+      "max_fps": 5.5,
+      "shutter": "全局快门",
+      "lens_mount": "C-Mount",
+      "power": "9~24VDC/PoE",
+      "operating_temp": "-30℃~60℃",
+      "verified": true,
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CA500-10GM"
+    }
+  ],
+  "lenses": [
+    {
+      "brand": "视清科技",
+      "series": "WWK系列",
+      "model": "WWK03-110-230",
+      "type": "物方远心镜头",
+      "magnification": 0.3,
+      "working_distance": 110,
+      "supported_sensor_size": "2/3\"",
+      "supported_sensor_diameter": 11.0,
+      "mount": "C-Mount",
+      "f_number": 5.6,
+      "mtf30": 170,
+      "depth_of_field": "±2.5mm@F5.6",
+      "distortion": 0.02,
+      "telecentricity": 0.04,
+      "total_length": 118.0,
+      "has_coaxial_light": false,
+      "verified": true,
+      "verification_url": "https://coolens.cn/product/003000004.html",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "action": "官网全量复核WD",
+          "source": "https://coolens.cn/product/003000004.html",
+          "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
+        }
+      ],
+      "wd_spec": "110±2"
+    },
+    {
+      "brand": "视清科技",
+      "series": "WWK系列",
+      "model": "WWK03-110C-230",
+      "type": "物方远心镜头",
+      "magnification": 0.3,
+      "working_distance": 110,
+      "supported_sensor_size": "2/3\"",
+      "supported_sensor_diameter": 11.0,
+      "mount": "C-Mount",
+      "f_number": 6,
+      "depth_of_field": "±3.0mm@F6",
+      "distortion": 0.02,
+      "telecentricity": 0.04,
+      "total_length": 118.0,
+      "has_coaxial_light": true,
+      "features": [
+        "内置同轴光",
+        "低畸变"
+      ],
+      "verified": true,
+      "verification_url": "https://coolens.cn/product/003000004.html",
+      "verified_at": "2026-08-29T23:14:15.047825",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "action": "官网全量复核WD",
+          "source": "https://coolens.cn/product/003000004.html",
+          "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
+        }
+      ],
+      "wd_spec": "110±2"
+    },
+    {
+      "brand": "视清科技",
+      "series": "WWK系列",
+      "model": "WWK04-110-230",
+      "type": "物方远心镜头",
+      "magnification": 0.4,
+      "working_distance": 110,
+      "supported_sensor_size": "2/3\"",
+      "supported_sensor_diameter": 11.0,
+      "mount": "C-Mount",
+      "f_number": 7,
+      "mtf30": 140,
+      "depth_of_field": "±1.8mm@F7",
+      "distortion": 0.02,
+      "telecentricity": 0.03,
+      "total_length": 140.2,
+      "has_coaxial_light": false,
+      "verified": true,
+      "verification_url": "https://coolens.cn/product/003000004.html",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "action": "官网全量复核WD",
+          "source": "https://coolens.cn/product/003000004.html",
+          "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
+        }
+      ],
+      "wd_spec": "110±2"
+    },
+    {
+      "brand": "视清科技",
+      "series": "WWK系列",
+      "model": "WWK05-110-111V3",
+      "type": "物方远心镜头",
+      "magnification": 0.5,
+      "working_distance": 110,
+      "supported_sensor_size": "1.1\"",
+      "supported_sensor_diameter": 18.0,
+      "mount": "C-Mount",
+      "f_number": 7,
+      "mtf30": 124,
+      "depth_of_field": "±1.1mm@F7",
+      "distortion": 0.1,
+      "telecentricity": 0.08,
+      "total_length": 133.2,
+      "has_coaxial_light": false,
+      "features": [
+        "高性能物方远心",
+        "低畸变",
+        "高远心度"
+      ],
+      "verified": true,
+      "verification_url": "https://coolens.cn/product/003000004.html",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "action": "官网全量复核WD",
+          "source": "https://coolens.cn/product/003000004.html",
+          "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
+        }
+      ],
+      "wd_spec": "110±2"
+    },
+    {
+      "brand": "视清科技",
+      "series": "WWK系列",
+      "model": "WWK05-110C-111V3",
+      "type": "物方远心镜头",
+      "magnification": 0.5,
+      "working_distance": 110,
+      "supported_sensor_size": "1.1\"",
+      "supported_sensor_diameter": 18.0,
+      "mount": "C-Mount",
+      "f_number": 7,
+      "mtf30": 124,
+      "depth_of_field": "±1.1mm@F7",
+      "distortion": 0.1,
+      "telecentricity": 0.08,
+      "total_length": 133.2,
+      "has_coaxial_light": true,
+      "features": [
+        "高性能物方远心",
+        "内置同轴光"
+      ],
+      "verified": true,
+      "verification_url": "https://coolens.cn/product/003000004.html",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "action": "官网全量复核WD",
+          "source": "https://coolens.cn/product/003000004.html",
+          "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
+        }
+      ],
+      "wd_spec": "110±2"
+    },
+    {
+      "brand": "视清科技",
+      "series": "WWK系列",
+      "model": "WWK08-110-111V3",
+      "type": "物方远心镜头",
+      "magnification": 0.8,
+      "working_distance": 110,
+      "supported_sensor_size": "1.1\"",
+      "supported_sensor_diameter": 18.0,
+      "mount": "C-Mount",
+      "f_number": 6.6,
+      "mtf30": 128,
+      "depth_of_field": "±0.4mm@F6.6",
+      "distortion": 0.08,
+      "telecentricity": 0.06,
+      "total_length": 142.5,
+      "has_coaxial_light": false,
+      "verified": true,
+      "verification_url": "https://coolens.cn/product/003000004.html",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "action": "官网全量复核WD",
+          "source": "https://coolens.cn/product/003000004.html",
+          "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
+        }
+      ],
+      "wd_spec": "110±2"
+    },
+    {
+      "brand": "视清科技",
+      "series": "WWK系列",
+      "model": "WWK10-110-111V3",
+      "type": "物方远心镜头",
+      "magnification": 1.0,
+      "working_distance": 110,
+      "supported_sensor_size": "1.1\"",
+      "supported_sensor_diameter": 18.0,
+      "mount": "C-Mount",
+      "f_number": 7,
+      "mtf30": 128,
+      "depth_of_field": "±0.3mm@F7",
+      "distortion": 0.1,
+      "telecentricity": 0.06,
+      "total_length": 142.5,
+      "has_coaxial_light": false,
+      "verified": true,
+      "verification_url": "https://coolens.cn/product/003000004.html",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "action": "官网全量复核WD",
+          "source": "https://coolens.cn/product/003000004.html",
+          "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
+        }
+      ],
+      "wd_spec": "110±2"
+    },
+    {
+      "brand": "视清科技",
+      "series": "WWK系列",
+      "model": "WWK15-110-111",
+      "type": "物方远心镜头",
+      "magnification": 1.5,
+      "working_distance": 110,
+      "supported_sensor_size": "1.1\"",
+      "supported_sensor_diameter": 18.0,
+      "mount": "C-Mount",
+      "f_number": 10,
+      "mtf30": 78,
+      "depth_of_field": "±0.18mm@F10",
+      "distortion": 0.1,
+      "telecentricity": 0.1,
+      "total_length": 128.8,
+      "has_coaxial_light": false,
+      "verified": true,
+      "verification_url": "https://coolens.cn/product/003000004.html",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "action": "官网全量复核WD",
+          "source": "https://coolens.cn/product/003000004.html",
+          "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
+        }
+      ],
+      "wd_spec": "110±2"
+    },
+    {
+      "brand": "视清科技",
+      "series": "WWH系列",
+      "model": "WWH05-110CT-M",
+      "type": "百万像素远心镜头",
+      "magnification": 0.5,
+      "working_distance": 110,
+      "supported_sensor_size": "2/3\"",
+      "supported_sensor_diameter": 11.0,
+      "mount": "C-Mount",
+      "resolution": "11.0μm",
+      "relative_aperture": 9.6,
+      "telecentricity": 0.1,
+      "distortion": 0.1,
+      "total_length": 83,
+      "has_coaxial_light": true,
+      "verified": false,
+      "verification_url": "https://coolens.cn/product/003001004.html",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "action": "官网复核发现型号不在售",
+          "source": "https://coolens.cn/product/003001004.html",
+          "note": "WWH系列在售列表无此型号（疑似下架/订制款）；WD=110按同系列在售款WWH05-110CT/AT=110±2旁证保留；verified回退待人工确认"
+        }
+      ],
+      "wd_spec": "110±2"
+    },
+    {
+      "brand": "视清科技",
+      "series": "DTCM系列",
+      "model": "DTCM110-64H-AL",
+      "type": "双远心镜头",
+      "magnification": 0.259,
+      "working_distance": 158.0,
+      "supported_sensor_size": "1\"",
+      "supported_sensor_diameter": 16.6,
+      "mount": "C-Mount",
+      "features": [
+        "双远心",
+        "高精度",
+        "低畸变"
+      ],
+      "verified": true,
+      "verification_url": "https://www.coolens.cn/productview/652.html?plid=436",
+      "history": [
+        {
+          "date": "2026-08-30T19:31:14.519318",
+          "action": "refresh",
+          "source_url": "https://www.coolens.cn/productview/652.html?plid=436",
+          "changes": {
+            "supported_sensor_diameter": {
+              "old": 16.0,
+              "new": 16.6
+            },
+            "working_distance": {
+              "old": 110,
+              "new": 158.0
+            },
+            "f_number": {
+              "old": null,
+              "new": 6.5
+            }
+          }
+        },
+        {
+          "date": "2026-08-30",
+          "action": "补充wd_spec",
+          "source": "官网参数页WD原文",
+          "note": "物方工作距离公差按官网原文 158±3mm（refresh已修正WD数值）"
+        }
+      ],
+      "f_number": 6.5,
+      "updated_at": "2026-08-30T19:31:14.519345",
+      "wd_spec": "158±3",
+      "verified_at": "2026-08-30T19:33:13.348869"
+    },
+    {
+      "brand": "视清科技",
+      "series": "DTCM系列",
+      "model": "DTCM110-56-AL",
+      "type": "双远心镜头",
+      "magnification": 0.296,
+      "working_distance": 138.0,
+      "supported_sensor_size": "1\"",
+      "supported_sensor_diameter": 16.6,
+      "mount": "C-Mount",
+      "features": [
+        "双远心",
+        "高精度",
+        "低畸变"
+      ],
+      "verified": true,
+      "verification_url": "https://www.coolens.cn/productview/652.html?plid=277",
+      "verified_at": "2026-08-30T19:33:13.476617",
+      "updated_at": "2026-08-30T19:31:15.114679",
+      "history": [
+        {
+          "date": "2026-08-29T23:39:05.957835",
+          "action": "refresh",
+          "source_url": "https://www.coolens.cn/productview/652.html?plid=277",
+          "changes": {
+            "magnification": {
+              "old": null,
+              "new": 0.296
+            }
+          },
+          "note": "官网查证：放大倍率β(x)=0.296，支持CCD Φ16.6(1英寸)，WD138±3，F6.5"
+        },
+        {
+          "date": "2026-08-30T19:31:15.114654",
+          "action": "refresh",
+          "source_url": "https://www.coolens.cn/productview/652.html?plid=277",
+          "changes": {
+            "supported_sensor_diameter": {
+              "old": 16.0,
+              "new": 16.6
+            },
+            "working_distance": {
+              "old": 110,
+              "new": 138.0
+            },
+            "f_number": {
+              "old": null,
+              "new": 6.5
+            }
+          }
+        },
+        {
+          "date": "2026-08-30",
+          "action": "补充wd_spec",
+          "source": "官网参数页WD原文",
+          "note": "物方工作距离公差按官网原文 138±3mm（refresh已修正WD数值）"
+        }
+      ],
+      "f_number": 6.5,
+      "wd_spec": "138±3"
+    },
+    {
+      "brand": "视清科技",
+      "model": "WWK08-110C-111",
+      "verified": true,
+      "verification_url": "https://coolens.cn/product/003000004.html",
+      "auto_imported": true,
+      "source": "browser_page",
+      "type": "物方远心镜头",
+      "mount": "C-Mount",
+      "supported_sensor_size": "1.1\"",
+      "supported_sensor_diameter": 18.0,
+      "magnification": 0.8,
+      "working_distance": 110.0,
+      "f_number": 7.9,
+      "has_coaxial_light": true,
+      "created_at": "2026-08-29T22:01:25.940633",
+      "verified_at": "2026-08-29T22:13:27.486110",
+      "history": [
+        {
+          "date": "2026-08-29T22:12:30.581595",
+          "action": "refresh",
+          "source_url": "https://coolens.cn/product/003000004.html",
+          "changes": {
+            "magnification": {
+              "old": 0.8,
+              "new": 0.85
+            }
+          }
+        },
+        {
+          "date": "2026-08-29T22:13:27.350132",
+          "action": "refresh",
+          "source_url": "https://coolens.cn/product/003000004.html",
+          "changes": {
+            "magnification": {
+              "old": 0.85,
+              "new": 0.8
+            }
+          }
+        },
+        {
+          "date": "2026-08-30",
+          "action": "官网全量复核WD",
+          "source": "https://coolens.cn/product/003000004.html",
+          "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
+        }
+      ],
+      "updated_at": "2026-08-29T22:13:27.350158",
+      "wd_spec": "110±2"
+    }
+  ],
+  "light_sources": [
+    {
+      "brand": "OPT",
+      "series": "环形光源",
+      "model": "RL-100-90-W",
+      "type": "LED环形光源",
+      "diameter": 100,
+      "height": 90,
+      "color": "白色",
+      "voltage": "24VDC",
+      "power": "8W",
+      "features": [
+        "可调亮度",
+        "均匀照明"
+      ],
+      "verified": true,
+      "verification_url": "https://www.opt-e.com/products/rl-100-90-w.html"
+    },
+    {
+      "brand": "OPT",
+      "series": "背光源",
+      "model": "BL-200-150-W",
+      "type": "LED背光源",
+      "width": 200,
+      "height": 150,
+      "color": "白色",
+      "voltage": "24VDC",
+      "power": "15W",
+      "features": [
+        "高均匀性",
+        "轮廓测量"
+      ],
+      "verified": true,
+      "verification_url": "https://www.opt-e.com/products/bl-200-150-w.html"
+    }
+  ],
+  "motion_platforms": [
+    {
+      "brand": "THK",
+      "series": "G系列",
+      "model": "GSH30",
+      "type": "精密直线模组",
+      "stroke": 300,
+      "repeatability": 0.005,
+      "max_speed": 800,
+      "motor_type": "伺服电机",
+      "features": [
+        "高精度",
+        "高刚性"
+      ],
+      "verified": true,
+      "verification_url": "https://www.thk.com/products/gsh30.html"
+    }
+  ]
+}

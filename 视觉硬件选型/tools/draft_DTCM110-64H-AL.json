@@ -1,0 +1,18 @@
+{
+  "category": "lenses",
+  "entry": {
+    "brand": "视清科技",
+    "model": "DTCM110-64H-AL",
+    "type": "物方远心镜头",
+    "mount": "C-Mount",
+    "verified": false,
+    "verification_url": "https://www.coolens.cn/productview/652.html?plid=436",
+    "auto_imported": true,
+    "verification_note": "脚本自动抓取自官网（静态快抓），参数需复核后 verify",
+    "magnification": 0.259,
+    "supported_sensor_diameter": 16.6,
+    "working_distance": 158.0,
+    "f_number": 6.5,
+    "supported_sensor_size": "Φ16.6mm"
+  }
+}

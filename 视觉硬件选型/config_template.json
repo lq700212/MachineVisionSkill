@@ -1,0 +1,22 @@
+{
+  "_说明": "视觉方案需求登记模板（从0场景）。把本文件复制为 project_config.json，把 null 换成真实值后运行：python vision_proposal_generator.py --config project_config.json --auto --output output 。所有字段值必须来自用户资料或用户确认，禁止编造；缺什么跑一次脚本会精确提示缺什么。template 可省略（自动扫描工作目录模板）。",
+
+  "_字段1_精度口径_三选一决策": "【决策表，按优先级】(1) 用户/合同明确给出设备精度（如≤0.012mm）→ 填 precision_requirement；(2) 只有图纸公差（如38.50±0.25）→ 填 tolerance，系统按公差/10自动反推精度；(3) 用户口头放宽（如'按0.03做'）→ 以用户最新口径为准填 precision_requirement。precision_requirement 与 tolerance 同时给时 precision_requirement 优先。不要自己发明口径，不确定时问用户。【单位铁律】precision_requirement 的单位是毫米（设备检测精度/总误差，如 0.03mm），不是像素精度(mm/pixel)！像素精度上限=precision_requirement÷pixel_per_precision（0.03÷3=0.01mm/pixel）。用户说'像素精度是X mm/pixel'时才按像素级口径处理。把设备精度数值直接填成像素精度会差3倍导致选型无解。",
+
+  "_字段2_尺寸": "工件尺寸 part_size（整体外形，系统×fov_margin余量）、检测区域 detection_area（只需检测的部分，推荐，视野更小成本更低）、field_of_view 直接给最终视野（不加余量）。三选一，格式如 '90x25x25' 或 '38.5x22'。检测视野决定相机像素需求，务必来自资料或用户确认，不要拍脑袋。",
+
+  "_字段3_pixel_per_precision": "亚像素因子，保持 3.0。禁止为了凑出选型解而改小此值——选型无解时按 SKILL.md『防死循环铁律』处理（核对口径、向用户确认），不是调参数。",
+
+  "_字段4_cycle_time": "节拍要求（秒）。必须来自用户/合同，不要默认。",
+
+  "project_name": null,
+  "precision_requirement": null,
+  "tolerance": null,
+  "cycle_time": null,
+  "detection_area": null,
+  "part_size": null,
+  "fov_margin": 1.2,
+  "pixel_per_precision": 3.0,
+  "detection_items": [],
+  "template": null
+}
