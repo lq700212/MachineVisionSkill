@@ -301,6 +301,41 @@ python tools/generate_ppt.py --template 模板.pptx --output 输出.pptx \
 4. 视野数值使用相机+镜头闭环计算的实际视野，与像素精度自洽
 5. 已知限制：模板"方案设计"页（多视角混排描述）不做替换，避免跨视角误改
 
+## 相机产品图与效果预览（fetch_product_image.py）
+
+选型相机缺官网产品图时主流程会自动补图（失败仅WARN不阻断）；也可手动操作：
+
+```bash
+# 为指定相机取官网图（库/本地已有则复用，--force 强制重取；基础版不在售时报错并列出在售变体）
+python tools/fetch_product_image.py fetch --brand 海康威视 --model MV-CS050-10GM
+# 库内缺图相机逐个补图
+python tools/fetch_product_image.py batch
+# 效果预览（高频）：把方案PPT里的相机产品图换成指定型号官网图 → 产出 *_相机图预览_*.pptx，绝不动原文件
+python tools/fetch_product_image.py replace --pptx 方案.pptx --model MV-CS060-10GM \
+  --brand 海康威视 --auto_variant --export
+# 硬件页三件套（高频）：相机+镜头+光源产品图按选型结果全部替换，一条命令
+python tools/fetch_product_image.py replace --pptx 方案.pptx --all_parts --export
+# 部件类型图资产管理（用户新增图后实时建立关联，不改代码）
+python tools/fetch_product_image.py map --list
+python tools/fetch_product_image.py map --migrate
+python tools/fetch_product_image.py map --add 条光 --alias 条形光 --alias 条形光源
+```
+
+- 旧图定位自动读PPT同目录 `selection_result.json` 的选型相机；也可 `--old-model 型号` 或 `--old-image 旧图.png` 指定
+- `--auto_variant`：用户报的型号官网不在售（如基础版下架只剩 -PRO/V5）时自动改用主推变体（-PRO > V5）；不加则诚实报错列出变体清单转人工
+- `--image 横幅.png` 可跳过官网取图直接指定图文件；`--export` 替换后自动导出页面图到同目录 `preview_check\`
+- **三件套图源约定（三级匹配）**：相机走官网API自动取图；镜头/光源——
+  ① 库条目 `image_path` 显式映射 ② 型号图 `images/{型号}.png`
+  ③ **类型图** `assets/part_images/`（用户中文命名资产如 `远心镜头.png`/`条光.png`，
+  与选型 type 互包含或别名命中即自动关联，同类型共享代表图；内置常用光源/镜头
+  别名，`aliases.json` 可扩展，`map --migrate` 把旧类型图从 images/ 一键搬来）。
+  缺图部件 WARN 跳过并提示 `map --add` 登记，绝不就近猜图
+- **用户新增类型图**：图放进 `assets/part_images/`（中文命名）即自动参与匹配；
+  type 写法对不上时登记别名：`map --add 条光 --alias 条形光源`（立即生效）
+- `--part lens|light|camera` 只替换单件
+- 0处替换（旧图对不上/锚定不到）→ 诚实报错并列出各页图片清单，禁止瞎猜
+- 预览件仅换图：页面文字仍是原选型内容，不可当作正式方案交付（换型号须重新走选型链）
+
 ## 硬件数据库
 `config/hardware_database.json`：海康威视相机（CS/CA系列）、视清科技远心镜头（WWK/WWH/DTCM系列，倍率0.3~1.5x）、OPT光源。所有型号带 verified 标记与官网链接，**扩展数据库时必须用官网可查证的型号**。
 

@@ -169,6 +169,7 @@ class VisionProposalGenerator:
             print("  下一步: 将模板PPT放到工作目录后用同一命令重跑，自动生成方案PPT")
             return 'SELECTION_ONLY'
 
+        self._ensure_camera_image(selection_result)
         ppt_path = generate_ppt(
             template_path=self.template_ppt,
             output_path=output_path,
@@ -359,6 +360,7 @@ class VisionProposalGenerator:
             print("  下一步: 将模板PPT放到工作目录后用同一命令重跑，自动生成方案PPT")
             return 'SELECTION_ONLY'
 
+        self._ensure_camera_image(selection_result)
         ppt_path = generate_ppt(
             template_path=self.template_ppt,
             output_path=output_path,
@@ -520,8 +522,14 @@ class VisionProposalGenerator:
         validated.pop('pixel_size', None)
         validated.pop('magnification', None)
 
-        # 根据公差计算精度
-        if 'tolerance' in validated and validated['tolerance'] is not None:
+        # 精度口径决策（config_template 决策表：precision_requirement 与 tolerance
+        # 同时给时 precision_requirement 优先——用户/合同明确精度不被图纸公差覆盖；
+        # 仅当无明确精度时才按公差/10反推）
+        if validated.get('precision_requirement') is not None:
+            if validated.get('tolerance') is not None:
+                print(f"  [精度口径] precision_requirement 优先（口径决策表），"
+                      f"忽略 tolerance={validated['tolerance']}")
+        elif validated.get('tolerance') is not None:
             tolerance = validated['tolerance']
             print(f"\n  [精度计算] 根据公差反推检测精度")
             precision_result = self.calculator.recommend_precision_from_tolerance(tolerance)
@@ -1096,12 +1104,41 @@ class VisionProposalGenerator:
         
         return algorithm
 
+    def _ensure_camera_image(self, selection: Dict):
+        """选型相机缺官方产品图时自动从官网补图（失败仅WARN，不阻断PPT生成）"""
+        camera = (selection or {}).get('camera') or {}
+        model = camera.get('model')
+        if not model:
+            return
+        img = camera.get('image_path') or ''
+        img_path = img if os.path.isabs(img) else (
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), img)
+            if img else '')
+        if img_path and os.path.exists(img_path):
+            return  # 产品图已在位
+        print(f"\n[自动补图] 相机 {model} 缺产品图，尝试从官网获取...")
+        try:
+            from fetch_product_image import fetch_camera_image, SKILL_DIR
+            r = fetch_camera_image(camera.get('brand', ''), model)
+            if r.get('ok'):
+                camera['image_path'] = os.path.relpath(r['image_path'], SKILL_DIR).replace(os.sep, '/')
+                print(f"  补图成功: {camera['image_path']}")
+            else:
+                print(f"  [WARN] 补图失败（不阻断，硬件页将无产品图）: {r.get('message')}")
+        except Exception as e:  # noqa: BLE001 - 补图是增益步骤，任何异常不阻断主流程
+            print(f"  [WARN] 补图异常（不阻断）: {e}")
+
     def _run_acceptance(self, ppt_path: str, output_dir: str):
         """生成后自动验收：规则自查 + 渲染导出（把AI临场验收行为固化为脚本）"""
         if getattr(self, 'no_verify', False):
             print("\n[验收] 已按要求跳过（--no_verify）")
             return
         tools_dir = os.path.dirname(os.path.abspath(__file__))
+        # 子进程以 tools_dir 为 cwd，其内部对路径做 abspath——相对路径（如
+        # --output output）会错位到 tools\output，必须先归一为绝对路径
+        ppt_path = os.path.abspath(ppt_path)
+        if output_dir:
+            output_dir = os.path.abspath(output_dir)
         report_path = os.path.join(output_dir or os.path.dirname(ppt_path),
                                    'acceptance_report.txt')
         print("\n" + "=" * 60)

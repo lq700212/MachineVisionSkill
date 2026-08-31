@@ -208,7 +208,12 @@ class UserDataParser:
         precision = self._extract_precision(text)
         if precision:
             params['precision_requirement'] = precision
-        
+
+        # 提取图纸公差（±X，如 38.50±0.25；无明确精度时按公差/10反推）
+        tolerance = self._extract_tolerance(text)
+        if tolerance is not None:
+            params['tolerance'] = tolerance
+
         # 提取节拍要求
         cycle_time = self._extract_cycle_time(text)
         if cycle_time:
@@ -241,6 +246,15 @@ class UserDataParser:
         
         return params
     
+    def _extract_tolerance(self, text: str) -> Optional[float]:
+        """提取图纸公差（±X 形式，如 38.50±0.25 / ±0.25mm；系统按公差/10反推精度）"""
+        match = re.search(r'±\s*([0-9]+(?:\.[0-9]+)?)', text)
+        if match:
+            value = float(match.group(1))
+            if value > 0:
+                return value
+        return None
+
     def _extract_precision(self, text: str) -> Optional[float]:
         """提取精度要求"""
         patterns = [

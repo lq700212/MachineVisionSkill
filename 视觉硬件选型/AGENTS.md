@@ -22,6 +22,9 @@
    - 回归测试：正常链路跑通（FAIL=0）
    - 注入测试：把历史缺陷手工注入（旧型号残留/串行参数/超长文本/物理不可能WD），
      确认机检/核验能检出，再还原
+   - 标准动作：跑专用测试套件 `视觉选型测试`（一条命令全量回归+注入，
+     22用例）：python "C:/Users/Administrator/.config/opencode/skills/视觉选型测试/tests/run_all.py"
+     ——修任何 bug 后必须在此套件补对应回归用例再修到全绿
 4. **字段语义必须写在代码注释+本文档**（曾犯：lens_wd=系统工作距离基准这个语义
    只在代码里，导致"相机工作距离"被质疑时无法快速自证）。
 5. **改任何 skill 文件后更新 CHANGELOG.md**（版本号+变更点；版本变动统一记录在该
@@ -46,6 +49,7 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→核验�
 ├── check_ppt_quality.py      PPT规则自查7项（历史缺陷全部机检化）
 ├── export_ppt_images.py      预览三件套（PNG/联系表/index.html；COM→LibreOffice降级）
 ├── database_updater.py       官网查证扩库：gap/fetch三级通道/add强校验/verify/check-db/refresh
+├── fetch_product_image.py    官网产品图自动获取（海康API通道）：防串行→下载原图→合成横幅→写库
 └── clean_ppt_shadows.py      阴影清理（历史污染修复工具）
 ```
 

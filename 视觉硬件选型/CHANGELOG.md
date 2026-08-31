@@ -2,6 +2,83 @@
 
 本 skill 的所有版本变动统一记录在此。格式参考 Keep a Changelog。
 
+## [Unreleased]
+
+### 硬件页三件套产品图替换（新功能，待执行验证）
+- fetch_product_image.py replace 新增 --all_parts / --part camera|lens|light：
+  相机+镜头+光源产品图按选型结果一条命令替换（相机走 blob 精确匹配与官网取图
+  链路；镜头/光源为本地资产，三级匹配：库 image_path > images/{型号}.png >
+  类型图资产目录 assets/part_images/）
+- 类型图自动关联（用户实时可增，不改代码）：资产目录中文命名（远心镜头/条光/
+  环光/同轴光.png…）运行时动态扫描，与选型 type 互包含或别名命中即自动配对；
+  内置常用光源/镜头领域别名表（环形/条形/同轴/点光/圆顶/背光/无影/远心/定焦/
+  变焦），aliases.json 可扩展；新增 map 子命令：--list 看资产与别名 / --migrate
+  把 images/ 旧类型图一键搬家（型号横幅不动）/ --add 标准名 --alias 别名 实时
+  登记新关联（立即生效）；缺图部件 WARN 并提示 map --add，绝不就近猜图
+- 镜头/光源页面定位=文字锚定：硬件描述文本框（远心镜头/镜头/光源/环光/同轴）
+  左侧同行最近的图片即其产品图；光路示意图部件标签（左侧无照片）天然跳过；
+  未锚定到图 → WARN 列清单转人工，绝不瞎换
+- 尺寸规则：原框内等比 contain 居中，任意形状产品图不变形不溢出
+- 各件独立降级：缺图/未锚定 WARN 不阻断；全部 0 命中不产出文件
+- 附 6 个离线测试（锚定命中/原文件字节不动/无图不误锚/库映射优先/
+  selection 解析降级/CLI 三件套端到端，临时库隔离）
+- 实测修复 3 缺陷（2026-08-31 首轮真实跑暴露）：
+  ① find_local_image 库内正斜杠路径未归一（normpath 统一）；
+  ② replace 三件套流转自拷自（相机命中后 tmp 既是源又是目标 → WinError 32
+  文件占用），改为 a/b 两级交替中转文件；
+  ③ 主流程验收相对路径静默失效（--output output 时验收子进程 cwd=tools_dir，
+  相对路径 abspath 错位到 tools\output，查错文件仍打印完成——**交付失检**），
+  _run_acceptance 入口统一归一为绝对路径；端到端测试原用绝对路径 temp 未覆盖，
+  补"相对 --output 验收仍 FAIL=0"回归用例；仓库白名单同步落地（.gitignore
+  只跟踪4个skill；git自动提交推送为symlink致白名单失效，换junction修复）
+
+### 换相机图效果预览固化（新功能，高频场景一条命令）
+- fetch_product_image.py 新增 replace 子命令：把方案 PPT 中的相机产品图换成指定
+  型号的官网图，产出 `*_相机图预览_*.pptx` 预览件，原方案文件字节级不动。
+  旧图定位自动读 PPT 同目录 selection_result.json 选型相机，也可 --old-model /
+  --old-image 指定；0 处替换时诚实报错并列出各页图片清单（防瞎猜），不留半成品
+- 基础版不在售自动发现：型号在官网系列列表缺失时，报错自动列出同前缀在售变体
+  （实测 MV-CS060-10GM 基础版下架，仅 -PRO/V5 在售）；replace 配合 --auto_variant
+  自动改用主推变体（-PRO > V5 > 其他），弱模型报基础版型号也能一条命令跑通
+- 复用短路：库条目 image_path 或本地横幅文件已在 → 直接复用不重复请求官网
+  （高频场景省时），--force 强制重取
+- 弱模型 SOP 沉淀至 SKILL.md「相机产品图与效果预览」节；边界声明：预览件仅换图，
+  页面文字仍是原选型型号，不可当正式方案交付（换型号须重新走选型链）
+- 测试沉淀 6 用例（总 28 全绿）：离线 replace 三例（多页替换+原文件不动/0 命中
+  不留半成品/CLI 端到端）+ 变体发现两例（前缀过滤不混 GC/UM 款/在线列变体）+
+  复用短路一例；并修复复用短路引入的测试语义漂移（e2e 用例曾被短路架空，
+  加 force=True 恢复真实网络链路覆盖——教训记入测试 skill AGENTS.md）
+
+### 官网产品图自动获取（新功能）
+- 新增 tools/fetch_product_image.py：选型后为相机自动补官方产品图。海康 API 通道
+  （纯 HTTP 零浏览器）：官网系列树匹配 → Vision/Cameras 系列列表（productModel
+  全等匹配防串行）→ VisionProductIntroduction（productModel 二次校验 + previewUrl
+  + 中文描述）→ 下载原图 → PIL 合成 662x163 标准横幅（与 images/ 现有图同风格：
+  型号名+描述+产品图）→ 写回库 image_path 并沉淀 source_product_id 可追溯
+- 子命令：fetch（单型号）/ batch（库内缺图相机逐个补图，实测补齐 CS 系列缺图 3 台）
+- 诚实降级：型号不在官网列表/系列名不唯一/品牌未接入/图源异常均报错转人工（exit 2），
+  绝不编造图片；未接入品牌明说未接入（当前仅海康威视，其余品牌待扩）
+- 主流程集成：generate_ppt 前 _ensure_camera_image 钩子——选中相机缺图自动补，
+  失败仅 WARN 不阻断 PPT 生成
+- batch 实测发现 MV-CA400-10GM / MV-CA500-10GM 不在官网在售列表；因"列表未收录"
+  证据不足以判下架（该 API 可能仅含主推型号），恢复 verified=true 待人工复核并留痕
+  ——教训：下架判定需要更强证据，已写入治理记录
+
+### 口径与解析修复（bug，附测试沉淀）
+- 修复口径优先级 bug：tolerance 曾无条件覆盖 precision_requirement（违反
+  config_template 决策表"同时给时 precision_requirement 优先"），导致本项目
+  唯一可行相机被口径漂移挤出局、选型无解。修复为决策表语义：precision_requirement
+  优先，仅无明确精度时才按公差/10 反推
+- 补齐 --text 公差解析：parse_user_data 原本无 ±公差提取，README 示例
+  （检测CD尺寸38.50±0.25）的公差会被静默丢弃；新增 _extract_tolerance
+
+### 测试体系（新 skill）
+- 新增独立测试 skill「视觉选型测试」（opencode skills 目录，ZCode 经 junction 共用）：
+  run_all.py 一键全量（--fast 跳过 PPT 端到端），回归+注入 22 用例覆盖选型核心/
+  --text 解析/产品图获取/PPT 端到端，全绿（在线用例断网自动跳过）
+- 纪律固化：bug→用例一一沉淀；注入用例对应历史事故不许删；测试用临时库副本
+  不污染真实数据；被测 skill 修 bug 后必须跑本套件全绿才算迭代完成
+
 ## [v1.0.0] - 2026-08-30
 
 首个正式版本：机器视觉检测方案的自动化选型与交付系统。从需求登记到方案

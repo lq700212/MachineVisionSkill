@@ -71,7 +71,9 @@
         "无损压缩"
       ],
       "verified": true,
-      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS050-10GM-PRO"
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS050-10GM-PRO",
+      "image_path": "images/MV-CS050-10GM-PRO.png",
+      "source_product_id": 7324
     },
     {
       "brand": "海康威视",
@@ -99,7 +101,9 @@
       "weight": "约100g",
       "color": "彩色",
       "verified": true,
-      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS050-10GC-PRO"
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS050-10GC-PRO",
+      "image_path": "images/MV-CS050-10GC-PRO.png",
+      "source_product_id": 7333
     },
     {
       "brand": "海康威视",
@@ -119,7 +123,9 @@
       "power": "9~24VDC/PoE",
       "operating_temp": "-30℃~60℃",
       "verified": true,
-      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS016-10GM"
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS016-10GM",
+      "image_path": "images/MV-CS016-10GM.png",
+      "source_product_id": 7308
     },
     {
       "brand": "海康威视",
@@ -181,7 +187,22 @@
       "power": "9~24VDC/PoE",
       "operating_temp": "-30℃~60℃",
       "verified": true,
-      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CA400-10GM"
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CA400-10GM",
+      "verification_note": "2026-08-30 官网Cameras API列表未收录该型号，但该API可能仅含主推型号，证据不足以判下架，恢复verified=true；详情页待人工用新URL复核",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "source": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CA400-10GM",
+          "change": "verified=true->false",
+          "reason": "官网在售列表未收录（自动补图batch时发现）"
+        },
+        {
+          "date": "2026-08-30",
+          "action": "撤销下架回退",
+          "source": "https://www.hikrobotics.com/cn/Api/Foreground/Vision/Cameras?seriesName=CA系列工业面阵相机",
+          "note": "列表未收录证据不足以判下架（项目唯一18MP+可行相机），恢复true待人工复核"
+        }
+      ]
     },
     {
       "brand": "海康威视",
@@ -201,7 +222,22 @@
       "power": "9~24VDC/PoE",
       "operating_temp": "-30℃~60℃",
       "verified": true,
-      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CA500-10GM"
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CA500-10GM",
+      "verification_note": "2026-08-30 官网Cameras API列表未收录该型号，但该API可能仅含主推型号，证据不足以判下架，恢复verified=true；详情页待人工用新URL复核",
+      "history": [
+        {
+          "date": "2026-08-30",
+          "source": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CA500-10GM",
+          "change": "verified=true->false",
+          "reason": "官网在售列表未收录（自动补图batch时发现）"
+        },
+        {
+          "date": "2026-08-30",
+          "action": "撤销下架回退",
+          "source": "https://www.hikrobotics.com/cn/Api/Foreground/Vision/Cameras?seriesName=CA系列工业面阵相机",
+          "note": "列表未收录证据不足以判下架（项目唯一18MP+可行相机），恢复true待人工复核"
+        }
+      ]
     }
   ],
   "lenses": [
