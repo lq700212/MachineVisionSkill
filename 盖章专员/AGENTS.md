@@ -61,8 +61,11 @@
 pdf_seal_stamper.py
 ├── 依赖自检（文件顶部，先于第三方 import）
 │   └── ensure_dependencies()      缺啥装啥（阿里镜像）；核心缺失退出，OCR 缺失降级
-├── 输入规范化（v1.1.0）：图片/扫描件 → "整页位图+OCR隐形文字层"规范化 PDF
-│   ├── detect_input_kind()        'image'/'pdf-scan'/'pdf-text'（扫描件=每页文本<20字符）
+├── 输入转换（v1.1.0 图片/扫描件 → OCR 规范化；v1.2.0 增加 Excel → PDF）
+│   ├── convert_excel_to_pdf()     Excel→PDF（Excel COM 另存为 PDF；完成后必须
+│   │                              pdfplumber 能打开才算写完——fitz 对不完整 PDF
+│   │                              太宽容；COM 引用必须 finally 释放防进程残留）
+│   ├── detect_input_kind()        'image'/'pdf-scan'/'pdf-text'/'excel'（扫描件=每页文本<20字符）
 │   ├── _lazy_full_ocr_engine()    整页 OCR（带 det，按行识别）——与公章 rec-only
 │   │                              是两种用途不可混用：公章环形大字 det 失灵，
 │   │                              页面小字没 det 无法分行
@@ -96,8 +99,11 @@ pdf_seal_stamper.py
 │   │                              共用的"动态判断"层，适配任意文档布局）
 │   └── adjust_avoid_forbidden()   落点撞禁忌区→半章宽步长网格搜最近合法位（水平优先）
 ├── 主流程 process_seal()
-│   ├── 步骤0  输入识别+规范化（仅扫描件/图片）：之后所有分析/定位/合并都作用在
-│   │         src_pdf（规范化临时PDF或原PDF）上，管线零差异；临时文件结束清理
+│   ├── 步骤0  输入识别+转换（Excel→PDF 后 src_pdf 必须重指向转换出的 PDF，
+│   │         否则会用 pdfplumber 解析 xlsx(zip) 崩——曾犯；图片/扫描件→OCR 规范化）
+│   │         之后所有分析/定位/合并都作用在 src_pdf 上，管线零差异；临时文件
+│   │         （tmp_normalized / tmp_excel_pdf）结束清理；默认输出名以 orig_input
+│   │         原始文件为基准（Excel 输入输出 `原名_已盖章.pdf`）
 │   ├── 步骤1  定位决策：auto（默认）→ seal → keyword → default 逐级回退
 │   ├── 步骤2  提取参考章内容区域 → ref_content_w/h（实际视觉大小 pts）
 │   ├── 步骤3  计算目标中心 + offset 微调
@@ -110,7 +116,7 @@ pdf_seal_stamper.py
                                    + 重建隐形文字层(render_mode=3)→其他页原样保留
 ```
 
-数据流：合同文件(PDF/扫描件/图片) + 公章图 → [扫描件/图片: OCR规范化] →
+数据流：合同文件(PDF/扫描件/图片/Excel) + 公章图 → [Excel: COM 另存为PDF] → [扫描件/图片: OCR规范化] →
 智能定位（OCR 公章公司名 → 匹配合同角色 → 定位该角色盖章处；失败逐级回退
 seal/keyword/default）→ 尺寸对齐 → 叠加盖章 → **压平** → [图片输入: 渲染回图片]
 → `*_已盖章.pdf` / `*_已盖章.原图格式`。
@@ -141,6 +147,9 @@ seal/keyword/default）→ 尺寸对齐 → 叠加盖章 → **压平** → [图
 | render_mode=3 | 文字渲染为不可见（隐形文字层） | 不是文字不存在；`get_text()`/搜索/复制都正常 |
 | --no-flatten | 保留叠加方式（公章=独立图片对象，可被编辑器选中移动） | 不是推荐用法，仅应急/内部核对用 |
 | 输入规范化 | 扫描件/图片 → "整页位图+OCR隐形文字层"规范化 PDF，之后管线与文本版零差异 | 不是新写一套定位逻辑；定位策略只有一份 |
+| Excel 转 PDF（v1.2.0） | 调用本机 Excel COM `ExportAsFixedFormat`，等价人工「另存为 PDF」——导出全部可见工作表，保留打印设置/分页/打印区域；Excel 转出的都是文本版 PDF | 不是用 openpyxl 之类 Python 库渲染（无打印设置、版式失真）；"文件可被 pdfplumber 打开"才是写完判据，fitz 会说谎（对残缺 PDF 宽容） |
+| Excel 输入输出 | 输出固定 `.xlsx` 同目录 `原名_已盖章.pdf`，默认名以原 Excel 文件（orig_input）为基准 | 不能拿转换后的临时 PDF 路径当基准（否则输出落到 %TEMP%） |
+| Excel 无 Office 兜底 | COM 不可用（pywin32 缺失/未装 Office）→ 打印"手动另存为 PDF 后把 PDF 交回盖章" | 不许静默失败；失败分支必须自带下一步动作（铁律9） |
 | 扫描件判定 | 每页 get_text 均 <20 字符 | 混合文档（部分页有文字）按文本版处理，定位失败走原回退链 |
 | 整页 OCR 引擎 | rapidocr 带 det（RapidOCR()），按行切块识别 | 与公章 rec-only 引擎是两个实例两种用途，不可合并 |
 | 图片页面规格化 | 图片输入页面宽=595pts，高等比；渲染回图片按原图宽放大 | 不是 1px=1pt（拍照大图会让默认章宽占比失调） |
@@ -202,3 +211,5 @@ seal/keyword/default）→ 尺寸对齐 → 叠加盖章 → **压平** → [图
 | 测试脚本把默认公章图片覆盖销毁（391x360 公章变 1653x2339 合同图） | run_test4 的 run_stamper 把"所有 None 参数"都替换成默认公章路径，output 位被撞成公章路径；图片输入+输出.png 合法 → 直接覆盖写出 | 脚本侧：输出路径=输入/公章路径拒绝执行（main 覆盖防护）；测试侧：只许替换第2位 seal 参数，注释固化；公章图片有 git 可恢复 |
 | 旧测试工作区（run_test1~3）整体丢失未发现 | 测试脚本放在用户工作区，无副本无告警 | 工作区约定注明现状；固件全部改为脚本生成（make_fixture.py），测试可自举不依赖历史文件 |
 | 扫描件"盖章"关键词定位落空，章盖默认右下角（工伤保险待遇申领表实测） | 三缺陷叠加：①det box_thresh=0.5 丢签名栏整行 ②文字层词宽=字号×字数与行框脱节（213→496pts）③max_word_width=200 误杀 213pts 签名行 | v1.1.1 三连修：det 降阈值+unclip 2.0、文字层词宽按行框校准、过滤阈值 300；另有骑压精对齐（章骑"盖章"二字而非长行几何中心） |
+| Excel 输入报 "No /Root object"，被误当"导出异步未写完"做了多轮无谓修复（怀疑大小稳定判据、改 fitz 探测等） | **src_pdf 未重指向转换后的 PDF**，pdfplumber 把 .xlsx（zip）当 PDF 解析——解析器对非 PDF 的合理报错。"修复"方向全错是因为没走数据流核实 | 铁律1：先沿数据链查 src_pdf 指到了哪；Excel 分支里 src_pdf = pdf_path（转换后）已固化+注释写明；"No /Root object"先怀疑"喂错了文件"，而不是"文件没写完" |
+| Excel 实验残留 excel.exe 进程 + 临时 PDF 删不掉（实验脚本 exp_probe 末尾未赋 None 释放 COM 引用） | COM 引用未彻底释放导致 Quit 未生效 | convert_excel_to_pdf 的 finally 中 wb.Close + excel.Quit + 赋 None 三步缺一不可（注释固化）；实验脚本同样必须释放 |

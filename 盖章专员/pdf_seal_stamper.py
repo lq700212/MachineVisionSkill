@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """
-PDF 公章添加工具 (PDF Seal Stamper) v1.1.0
+PDF 公章添加工具 (PDF Seal Stamper) v1.2.0
 =========================================
 自动将公章盖到合同文件上——支持文本版 PDF、扫描件 PDF（无文本层）、图片文件
-（png/jpg/jpeg/bmp/webp）三类输入。智能定位（默认开启）：OCR 识别公章公司名，
-自动匹配合同里该公司是甲方/乙方/卖方/买方等哪个角色，精准盖到该角色的盖章处；
-盖完自动压平，公章与页面融为一体、不可被编辑软件单独编辑。
+（png/jpg/jpeg/bmp/webp）、Excel 工作簿（xlsx/xls/xlsm/xlsb）四类输入。
+智能定位（默认开启）：OCR 识别公章公司名，自动匹配合同里该公司是
+甲方/乙方/卖方/买方等哪个角色，精准盖到该角色的盖章处；盖完自动压平，公章与
+页面融为一体、不可被编辑软件单独编辑。
 
 扫描件/图片的处理设计（v1.1.0 新增）：不新写定位逻辑，而是先把输入规范化为
 "整页位图 + OCR 隐形文字层"的 PDF——之后智能定位/角色匹配/禁忌区避让/骑压/
 压平与原管线完全共用（详见 normalize_input）。图片输入默认输出同格式图片，
 也可显式指定 .pdf 输出。
+
+Excel 的处理设计（v1.2.0 新增）：对 Excel 输入，第 0 步先调用本机 Excel COM
+执行「另存为 PDF」（导出所有可见工作表、保持原页面设置/分页/打印区域，与人工
+在 Office 中另存为 PDF 等价），得到文本版 PDF 后**整体替换输入**走原管线——
+定位/盖章/压平与 PDF 输入零差异（详见 convert_excel_to_pdf）。输出固定为 PDF。
 
 核心逻辑:
     1. 智能定位（默认）：OCR 公章公司名 → 匹配合同"角色: 公司名" → 定位该角色
@@ -26,9 +32,10 @@ PDF 公章添加工具 (PDF Seal Stamper) v1.1.0
     python3 pdf_seal_stamper.py <合同文件> [公章图片] [输出文件] [选项]
 
 参数:
-    合同文件      - 待盖章的合同：PDF（文本版或扫描件）或图片（png/jpg/jpeg/bmp/webp）
+    合同文件      - 待盖章的合同：PDF（文本版或扫描件）、图片（png/jpg/jpeg/bmp/webp）、
+                    Excel 工作簿（xlsx/xls/xlsm/xlsb，自动转 PDF 后盖章）
     公章图片      - （可选）要添加的公章图片（支持 PNG/JPEG），默认使用脚本同目录下的"默认公章图片.png"
-    输出文件      - （可选）输出文件路径，默认在原文件名后加"_已盖章"（图片输入默认输出同格式图片）
+    输出文件      - （可选）输出文件路径（Excel/PDF 输入默认 .pdf；图片输入默认输出同格式图片）
 
 选项:
     --side left|right    - 常规定位时新公章放在参考公章的左侧还是右侧，默认 right
@@ -45,6 +52,7 @@ PDF 公章添加工具 (PDF Seal Stamper) v1.1.0
 
 示例:
     python3 pdf_seal_stamper.py contract.pdf
+    python3 pdf_seal_stamper.py quote.xlsx           # Excel：自动转 PDF 后盖章
     python3 pdf_seal_stamper.py contract.pdf seal.png
     python3 pdf_seal_stamper.py contract.pdf seal.png output.pdf
     python3 pdf_seal_stamper.py contract.pdf seal.png --role 乙方
@@ -85,6 +93,9 @@ REQUIRED_DEPENDENCIES = [
 OPTIONAL_DEPENDENCIES = [
     ("rapidocr_onnxruntime", "rapidocr_onnxruntime"),
     ("cv2", "opencv-python"),
+    # Excel→PDF 转换（v1.2.0）：只有 Excel 输入才需要；缺失时自动安装，
+    # 装不上仅影响 Excel 输入（PDF/扫描件/图片不受影响）
+    ("win32com", "pywin32"),
 ]
 
 
@@ -913,6 +924,8 @@ def adjust_avoid_forbidden(cx, cy, half_w, half_h, forbidden, page_w, page_h):
 
 # 支持的图片输入格式（第一个参数）
 IMAGE_INPUT_EXTS = ('.png', '.jpg', '.jpeg', '.bmp', '.webp')
+# 支持的 Excel 输入格式（v1.2.0）：第 0 步先经 Excel COM 转 PDF 再走原盖章管线
+EXCEL_INPUT_EXTS = ('.xlsx', '.xls', '.xlsm', '.xlsb')
 # 图片输入的页面规格化宽度（pts，≈A4 宽）。为什么要规格化：图片像素尺寸差异巨大
 # （手机拍照 3000px+），若按 1px=1pt 建页，默认章宽 125pts 占比会严重失调；
 # 统一规格化到 595pts 宽后，默认章宽占比与文本版合同一致，渲染回图片时再按
@@ -946,10 +959,12 @@ def _lazy_full_ocr_engine():
 
 
 def detect_input_kind(path):
-    """识别输入类型，返回 'image' / 'pdf-scan' / 'pdf-text'。"""
+    """识别输入类型，返回 'image' / 'pdf-scan' / 'pdf-text' / 'excel'。"""
     ext = os.path.splitext(path)[1].lower()
     if ext in IMAGE_INPUT_EXTS:
         return 'image'
+    if ext in EXCEL_INPUT_EXTS:
+        return 'excel'
     doc = fitz.open(path)
     try:
         for page in doc:
@@ -958,6 +973,77 @@ def detect_input_kind(path):
         return 'pdf-scan'
     finally:
         doc.close()
+
+
+def convert_excel_to_pdf(excel_path, out_pdf_path, wait_sec=30):
+    """
+    Excel → PDF（v1.2.0）：调用本机 Office Excel COM 执行「另存为 PDF」——
+    导出所有可见工作表、保持原页面设置/分页/打印区域，与人工在 Excel 中
+    「另存为 PDF」完全等价。转出的 PDF 是文本版（文字可提取），之后盖章
+    主流程直接复用文本版 PDF 管线，无需再 OCR。
+
+    失败时抛 RuntimeError（由调用方转成可行动的报错 — 铁律9：失败分支
+    自带下一步指引）。铁律：COM 对象必须在 finally 中 Close + Quit + 释放
+    COM 引用，否则 excel.exe 进程会残留占用文件。
+
+    pywin32 包缺失或本机未安装 Office Excel 都会使 win32com.Dispatch 失败
+    ——调用方已捕获并提示"手动另存为 PDF 后重跑"的兜底路径。
+    """
+    if _missing('win32com'):
+        raise RuntimeError("缺少 pywin32（Excel→PDF 转换需要），请先执行："
+                           "pip install pywin32 -i https://mirrors.aliyun.com/pypi/simple/")
+    import win32com.client
+    excel = None
+    wb = None
+    try:
+        excel = win32com.client.DispatchEx('Excel.Application')
+        excel.Visible = False
+        excel.DisplayAlerts = False   # 避免宏安全等弹窗阻塞导出
+        wb = excel.Workbooks.Open(excel_path, ReadOnly=True, UpdateLinks=0)
+        # 0 = xlTypePDF；不指定 From/To Sheet → 导出工作簿全部可见工作表
+        wb.ExportAsFixedFormat(0, out_pdf_path)
+        # 落盘防御性等待：正常情况下 ExportAsFixedFormat 同步写完（实测受控
+        # 实验 1.6s 内写全）。保留"pdfplumber 能打开且页数≥1"才放行的兜底——
+        # 防杀毒实时扫描/慢磁盘/Office 后台补写的文件锁（_write_bytes_retry
+        # 同源的 Windows 元凶）。⚠️ 注意：不能用 fitz 探测（MuPDF 对不完整
+        # PDF 宽容，缺 /Root 也肯开）；pdfplumber 严格校验 xref 才匹配后续管线。
+        import time as _time
+        deadline = _time.time() + wait_sec
+        exported_ok = False
+        while _time.time() < deadline:
+            if os.path.exists(out_pdf_path) and os.path.getsize(out_pdf_path) > 0:
+                try:
+                    with pdfplumber.open(out_pdf_path) as _probe:
+                        if len(_probe.pages) >= 1:
+                            exported_ok = True
+                            break
+                except Exception:
+                    pass
+            _time.sleep(0.5)
+        if not exported_ok:
+            raise RuntimeError(f"Excel 导出 PDF 超时未完成（{int(wait_sec)}s），"
+                               f"文件可能仍在写入: {out_pdf_path}")
+        wb.Close(False)
+        wb = None
+    except Exception as e:
+        raise RuntimeError(f"Excel COM 转换失败：{e}") from e
+    finally:
+        # 释放 COM 引用（赋值 None 令 PythonCOM 引用计数归零）+ Quit，
+        # 缺一步都可能导致 excel.exe 进程残留占用临时文件
+        if wb is not None:
+            try:
+                wb.Close(False)
+            except Exception:
+                pass
+            wb = None
+        if excel is not None:
+            try:
+                excel.Quit()
+            except Exception:
+                pass
+            excel = None
+    if not os.path.exists(out_pdf_path) or os.path.getsize(out_pdf_path) == 0:
+        raise RuntimeError(f"Excel COM 转换未生成有效 PDF：{out_pdf_path}")
 
 
 def ocr_page_lines(pil_img, ocr):
@@ -1097,20 +1183,53 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
     print(f"合同文件:  {pdf_path}")
     print(f"公章图片:  {seal_image_path}")
 
-    # ---- 步骤 0: 输入类型识别与规范化（图片/扫描件 → 位图+OCR文字层 PDF）----
+    # ---- 步骤 0: 输入类型识别与规范化 ----
+    # Excel→PDF（v1.2.0）；图片/扫描件 → "位图+OCR文字层 PDF"。
     # 后续所有分析/定位/合并都作用在 src_pdf 上（规范化后的临时 PDF 或原 PDF），
-    # 与原管线零差异；tmp_normalized 在函数结束（含 dry-run 提前返回）时清理。
+    # 与原管线零差异；tmp_normalized / tmp_excel_pdf 在函数结束（含 dry-run
+    # 提前返回）时清理。orig_input 始终是原始文件——Excel 等非 PDF 输入在第 0
+    # 步替换 pdf_path 为临时 PDF 后，默认输出名仍以原始文件名为基准。
     print("\n" + "─" * 55)
     print("【步骤 0】识别输入类型")
     print("─" * 55)
 
+    orig_input = pdf_path
     input_kind = detect_input_kind(pdf_path)
     src_pdf = pdf_path
     img_orig_w = None        # 图片输入的原始宽度（px），渲染回图片用
+    tmp_excel_pdf = None     # Excel→PDF 临时文件，结束时清理
     tmp_normalized = None    # 规范化临时 PDF，结束时清理
     kind_label = {'pdf-text': '文本版 PDF', 'pdf-scan': '扫描件 PDF（无文本层）',
-                  'image': '图片文件'}[input_kind]
+                  'image': '图片文件', 'excel': 'Excel 工作簿'}[input_kind]
     print(f"  输入类型: {kind_label}")
+
+    # Excel 输入（v1.2.0）：先经本机 Excel COM「另存为 PDF」（与人工在 Office
+    # 中操作等价，保留原打印设置/分页），转出的 PDF 是文本版 → 直接复用文本
+    # 版管线盖章/压平，智能定位/角色匹配自动生效，无任何新定位逻辑。
+    # 转换失败给出"手动另存为 PDF 后重跑"的兜底指引（铁律9）。
+    if input_kind == 'excel':
+        print(f"  → Excel 转为 PDF（等同 Office「另存为 PDF」），之后走 PDF 管线 ...")
+        tmp_excel_pdf = tempfile.mktemp(suffix='_excel2pdf.pdf')
+        try:
+            convert_excel_to_pdf(pdf_path, tmp_excel_pdf)
+            print(f"  → 转换完成（{os.path.getsize(tmp_excel_pdf)} bytes）")
+        except Exception as e:
+            print(f"  ❌ Excel 转 PDF 失败: {e}")
+            print("     兜底方案：请手动用 Office 打开该 Excel，执行「另存为 PDF」，")
+            print("     再把生成的 PDF 文件交给我盖章（盖章流程不变）。")
+            _cleanup_tmp(tmp_excel_pdf)
+            return None
+        pdf_path = tmp_excel_pdf
+        input_kind = detect_input_kind(pdf_path)
+        # ⚠️ 核心：src_pdf 必须重新指向转换后的 PDF！曾漏改导致 analyze_pdf_seals
+        # 对原 .xlsx（zip）调 pdfplumber 报 "No /Root object"（解析器把 xlsx 当 PDF
+        # 解析的合理报错），且被误当作"导出异步未写完"排查很久（铁律1教训）。
+        # 转换后为文本版 PDF 时走 pdf-text 通用分支（src_pdf 此处即可）；若为
+        # 扫描件会在下方规范化分支覆盖为 tmp_normalized。
+        src_pdf = pdf_path
+        kind_label = {'pdf-text': '文本版 PDF', 'pdf-scan': '扫描件 PDF（无文本层）',
+                      'image': '图片文件'}.get(input_kind, input_kind)
+        print(f"  → 转换后 PDF 输入类型: {kind_label}")
 
     if input_kind != 'pdf-text':
         if input_kind == 'image':
@@ -1456,6 +1575,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
         print(f"  尺寸: {new_w:.1f} x {new_h:.1f} pts")
         print(f"  旋转: {rotate}°")
         _cleanup_tmp(tmp_normalized)
+        _cleanup_tmp(tmp_excel_pdf)
         return None
 
     # ---- 步骤 5: 生成最终 PDF ----
@@ -1501,11 +1621,12 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
     # 输出路径决策：
     # - 图片输入且未指定输出 → 默认输出同格式图片（原名_已盖章.原扩展名）
     # - 图片输入且指定 .pdf 输出 → 输出 PDF（规范化后的版本，位图+文字层）
-    # - PDF 输入 → 原名_已盖章.pdf（原逻辑）
+    # - PDF / Excel 输入 → 原名_已盖章.pdf（Excel 第0步转 PDF 后按 PDF 处理；
+    #   基准名必须用原 Excel 文件 orig_input，不能用已被替换的临时 PDF 路径）
     if output_path is None:
-        base = os.path.splitext(pdf_path)[0]
+        base = os.path.splitext(orig_input)[0]
         if input_kind == 'image':
-            output_path = f"{base}_已盖章{os.path.splitext(pdf_path)[1]}"
+            output_path = f"{base}_已盖章{os.path.splitext(orig_input)[1]}"
         else:
             output_path = f"{base}_已盖章.pdf"
     # 图片输出：先落中间 PDF（走合并+压平同一管线），最后渲染回图片
@@ -1575,6 +1696,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
         print("  → 章已融入图片像素，任何图片/PDF 编辑软件都无法单独选中或移除公章")
 
     _cleanup_tmp(tmp_normalized)
+    _cleanup_tmp(tmp_excel_pdf)
     return output_path
 
 
@@ -1584,24 +1706,26 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='公章添加工具 v1.1.0 — 支持文本版PDF/扫描件PDF/图片，智能定位 + 防编辑压平',
+        description='公章添加工具 v1.2.0 — 支持文本版PDF/扫描件PDF/图片/Excel，智能定位 + 防编辑压平',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
   python3 pdf_seal_stamper.py contract.pdf              # 文本版 PDF
   python3 pdf_seal_stamper.py scan.pdf                  # 扫描件 PDF（无文本层，自动 OCR）
   python3 pdf_seal_stamper.py photo.jpg                 # 图片（拍的合同照片，默认输出 原名_已盖章.jpg）
+  python3 pdf_seal_stamper.py quote.xlsx                # Excel（自动转 PDF 后盖章，输出 原名_已盖章.pdf）
   python3 pdf_seal_stamper.py photo.jpg seal.png out.pdf  # 图片输入、PDF 输出
   python3 pdf_seal_stamper.py contract.pdf seal.png output.pdf
   python3 pdf_seal_stamper.py contract.pdf --rotate -15
   python3 pdf_seal_stamper.py contract.pdf --dry-run
         """
     )
-    parser.add_argument('pdf', help='合同文件路径：PDF（文本版或扫描件）或图片（png/jpg/jpeg/bmp/webp）')
+    parser.add_argument('pdf', help='合同文件路径：PDF（文本版或扫描件）/ 图片'
+                                    '（png/jpg/jpeg/bmp/webp）/ Excel（xlsx/xls/xlsm/xlsb，自动转 PDF）')
     parser.add_argument('seal', nargs='?', default=None,
                         help='公章图片路径（可选，默认使用脚本同目录下的"默认公章图片.png"）')
     parser.add_argument('output', nargs='?', default=None,
-                        help='输出路径（可选）：PDF 输入默认 原名_已盖章.pdf；'
+                        help='输出路径（可选）：PDF/Excel 输入默认 原名_已盖章.pdf；'
                              '图片输入默认 原名_已盖章.原扩展名，指定 .pdf 结尾则输出 PDF')
     parser.add_argument('--side', choices=['left', 'right'], default='right',
                         help='放置侧（默认: right）')
@@ -1652,17 +1776,25 @@ def main():
                 print(f"❌ 输出路径与{name}路径相同，执行会覆盖源文件，已拒绝: {args.output}")
                 sys.exit(1)
 
-    # 输入类型校验：只接受 PDF 或支持的图片格式
+    # 输入类型校验：只接受 PDF、支持的图片格式或 Excel 工作簿
     in_ext = os.path.splitext(args.pdf)[1].lower()
-    if in_ext != '.pdf' and in_ext not in IMAGE_INPUT_EXTS:
+    if in_ext != '.pdf' and in_ext not in IMAGE_INPUT_EXTS and in_ext not in EXCEL_INPUT_EXTS:
         print(f"❌ 不支持的合同文件类型: {in_ext or '(无扩展名)'}"
-              f"（支持 .pdf / {' / '.join(IMAGE_INPUT_EXTS)}）")
+              f"（支持 .pdf / {' / '.join(IMAGE_INPUT_EXTS)} / "
+              f"{' / '.join(EXCEL_INPUT_EXTS)}）")
         sys.exit(1)
     # 图片输入 + 显式输出：输出只接受 PDF 或图片格式
     if in_ext in IMAGE_INPUT_EXTS and args.output:
         out_ext = os.path.splitext(args.output)[1].lower()
         if out_ext != '.pdf' and out_ext not in IMAGE_INPUT_EXTS:
             print(f"❌ 图片输入的输出只支持 PDF 或图片格式，收到: {out_ext or '(无扩展名)'}")
+            sys.exit(1)
+    # Excel 输入 + 显式输出：Excel 转 PDF 后按 PDF 输出，扩展名必须是 .pdf
+    if in_ext in EXCEL_INPUT_EXTS and args.output:
+        out_ext = os.path.splitext(args.output)[1].lower()
+        if out_ext != '.pdf':
+            print(f"❌ Excel 输入的输出固定为 PDF（Excel 先转 PDF 再盖章），收到: "
+                  f"{out_ext or '(无扩展名)'}，请用 .pdf 结尾的输出路径")
             sys.exit(1)
 
     process_seal(

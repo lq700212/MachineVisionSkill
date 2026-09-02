@@ -1,5 +1,39 @@
 # 版本更新记录
 
+## v1.2.0 (2026-09-02)
+
+### Excel 工作簿支持：多一步"转 PDF"，之后盖章管线零差异
+
+真实场景：报价单/订购单等合同常以 .xlsx 交付。按用户要求实现"Excel 先转 PDF
+再走现有盖章逻辑"——与人工在 Office 中「另存为 PDF」打通为同一件事（第 0 步
+转换，定位/盖章/压平全部复用文本版 PDF 管线，不新写任何定位逻辑）。
+
+- 第 0 步输入类型新增 `excel`（xlsx/xls/xlsm/xlsb）：调用本机 Excel COM
+  （win32com，DispatchEx 独立进程）执行 `ExportAsFixedFormat`，等价于 Office
+  「另存为 PDF」——导出全部可见工作表，保留原打印设置/分页/打印区域
+- **src_pdf 必须重新指向转换后的 PDF**（曾漏改：src_pdf 仍指原 .xlsx，
+  pdfplumber 把 zip 当 PDF 解析报 "No /Root object"，被误当"导出异步未写完"
+  排查较久——铁律1教训，注释已固化）
+- 导出落盘防御性等待：`ExportAsFixedFormat` 正常同步写完；保留"pdfplumber 能
+  打开且页数≥1"才放行的兜底（防杀软实时扫描/慢磁盘锁）。⚠️ 探测不能用 fitz：
+  MuPDF 对不完整 PDF 宽容（缺 /Root 也肯开），pdfplumber 严格校验 xref 才与
+  后续管线一致
+- 输出固定在 `.xlsx` 同目录 `原名_已盖章.pdf`；默认输出名以**原 Excel 文件名**
+  为基准（orig_input），不受临时 PDF 路径替换影响
+- 依赖登记：`pywin32`（win32com）加入 `OPTIONAL_DEPENDENCIES`（仅 Excel 输入
+  需要；缺失自动装、装不上只影响 Excel 输入）
+- 转换失败诚实降级：打印"手动用 Office 另存为 PDF 后把 PDF 交给盖章"兜底指引，
+  绝不静默
+
+### 验收基线（本机 Excel 2013 COM 实测）
+
+- `E:\Agent工作空间\盖章\` 两份报价单 xlsx 全流程盖章 PASS：转 PDF（文本版）→
+  关键词定位"买方签字/盖章："右侧 → 压平 → 文字可搜（"盖章/签字"、"苏州华际
+  光电"均命中）→ 章红像素重心 vs 预期偏差 <3pts（实测 (440,609) vs 预期
+  (441.1,612.1)，另一份偏差同量级）
+- 回归基线 `tests/run_test4_scan.py` 24/24 PASS（文本/扫描件/图片三线无回归）
+- `--dry-run` / 清理逻辑对 Excel 输入正常
+
 ## v1.1.1 (2026-09-02)
 
 ### 扫描件关键词定位三连修（实测"工伤保险待遇申领表"扫描件定位落空 → 命中"盖章"二字）
