@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """
-PDF 公章添加工具 (PDF Seal Stamper) v1.0.0
+PDF 公章添加工具 (PDF Seal Stamper) v1.1.0
 =========================================
-自动将公章盖到 PDF 合同上。智能定位（默认开启）：OCR 识别公章公司名，自动匹配
-合同里该公司是甲方/乙方/卖方/买方等哪个角色，精准盖到该角色的盖章处；盖完自动
-压平，公章与页面融为一体、不可被编辑软件单独编辑。
+自动将公章盖到合同文件上——支持文本版 PDF、扫描件 PDF（无文本层）、图片文件
+（png/jpg/jpeg/bmp/webp）三类输入。智能定位（默认开启）：OCR 识别公章公司名，
+自动匹配合同里该公司是甲方/乙方/卖方/买方等哪个角色，精准盖到该角色的盖章处；
+盖完自动压平，公章与页面融为一体、不可被编辑软件单独编辑。
+
+扫描件/图片的处理设计（v1.1.0 新增）：不新写定位逻辑，而是先把输入规范化为
+"整页位图 + OCR 隐形文字层"的 PDF——之后智能定位/角色匹配/禁忌区避让/骑压/
+压平与原管线完全共用（详见 normalize_input）。图片输入默认输出同格式图片，
+也可显式指定 .pdf 输出。
 
 核心逻辑:
     1. 智能定位（默认）：OCR 公章公司名 → 匹配合同"角色: 公司名" → 定位该角色
@@ -17,12 +23,12 @@ PDF 公章添加工具 (PDF Seal Stamper) v1.0.0
        融为一体，编辑软件无法单独选中/移动/删除公章；文字仍可搜索/复制
 
 用法:
-    python3 pdf_seal_stamper.py <合同PDF> [公章图片] [输出PDF] [选项]
+    python3 pdf_seal_stamper.py <合同文件> [公章图片] [输出文件] [选项]
 
 参数:
-    合同PDF       - 待盖章的合同 PDF 文件路径
+    合同文件      - 待盖章的合同：PDF（文本版或扫描件）或图片（png/jpg/jpeg/bmp/webp）
     公章图片      - （可选）要添加的公章图片（支持 PNG/JPEG），默认使用脚本同目录下的"默认公章图片.png"
-    输出PDF       - （可选）输出 PDF 文件路径，默认在原合同名后加"_已盖章"
+    输出文件      - （可选）输出文件路径，默认在原文件名后加"_已盖章"（图片输入默认输出同格式图片）
 
 选项:
     --side left|right    - 常规定位时新公章放在参考公章的左侧还是右侧，默认 right
@@ -233,7 +239,7 @@ def analyze_pdf_seals(pdf_path):
     return results
 
 
-def find_keyword_blocks(pdf_path, keywords, cluster_distance=100, max_word_width=200):
+def find_keyword_blocks(pdf_path, keywords, cluster_distance=100, max_word_width=300):
     """
     在 PDF 中搜索包含关键词的文字块，用于定位盖章位置。
 
@@ -241,7 +247,10 @@ def find_keyword_blocks(pdf_path, keywords, cluster_distance=100, max_word_width
         pdf_path: PDF 文件路径
         keywords: 关键词列表，如 ['签章', '公章', '盖章']
         cluster_distance: 聚类距离（pts），用于将附近的关键词归为同一文字块
-        max_word_width: 关键词词语的最大宽度（pts），超过此宽度的视为正文行，予以过滤
+        max_word_width: 关键词词语的最大宽度（pts），超过此宽度的视为正文行，予以过滤。
+            200→300（v1.1.1）：扫描件 OCR 文字层按"整行"写入，"单位（盖章）/
+            承诺人（签名）："式签名栏整行宽约 213pts，阈值 200 会把它误当正文
+            过滤掉，关键词定位落空；正文贯穿行通常 ≥380pts，300 足以区分。
 
     返回:
         list[dict]: 每个文字块的信息，包含 page, x0, y0, x1, y1, center_x, center_y, side, keywords_found 等
@@ -322,6 +331,9 @@ def find_keyword_blocks(pdf_path, keywords, cluster_distance=100, max_word_width
                     'page_width': page.width,
                     'page_height': page.height,
                     'keywords_found': [w['text'] for w in cluster_words],
+                    # 命中词明细（text+坐标）：骑压分支按关键词在块内的字符
+                    # 位置精确对齐章中心用（v1.1.1）
+                    'kw_words': [(w['text'], w['x0'], w['x1']) for w in cluster_words],
                 })
 
     return blocks
@@ -470,6 +482,16 @@ _ROLE_MOD = r"[名称单位]{0,4}\s*(?:[（(][^（）()]{0,12}[）)])?\s*[：:]"
 _ROLE_HEAD = "(?:" + "|".join(_CONTRACT_ROLES) + r")" + _ROLE_MOD
 _PARTY_LINE_RE = re.compile("(" + "|".join(_CONTRACT_ROLES) + r")" + _ROLE_MOD
                             + r"\s*((?:(?!" + _ROLE_HEAD + ").)+)")
+
+
+def _cleanup_tmp(path):
+    """清理规范化/中间临时文件；被占用时只警告不阻塞（下次运行不受影响）"""
+    if not path:
+        return
+    try:
+        os.unlink(path)
+    except OSError:
+        print(f"  ⚠️  临时文件未能删除（可能被占用），可稍后手动删除: {path}")
 
 
 def _write_bytes_retry(path, data, attempts=4, delay=0.5):
@@ -883,6 +905,177 @@ def adjust_avoid_forbidden(cx, cy, half_w, half_h, forbidden, page_w, page_h):
 
 
 # ============================================================
+# 输入规范化：图片 / 扫描件 PDF → "整页位图 + OCR 隐形文字层" PDF
+# 设计要点（v1.1.0）：不新写定位逻辑！扫描件/图片先规范化为与文本版合同
+# 同构的 PDF（位图承载视觉 + render_mode=3 隐形文字层承载可提取文本），
+# 之后智能定位/角色匹配/禁忌区避让/骑压/压平全部零改动复用原管线。
+# ============================================================
+
+# 支持的图片输入格式（第一个参数）
+IMAGE_INPUT_EXTS = ('.png', '.jpg', '.jpeg', '.bmp', '.webp')
+# 图片输入的页面规格化宽度（pts，≈A4 宽）。为什么要规格化：图片像素尺寸差异巨大
+# （手机拍照 3000px+），若按 1px=1pt 建页，默认章宽 125pts 占比会严重失调；
+# 统一规格化到 595pts 宽后，默认章宽占比与文本版合同一致，渲染回图片时再按
+# 原图宽度等比放大，章在输出图片中的占比与 PDF 中相同。
+NORMALIZED_PAGE_W = 595.0
+# 扫描件判定阈值：任一页文本字符数达到该值即视为"文本版 PDF"走原管线；
+# 全部页低于该值判定为扫描件（无文本层，必须 OCR 建文字层才能智能定位）。
+SCAN_TEXT_MIN_CHARS = 20
+# 扫描件 OCR 渲染分辨率：150dpi 兼顾速度与中文小字识别率（压平另有自己的 dpi）
+SCAN_OCR_DPI = 150
+
+
+def _lazy_full_ocr_engine():
+    """懒加载整页 OCR 引擎（带文字检测 det，用于扫描件/图片的全文识别）。
+    与公章识别的 rec-only 引擎是两种用途，不可混用：公章环形大字 det 失灵必须
+    rec-only；页面正文是规整横排小字，必须带 det 才能正确分行/定位。
+    OCR 依赖不可用返回 None（降级为无文字层，定位落默认位置并警告）。"""
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+        # det_box_thresh 0.5→0.3、unclip 1.6→2.0：提高弱对比文字行检出召回。
+        # 根因（v1.1.1 实测）：扫描件签名栏"单位（盖章）/承诺人（签名）："整行
+        # det 得分仅 0.77 分、但 box_thresh 默认 0.5 时该行检测框直接被丢弃，
+        # OCR 文字层缺失该行 → 关键词"盖章"搜索落空 → 定位落到默认右下角。
+        # 降低阈值后该行稳定检出；正文长行仍会被 max_word_width 过滤，不误伤。
+        # 注意：rapidocr_onnxruntime 新版 API 传任何 det_* 参数时必须显式带
+        # det_model_path=None（否则其参数合并逻辑 KeyError: 'model_path'）。
+        return RapidOCR(det_model_path=None, det_box_thresh=0.3,
+                        det_unclip_ratio=2.0)
+    except Exception:
+        return None
+
+
+def detect_input_kind(path):
+    """识别输入类型，返回 'image' / 'pdf-scan' / 'pdf-text'。"""
+    ext = os.path.splitext(path)[1].lower()
+    if ext in IMAGE_INPUT_EXTS:
+        return 'image'
+    doc = fitz.open(path)
+    try:
+        for page in doc:
+            if len(page.get_text().strip()) >= SCAN_TEXT_MIN_CHARS:
+                return 'pdf-text'
+        return 'pdf-scan'
+    finally:
+        doc.close()
+
+
+def ocr_page_lines(pil_img, ocr):
+    """整页 OCR，返回 [(x0,y0,x1,y1,text), ...]（像素坐标，顶部原点）。
+    rapidocr 的 det 按文字行切块（每个 box 一行）——写入 PDF 文字层时必须整行
+    一次 insert_text，pdfplumber 的 extract_text 才能按行还原（签署方正则
+    "需方：A 供方：B"同行多对匹配依赖行结构）。"""
+    arr = np.array(pil_img.convert("RGB"))
+    result, _ = ocr(arr)
+    lines = []
+    for item in (result or []):
+        box, text = item[0], item[1]
+        text = (text or "").strip()
+        if not text:
+            continue
+        xs = [p[0] for p in box]
+        ys = [p[1] for p in box]
+        lines.append((min(xs), min(ys), max(xs), max(ys), text))
+    return lines
+
+
+def _insert_invisible_lines(page, lines, sx, sy):
+    """把 OCR 行以 render_mode=3（隐形）写入页面。sx/sy = 像素→PDF pts 换算比例。
+    与 flatten_stamped_page 重建文字层同一套路：视觉 100% 来自位图，文字层只为
+    可搜索/可提取（pdfplumber 的智能定位全靠它）。逐行插入保证行结构。"""
+    for x0, y0, x1, y1, text in lines:
+        fontsize = max((y1 - y0) * sy * 0.8, 4.0)
+        # 宽度校准（v1.1.1）：按行高推的字号只保证纵向贴合，横向铺开宽度
+        # = fontsize × 字符数，与 OCR 行框宽脱节（实测签名栏行框 213pts 被
+        # 铺成 496pts，超 max_word_width 被误过滤，关键词定位落空）。
+        # 把文字层词宽缩放到与 OCR 行框一致，定位/搜索才反映真实版式。
+        target_w = (x1 - x0) * sx
+        tl = fitz.get_text_length(text, fontname="china-s", fontsize=fontsize)
+        if tl > 0:
+            fontsize = max(fontsize * target_w / tl, 2.0)
+        try:
+            page.insert_text(
+                fitz.Point(x0 * sx, y1 * sy - fontsize * 0.18), text,
+                fontsize=fontsize, fontname="china-s", render_mode=3)
+        except Exception:
+            # 个别行字符不支持时跳过，不影响整页
+            continue
+
+
+def build_pdf_from_scanned_pages(pages, out_path):
+    """pages: [(pil_img, page_w_pts, page_h_pts, ocr_lines, px_w, px_h)]
+    生成"整页位图 + OCR 隐形文字层"的规范化 PDF。"""
+    doc = fitz.open()
+    try:
+        for img, w, h, lines, pw, ph in pages:
+            page = doc.new_page(width=w, height=h)
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="JPEG", quality=92)
+            page.insert_image(page.rect, stream=buf.getvalue())
+            _insert_invisible_lines(page, lines, w / pw, h / ph)
+        doc.save(out_path, garbage=3, deflate=True)
+    finally:
+        doc.close()
+
+
+def normalize_input(pdf_path, input_kind, ocr, dpi=SCAN_OCR_DPI):
+    """图片/扫描件 → 规范化临时 PDF。返回 (tmp_pdf_path, img_orig_w_px, 识别行数)。
+    OCR 不可用时 lines 为空 → 无文字层 → 后续定位自动落到默认位置并警告
+    （诚实降级，不阻塞盖章）。img_orig_w_px 仅图片输入有效（渲染回图片用）。"""
+    pages = []
+    img_w_px = None
+    if input_kind == 'image':
+        img = Image.open(pdf_path).convert("RGB")
+        img_w_px = img.width
+        scale = NORMALIZED_PAGE_W / img.width
+        w, h = NORMALIZED_PAGE_W, img.height * scale
+        lines = ocr_page_lines(img, ocr) if ocr else []
+        pages.append((img, w, h, lines, img.width, img.height))
+    else:  # pdf-scan：渲染每页再 OCR（页尺寸保持原 pts，不动比例）
+        doc = fitz.open(pdf_path)
+        try:
+            for page in doc:
+                pix = page.get_pixmap(dpi=dpi, alpha=False)
+                stride = getattr(pix, "stride", pix.width * 3)
+                # frombuffer 引用的是 pix 内部缓冲，pix 销毁前必须 copy 出来
+                img = Image.frombuffer("RGB", (pix.width, pix.height), pix.samples,
+                                       "raw", "RGB", stride, 1).copy()
+                lines = ocr_page_lines(img, ocr) if ocr else []
+                pages.append((img, page.rect.width, page.rect.height, lines,
+                              pix.width, pix.height))
+        finally:
+            doc.close()
+    tmp = tempfile.mktemp(suffix='.normalized.pdf')
+    build_pdf_from_scanned_pages(pages, tmp)
+    n_lines = sum(len(p[3]) for p in pages)
+    return tmp, img_w_px, n_lines
+
+
+def render_pdf_page_to_image(pdf_path, page_number, out_img_path, target_w_px):
+    """盖章完成的 PDF 页按原图宽度渲染回图片（图片输入的输出路径）。
+    zoom = 原图宽 / 页宽：输出图片与原图同分辨率，章的占比与 PDF 中一致。"""
+    doc = fitz.open(pdf_path)
+    try:
+        page = doc[page_number - 1]
+        zoom = target_w_px / page.rect.width
+        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        stride = getattr(pix, "stride", pix.width * 3)
+        img = Image.frombuffer("RGB", (pix.width, pix.height), pix.samples,
+                               "raw", "RGB", stride, 1).copy()
+    finally:
+        doc.close()
+    ext = os.path.splitext(out_img_path)[1].lower()
+    if ext in ('.jpg', '.jpeg'):
+        img.save(out_img_path, quality=95)
+    elif ext == '.webp':
+        img.save(out_img_path, quality=95)
+    elif ext == '.bmp':
+        img.save(out_img_path, format='BMP')
+    else:
+        img.save(out_img_path, format='PNG')
+
+
+# ============================================================
 # 主处理函数
 # ============================================================
 
@@ -901,15 +1094,47 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
     6. 生成覆盖层 → 合并到原始 PDF（支持旋转）
     7. 压平盖章页（默认开启）→ 公章不可被编辑软件单独编辑
     """
-    print(f"合同 PDF:  {pdf_path}")
+    print(f"合同文件:  {pdf_path}")
     print(f"公章图片:  {seal_image_path}")
+
+    # ---- 步骤 0: 输入类型识别与规范化（图片/扫描件 → 位图+OCR文字层 PDF）----
+    # 后续所有分析/定位/合并都作用在 src_pdf 上（规范化后的临时 PDF 或原 PDF），
+    # 与原管线零差异；tmp_normalized 在函数结束（含 dry-run 提前返回）时清理。
+    print("\n" + "─" * 55)
+    print("【步骤 0】识别输入类型")
+    print("─" * 55)
+
+    input_kind = detect_input_kind(pdf_path)
+    src_pdf = pdf_path
+    img_orig_w = None        # 图片输入的原始宽度（px），渲染回图片用
+    tmp_normalized = None    # 规范化临时 PDF，结束时清理
+    kind_label = {'pdf-text': '文本版 PDF', 'pdf-scan': '扫描件 PDF（无文本层）',
+                  'image': '图片文件'}[input_kind]
+    print(f"  输入类型: {kind_label}")
+
+    if input_kind != 'pdf-text':
+        if input_kind == 'image':
+            print(f"  → 图片规范化为 PDF 页面（宽 {NORMALIZED_PAGE_W:.0f}pts）+ OCR 建文字层")
+        else:
+            print(f"  → 扫描件按 {SCAN_OCR_DPI}dpi 渲染每页 + OCR 建文字层")
+        full_ocr = _lazy_full_ocr_engine()
+        if full_ocr is None:
+            print("  ⚠️  OCR 依赖不可用，无法建立文字层：智能定位/关键词定位全部失效，")
+            print("      将落到默认位置（右下角），交付前必须人工核对！")
+            print("      （安装 rapidocr_onnxruntime 后重跑即可智能定位：")
+            print("       pip install rapidocr_onnxruntime -i https://mirrors.aliyun.com/pypi/simple/）")
+        tmp_normalized, img_orig_w, n_ocr_lines = normalize_input(
+            pdf_path, input_kind, full_ocr)
+        src_pdf = tmp_normalized
+        if full_ocr is not None:
+            print(f"  → OCR 建立文字层完成（{n_ocr_lines} 行），后续定位流程与文本版合同一致")
 
     # ---- 步骤 1: 分析 PDF 中已有公章 ----
     print("\n" + "─" * 55)
-    print("【步骤 1】分析 PDF 中已有公章")
+    print("【步骤 1】分析文档中已有公章")
     print("─" * 55)
 
-    all_images = analyze_pdf_seals(pdf_path)
+    all_images = analyze_pdf_seals(src_pdf)
     existing_seals = [s for s in all_images if s['is_seal']]
 
     print(f"  检测到 {len(all_images)} 个图片，其中 {len(existing_seals)} 个被识别为公章：")
@@ -949,7 +1174,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
         if role:
             party = {"role": role, "company": None}  # 手动角色无公司名，策略3不适用
         elif company:
-            parties = extract_contract_parties(pdf_path)
+            parties = extract_contract_parties(src_pdf)
             if parties:
                 print("  → 合同签署方:")
                 for p in parties:
@@ -964,7 +1189,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
 
         if party:
             block, strategy = find_role_stamp_block(
-                pdf_path, party["role"], party.get("company"))
+                src_pdf, party["role"], party.get("company"))
             if block:
                 seal_size = SEAL_DEFAULT_SIZE
                 reference = {
@@ -1003,7 +1228,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
 
             if keywords:
                 print("\n  → 未检测到已有公章，尝试通过关键词定位...")
-                kw_blocks = find_keyword_blocks(pdf_path, keywords)
+                kw_blocks = find_keyword_blocks(src_pdf, keywords)
 
                 if kw_blocks:
                     # 按优先级排序：左侧优先，同侧页面从后往前
@@ -1038,6 +1263,8 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
                             'kw_y0': block['y0'],
                             'kw_x1': block['x1'],
                             'kw_y1': block['y1'],
+                            # 命中词明细：骑压分支关键词精对齐用（v1.1.1）
+                            'kw_words': block.get('kw_words', []),
                         }
                         positioning_mode = 'keyword'
                         side_label = '左侧' if block['side'] == 'left' else '右侧'
@@ -1072,7 +1299,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
 
     if existing_seals:
         ref_cropped_img, ref_ratio_w, ref_ratio_h = extract_ref_seal_from_pdf(
-            pdf_path, reference)
+            src_pdf, reference)
         if ref_cropped_img:
             print(f"  参考公章原始像素: {reference['pixel_width']}x{reference['pixel_height']}")
             print(f"  参考公章内容像素: {ref_cropped_img.size[0]}x{ref_cropped_img.size[1]}")
@@ -1105,9 +1332,28 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
         kw_y1 = reference.get('kw_y1', reference['y1'])
         block_w = kw_x1 - kw_x0
         if block_w >= ref_content_w * 0.9:
-            target_cx = (kw_x0 + kw_x1) / 2 + offset_x
+            target_cx = (kw_x0 + kw_x1) / 2
+            # 关键词精对齐（v1.1.1）：长签署行（如"单位（盖章）/承诺人（签名）："）
+            # 骑整块中心会盖偏——章应骑在"盖章"二字处，不是几何中心。
+            # 文字层词宽已校准=OCR行框宽，按字符均布估算关键词在块内的位置；
+            # 找不到关键词明细（如智能定位合成块）时退回块中心。
+            kw_centers = []
+            kw_hits = []
+            for w_text, wx0, wx1 in reference.get('kw_words', []):
+                for kw in keywords:
+                    idx = w_text.find(kw)
+                    if idx >= 0 and len(w_text) > 0:
+                        char_w = (wx1 - wx0) / len(w_text)
+                        kw_centers.append(wx0 + (idx + len(kw) / 2) * char_w)
+                        kw_hits.append(kw)
+                        break
+            if kw_centers:
+                target_cx = sum(kw_centers) / len(kw_centers)
+                print(f"  文字块较宽（{block_w:.0f}pts），骑压\"{'/'.join(kw_hits)}\"关键词处（精对齐）")
+            else:
+                print(f"  文字块较宽（{block_w:.0f}pts），骑压式盖章（模拟真实压字）")
+            target_cx += offset_x
             target_cy = reference['center_y'] + offset_y
-            print(f"  文字块较宽（{block_w:.0f}pts），骑压式盖章（模拟真实压字）")
         else:
             target_cx = kw_x1 + ref_content_w / 2 + offset_x
             target_cy = reference['center_y'] + offset_y
@@ -1169,7 +1415,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
     # 现场计算"对方盖章栏/对方公司名"禁忌区，章压到就在锚点附近自动挪开。
     # 仅智能定位启用——回退模式无法确定"我方是谁"，无从构建禁忌区（保持警告交付）。
     if auto_matched:
-        forbidden = build_forbidden_zones(pdf_path, party["role"], party.get("company"))
+        forbidden = build_forbidden_zones(src_pdf, party["role"], party.get("company"))
         ncx, ncy, moved = adjust_avoid_forbidden(
             target_cx, target_cy, ref_content_w / 2, ref_content_h / 2,
             forbidden, page_w, page_h)
@@ -1209,6 +1455,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
         print(f"  位置: ({target_cx - new_w/2:.1f}, {target_cy - new_h/2:.1f})")
         print(f"  尺寸: {new_w:.1f} x {new_h:.1f} pts")
         print(f"  旋转: {rotate}°")
+        _cleanup_tmp(tmp_normalized)
         return None
 
     # ---- 步骤 5: 生成最终 PDF ----
@@ -1240,8 +1487,8 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
     c.restoreState()
     c.save()
 
-    # 合并到原始 PDF
-    reader_original = PdfReader(pdf_path)
+    # 合并到原始 PDF（图片/扫描件输入时 = 规范化后的临时 PDF，视觉内容不变）
+    reader_original = PdfReader(src_pdf)
     reader_overlay = PdfReader(overlay_path)
     writer = PdfWriter()
 
@@ -1251,22 +1498,42 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
             page.merge_page(overlay_page)
         writer.add_page(page)
 
+    # 输出路径决策：
+    # - 图片输入且未指定输出 → 默认输出同格式图片（原名_已盖章.原扩展名）
+    # - 图片输入且指定 .pdf 输出 → 输出 PDF（规范化后的版本，位图+文字层）
+    # - PDF 输入 → 原名_已盖章.pdf（原逻辑）
     if output_path is None:
         base = os.path.splitext(pdf_path)[0]
-        output_path = f"{base}_已盖章.pdf"
+        if input_kind == 'image':
+            output_path = f"{base}_已盖章{os.path.splitext(pdf_path)[1]}"
+        else:
+            output_path = f"{base}_已盖章.pdf"
+    # 图片输出：先落中间 PDF（走合并+压平同一管线），最后渲染回图片
+    img_output = (input_kind == 'image' and
+                  os.path.splitext(output_path)[1].lower() != '.pdf')
+    pdf_out_path = tempfile.mktemp(suffix='.stamped.pdf') if img_output else output_path
 
     buf = io.BytesIO()
     writer.write(buf)
     try:
-        _write_bytes_retry(output_path, buf.getvalue())
+        _write_bytes_retry(pdf_out_path, buf.getvalue())
     except PermissionError:
         # 目标被持续占用（资源管理器预览/杀软长扫描），换名落盘保证盖章不白跑
         import time as _time
-        alt = f"{os.path.splitext(output_path)[0]}_{_time.strftime('%H%M%S')}.pdf"
+        alt = f"{os.path.splitext(pdf_out_path)[0]}_{_time.strftime('%H%M%S')}.pdf"
         _write_bytes_retry(alt, buf.getvalue())
-        output_path = alt
+        pdf_out_path = alt
+        if not img_output:
+            output_path = alt
         print(f"  ⚠️  目标文件被其他程序占用，已改写到: {alt}")
         print("      （关闭占用它的程序如预览窗格后，可重命名为原输出名，或删除旧文件重跑）")
+
+    # 尽早关闭读取器释放文件句柄（Windows 下不关闭会导致临时文件删不掉）
+    for _r in (reader_original, reader_overlay):
+        try:
+            _r.close()
+        except Exception:
+            pass
 
     # 清理临时文件
     os.unlink(cropped_path)
@@ -1288,7 +1555,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
     print("─" * 55)
 
     if flatten:
-        flatten_stamped_page(output_path, reference['page'], dpi=dpi)
+        flatten_stamped_page(pdf_out_path, reference['page'], dpi=dpi)
         print(f"  盖章页（第 {reference['page']} 页）已压平: "
               f"整页位图({dpi}dpi) + 隐形文字层（文字仍可搜索/复制）")
         print("  → 公章与页面融为一体，编辑软件无法单独选中/移动/删除公章")
@@ -1296,6 +1563,18 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
         print("  ⚠️  未压平（--no-flatten）：公章仍是页面内独立图片对象，"
               "可被编辑软件选中/移动/删除，存在法律风险，仅限应急/内部核对使用")
 
+    # ---- 步骤 7: 图片输入时渲染回图片（与原图同分辨率）----
+    if img_output:
+        print("\n" + "─" * 55)
+        print("【步骤 7】渲染回图片")
+        print("─" * 55)
+        render_pdf_page_to_image(pdf_out_path, reference['page'],
+                                 output_path, img_orig_w)
+        _cleanup_tmp(pdf_out_path)
+        print(f"  已输出图片: {output_path}（宽 {img_orig_w}px，与原图同分辨率）")
+        print("  → 章已融入图片像素，任何图片/PDF 编辑软件都无法单独选中或移除公章")
+
+    _cleanup_tmp(tmp_normalized)
     return output_path
 
 
@@ -1305,21 +1584,25 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='PDF 公章添加工具 v1.0.0 — 智能定位 + 防编辑压平',
+        description='公章添加工具 v1.1.0 — 支持文本版PDF/扫描件PDF/图片，智能定位 + 防编辑压平',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python3 pdf_seal_stamper.py contract.pdf
-  python3 pdf_seal_stamper.py contract.pdf seal.png
+  python3 pdf_seal_stamper.py contract.pdf              # 文本版 PDF
+  python3 pdf_seal_stamper.py scan.pdf                  # 扫描件 PDF（无文本层，自动 OCR）
+  python3 pdf_seal_stamper.py photo.jpg                 # 图片（拍的合同照片，默认输出 原名_已盖章.jpg）
+  python3 pdf_seal_stamper.py photo.jpg seal.png out.pdf  # 图片输入、PDF 输出
   python3 pdf_seal_stamper.py contract.pdf seal.png output.pdf
   python3 pdf_seal_stamper.py contract.pdf --rotate -15
   python3 pdf_seal_stamper.py contract.pdf --dry-run
         """
     )
-    parser.add_argument('pdf', help='合同 PDF 文件路径')
+    parser.add_argument('pdf', help='合同文件路径：PDF（文本版或扫描件）或图片（png/jpg/jpeg/bmp/webp）')
     parser.add_argument('seal', nargs='?', default=None,
                         help='公章图片路径（可选，默认使用脚本同目录下的"默认公章图片.png"）')
-    parser.add_argument('output', nargs='?', default=None, help='输出 PDF 路径（可选）')
+    parser.add_argument('output', nargs='?', default=None,
+                        help='输出路径（可选）：PDF 输入默认 原名_已盖章.pdf；'
+                             '图片输入默认 原名_已盖章.原扩展名，指定 .pdf 结尾则输出 PDF')
     parser.add_argument('--side', choices=['left', 'right'], default='right',
                         help='放置侧（默认: right）')
     parser.add_argument('--rotate', type=float, default=20,
@@ -1356,9 +1639,30 @@ def main():
         args.seal = os.path.join(script_dir, '默认公章图片.png')
         print(f"ℹ️  未指定公章图片，使用默认公章: {args.seal}")
 
-    for path, name in [(args.pdf, '合同 PDF'), (args.seal, '公章图片')]:
+    for path, name in [(args.pdf, '合同文件'), (args.seal, '公章图片')]:
         if not os.path.exists(path):
             print(f"❌ {name} 不存在: {path}")
+            sys.exit(1)
+
+    # 覆盖防护：输出路径不得与输入/公章路径相同（测试事故曾把默认公章图片
+    # 当输出覆盖销毁——图片输入时输出默认同格式图片，更容易踩中）
+    if args.output:
+        for other, name in [(args.pdf, '合同文件'), (args.seal, '公章图片')]:
+            if os.path.abspath(args.output) == os.path.abspath(other):
+                print(f"❌ 输出路径与{name}路径相同，执行会覆盖源文件，已拒绝: {args.output}")
+                sys.exit(1)
+
+    # 输入类型校验：只接受 PDF 或支持的图片格式
+    in_ext = os.path.splitext(args.pdf)[1].lower()
+    if in_ext != '.pdf' and in_ext not in IMAGE_INPUT_EXTS:
+        print(f"❌ 不支持的合同文件类型: {in_ext or '(无扩展名)'}"
+              f"（支持 .pdf / {' / '.join(IMAGE_INPUT_EXTS)}）")
+        sys.exit(1)
+    # 图片输入 + 显式输出：输出只接受 PDF 或图片格式
+    if in_ext in IMAGE_INPUT_EXTS and args.output:
+        out_ext = os.path.splitext(args.output)[1].lower()
+        if out_ext != '.pdf' and out_ext not in IMAGE_INPUT_EXTS:
+            print(f"❌ 图片输入的输出只支持 PDF 或图片格式，收到: {out_ext or '(无扩展名)'}")
             sys.exit(1)
 
     process_seal(
