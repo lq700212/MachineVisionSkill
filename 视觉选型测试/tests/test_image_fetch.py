@@ -251,7 +251,9 @@ class TestPptReplace(unittest.TestCase):
              os.path.join(vt_common.TOOLS_DIR, 'fetch_product_image.py'),
              'replace', '--pptx', src, '--image', new_p,
              '--old-image', old_p, '--out', out],
-            capture_output=True, text=True, timeout=120, cwd=tmp)
+            capture_output=True, text=True,
+            encoding='utf-8', errors='replace',  # 子进程输出UTF-8(±等)，默认gbk解码会崩reader线程
+            timeout=120, cwd=tmp)
         self.assertEqual(r.returncode, 0, f'CLI失败: {r.stdout}{r.stderr}')
         self.assertIn('共1处', r.stdout)
         self.assertIn('原文件未改动', r.stdout)
@@ -485,7 +487,9 @@ class TestReplaceParts(unittest.TestCase):
             [sys.executable,
              os.path.join(vt_common.TOOLS_DIR, 'fetch_product_image.py'),
              'replace', '--pptx', src, '--all_parts', '--db', db],
-            capture_output=True, text=True, timeout=120, cwd=tmp)
+            capture_output=True, text=True,
+            encoding='utf-8', errors='replace',  # 子进程输出UTF-8，默认gbk解码会崩reader线程
+            timeout=120, cwd=tmp)
         self.assertEqual(r.returncode, 0, f'CLI失败: {r.stdout}{r.stderr}')
         for frag in ('相机1处', '镜头1处', '光源1处', '硬件图预览就绪'):
             self.assertIn(frag, r.stdout, f'汇总缺[{frag}]: {r.stdout}')

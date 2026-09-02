@@ -4,6 +4,32 @@
 
 ## [Unreleased]
 
+### 修复：用户指定像素精度时弱模型思考死循环（v1.8.1）
+- **根因**：脚本链路没有"像素级口径"入口——用户明说"像素精度X mm/pixel"时，
+  ① --text 解析的 `_extract_precision` 正则会把"像素精度：0.01mm"误抓成设备精度
+  `precision_requirement`（keywords 表里的像素精度正则从未被使用），再被 ÷3 成
+  异常严格的口径 → 选型无解；② config 无 pixel_precision 字段，SKILL.md 写了
+  "按像素级口径处理"但脚本不支持，弱模型无合法路径；③ 无解诊断只有"口径过松
+  (>20μm)"一个方向，没有"口径过严疑似像素精度被当设备精度"的反向提示 →
+  弱模型只能反复"重新考虑/调参重试"死循环
+- **修复**：
+  - parse_user_data.py：新增 `_extract_pixel_precision`（"像素精度X mm/pixel"、
+    "X mm/pixel"两种写法，先于设备精度提取）；`_extract_precision` 加 `(?<!像素)`
+    负向后行断言，设备精度与像素精度两口径各走各路
+  - vision_proposal_generator.py `_validate_params`：支持 config 字段
+    `pixel_precision`（mm/pixel），等效设备精度=pixel_precision×pixel_per_precision
+    后走原设备精度链（下游零改动）；与 precision_requirement 同给时警告冲突并采用
+    像素级口径；【缺少精度口径】指引更新为三选一
+  - `_perform_selection` 无解诊断新增反向口径复核：像素精度上限<5μm/pixel 异常
+    严格且非像素级口径来源时，明确指引"把值改填 pixel_precision 字段"，
+    禁止调 pixel_per_precision 凑解
+  - config_template.json 决策表更新（像素级口径列为优先级1）+ 新增
+    `pixel_precision` 字段；SKILL.md 口径三选一/单位铁律/防死循环铁律同步更新
+- **测试**：视觉选型测试套件新增 5 用例（文本解析3：像素精度带/不带 /pixel
+  后缀不被误抓、设备精度不被劫持；config链2：等效换算+口径冲突取舍），
+  全量 42 用例 40 过 2 错——2 错为改动前即存在的环境问题
+  （test_image_fetch CLI 子进程 gbk 解码，与本次改动无关，stash 基线复现一致）
+
 ### 硬件页三件套产品图替换（新功能，待执行验证）
 - fetch_product_image.py replace 新增 --all_parts / --part camera|lens|light：
   相机+镜头+光源产品图按选型结果一条命令替换（相机走 blob 精确匹配与官网取图

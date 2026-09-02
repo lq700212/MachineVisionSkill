@@ -116,8 +116,8 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
    图片必须 AI 直接读图抄字（勿依赖 OCR）。
 2. **config 模式**：复制 skill 目录的 `config_template.json` 为工作区 `project_config.json`，
    把 null 换成真实值。字段说明与**口径决策表**都写在模板内：
-   - 精度口径三选一：合同/用户明确精度 → `precision_requirement`；只有图纸公差 → `tolerance`（自动按公差/10反推）；用户口头放宽 → 以用户最新口径为准。**不确定就问用户，不要发明口径**
-   - **单位铁律**：`precision_requirement` 的单位是毫米（设备检测精度），不是像素精度(mm/pixel)！像素精度上限 = precision_requirement ÷ pixel_per_precision（0.03÷3=0.01mm/pixel）。用户说"精度0.03"默认指设备精度；只有用户明说"像素精度是X mm/pixel"才按像素级口径处理
+    - 精度口径三选一：用户明说"像素精度X mm/pixel" → `pixel_precision`（mm/pixel，脚本×亚像素因子自动换算）；合同/用户明确设备精度 → `precision_requirement`；只有图纸公差 → `tolerance`（自动按公差/10反推）。**不确定就问用户，不要发明口径**
+    - **单位铁律**：`precision_requirement` 的单位是毫米（设备检测精度），不是像素精度(mm/pixel)！像素精度上限 = precision_requirement ÷ pixel_per_precision（0.03÷3=0.01mm/pixel）。用户说"精度0.03"默认指设备精度；用户明说"像素精度是X mm/pixel"时填 `pixel_precision` 字段，**禁止塞进 precision_requirement**（会被再÷3，差3倍导致无解）
    - 尺寸三选一：`detection_area`（检测区域，推荐）> `part_size`（整体外形）> `field_of_view`（最终视野）
    - `template` 可省略：自动扫描工作目录 *.pptx；工作目录无模板时只输出选型结果（放模板后重跑即生成PPT）
 3. 漏填/格式错不会静默出错方案：脚本报`【缺少XX】/【尺寸格式错误】`并给出可执行修正指引
@@ -128,7 +128,9 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 （反复打印"让我重新考虑/让我尝试更大的像素精度"）。以下铁律直接执行，不需要理解原理：
 
 1. **同一参数组合最多跑2次**。脚本输出`[无解诊断]`后，按诊断文案行动，不要改参数重跑试探
-2. **禁止改 `pixel_per_precision`、`precision_requirement` 等"凑出"选型解**——那是在发明口径
+2. **禁止改 `pixel_per_precision`、`precision_requirement` 等"凑出"选型解**——那是在发明口径。
+   用户明说"像素精度X mm/pixel"时只能填 config 的 `pixel_precision` 字段（像素级口径），
+   禁止塞进 `precision_requirement`
 3. 脚本输出`✅ 标准口径有解`时：说明口径混淆已被脚本自动矫正，**把脚本里的确认问题原样转问用户**
    （"您说的精度0.03是设备检测精度(mm)还是像素精度(mm/pixel)？"），用户答复前不要继续生成PPT
 4. 脚本输出`[镜头无匹配·根因]`时按根因走：窗口上限低于库内最低倍率→换更大靶面相机（脚本会自动

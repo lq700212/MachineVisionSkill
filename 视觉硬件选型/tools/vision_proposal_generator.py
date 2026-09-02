@@ -400,6 +400,9 @@ class VisionProposalGenerator:
         validated = params.copy()
         
         # ============ 检查精度/公差（必须有明确来源） ============
+        # 像素级口径（pixel_precision，单位mm/pixel）也是合法精度来源：
+        # 用户明说"像素精度X mm/pixel"时直接填它，禁止塞进 precision_requirement
+        has_pixel_precision = 'pixel_precision' in validated and validated['pixel_precision'] is not None
         has_precision = 'precision_requirement' in validated and validated['precision_requirement'] is not None
         has_tolerance = 'tolerance' in validated and validated['tolerance'] is not None
         
@@ -407,7 +410,7 @@ class VisionProposalGenerator:
         has_camera = 'camera' in validated and validated['camera'] is not None
         has_lens = 'lens' in validated and validated['lens'] is not None
         
-        if not has_precision and not has_tolerance:
+        if not has_precision and not has_tolerance and not has_pixel_precision:
             # 如果有camera和lens配置，使用默认精度
             if has_camera and has_lens:
                 print("\n  从配置文件中读取相机和镜头参数")
@@ -416,10 +419,11 @@ class VisionProposalGenerator:
             elif self.auto_mode or not sys.stdin.isatty():
                 # 非交互环境（AI/弱模型调用）：禁止卡死在input()，抛出可执行的填写指引
                 raise ValueError(
-                    "【缺少精度口径】config 里 precision_requirement 与 tolerance 均为空。\n"
-                    "  修正方法（二选一，写入 project_config.json 后重跑）：\n"
+                    "【缺少精度口径】config 里 precision_requirement / tolerance / pixel_precision 均为空。\n"
+                    "  修正方法（三选一，写入 project_config.json 后重跑）：\n"
                     "    1) \"precision_requirement\": 0.03   ← 用户/合同给的设备检测精度(mm)\n"
                     "    2) \"tolerance\": 0.25               ← 图纸公差(±0.25mm)，系统按公差/10反推\n"
+                    "    3) \"pixel_precision\": 0.01           ← 用户明说的像素精度(mm/pixel)，系统×亚像素因子换算\n"
                     "  注意：不要自己发明口径，不确定时向用户确认。")
             else:
                 print("\n" + "=" * 60)
@@ -522,10 +526,29 @@ class VisionProposalGenerator:
         validated.pop('pixel_size', None)
         validated.pop('magnification', None)
 
-        # 精度口径决策（config_template 决策表：precision_requirement 与 tolerance
-        # 同时给时 precision_requirement 优先——用户/合同明确精度不被图纸公差覆盖；
-        # 仅当无明确精度时才按公差/10反推）
-        if validated.get('precision_requirement') is not None:
+        # 精度口径决策（config_template 决策表）：
+        # 1) pixel_precision（用户明说的像素级口径，mm/pixel）最优先——
+        #    等效设备精度 = pixel_precision × pixel_per_precision，下游链不变；
+        #    与 precision_requirement 同时给属口径冲突，打印警告采用像素级口径
+        #    （用户明说"像素精度"是更强的口径声明），并提示向用户确认。
+        # 2) precision_requirement 与 tolerance 同时给时 precision_requirement 优先；
+        #    仅当无明确精度时才按公差/10反推。
+        if validated.get('pixel_precision') is not None:
+            pp = float(validated['pixel_precision'])
+            if pp <= 0:
+                raise ValueError(
+                    f"【口径数值错误】pixel_precision={pp} 必须>0，单位 mm/pixel，"
+                    "修正 config 后重跑。")
+            k = float(validated.get('pixel_per_precision', 3.0))
+            if validated.get('precision_requirement') is not None:
+                print(f"  [精度口径] ⚠️ 口径冲突：pixel_precision={pp}mm/pixel 与 "
+                      f"precision_requirement={validated['precision_requirement']}mm 同时给出，"
+                      f"采用用户明说的像素级口径；如非用户本意请向用户确认")
+            validated['precision_requirement'] = pp * k
+            validated['precision_source'] = 'pixel_precision'
+            print(f"\n  [精度口径] 用户指定像素精度 {pp}mm/pixel（像素级口径）")
+            print(f"  等效设备精度 = {pp} × 亚像素因子{k} = {pp*k:.4f}mm（下游按设备精度链计算）")
+        elif validated.get('precision_requirement') is not None:
             if validated.get('tolerance') is not None:
                 print(f"  [精度口径] precision_requirement 优先（口径决策表），"
                       f"忽略 tolerance={validated['tolerance']}")
@@ -785,6 +808,16 @@ class VisionProposalGenerator:
                     return fixed
             else:
                 print("  亚像素因子已是3.0，重试无意义 → 检查检测精度数值本身是否填错")
+
+        # 反向口径复核：像素精度上限 <5μm/pixel 异常严格，常见根因是把用户明说的
+        # "像素精度X mm/pixel"误填进了 precision_requirement（被再÷3），差3倍导致无解
+        if 0 < ppm < 0.005 and params.get('precision_source') != 'pixel_precision':
+            print(f"\n  ⚠️ 口径复核: 像素精度上限 {ppm*1000:.1f} μm/pixel 异常严格"
+                  f"（常见 5~15 μm/pixel），疑似口径混淆")
+            print("  → 若用户原话是“像素精度X mm/pixel”，请把该值改填 config 的 "
+                  "\"pixel_precision\" 字段（像素级口径，单位mm/pixel），"
+                  "不要塞进 precision_requirement，也不要调 pixel_per_precision 凑解")
+
 
         print("\n  ⛔ 防死循环铁律:")
         print("  1. 同一参数组合最多重试2次，第2次仍无解必须停止")

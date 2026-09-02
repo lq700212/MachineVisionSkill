@@ -204,6 +204,12 @@ class UserDataParser:
         """从文本中提取参数"""
         params = {}
         
+        # 提取像素精度（用户明说"像素精度X mm/pixel"的像素级口径，必须先于设备精度提取，
+        # 否则会被 _extract_precision 的"精度"正则误抓成 precision_requirement，差3倍导致无解死循环）
+        pixel_precision = self._extract_pixel_precision(text)
+        if pixel_precision:
+            params['pixel_precision'] = pixel_precision
+
         # 提取精度要求
         precision = self._extract_precision(text)
         if precision:
@@ -255,11 +261,30 @@ class UserDataParser:
                 return value
         return None
 
-    def _extract_precision(self, text: str) -> Optional[float]:
-        """提取精度要求"""
+    def _extract_pixel_precision(self, text: str) -> Optional[float]:
+        """提取像素级口径（用户明说"像素精度X mm/pixel"才命中）。
+        返回 mm/pixel 数值；脚本链按 ×亚像素因子 换算等效设备精度。"""
         patterns = [
-            r'精度[要需]?求[：:]?\s*[≤<]?\s*([0-9.]+)\s*(mm|μm|um)',
-            r'[精测]度[：:]?\s*[≤<]?\s*([0-9.]+)\s*(mm|μm|um)',
+            r'像素精度[：:]?\s*[≤<]?\s*([0-9.]+)\s*(mm|μm|um)\s*(?:/\s*(?:pixel|px|像素))?',
+            r'([0-9.]+)\s*(mm|μm|um)\s*/\s*(?:pixel|px|像素)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                value = float(match.group(1))
+                unit = match.group(2).lower()
+                if unit in ['μm', 'um']:
+                    value = value / 1000
+                if value > 0:
+                    return value
+        return None
+
+    def _extract_precision(self, text: str) -> Optional[float]:
+        """提取精度要求（设备检测精度口径；带"像素"前缀的由 _extract_pixel_precision 处理，
+        此处用负向后行断言排除，防止把像素精度误抓成设备精度）"""
+        patterns = [
+            r'(?<!像素)精度[要需]?求[：:]?\s*[≤<]?\s*([0-9.]+)\s*(mm|μm|um)',
+            r'(?<!像素)[精测]度[：:]?\s*[≤<]?\s*([0-9.]+)\s*(mm|μm|um)',
             r'设备精度[：:]?\s*[≤<]?\s*([0-9.]+)\s*(mm|μm|um)',
         ]
         
