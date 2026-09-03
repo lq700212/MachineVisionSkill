@@ -122,6 +122,7 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 2. **config 模式**：复制 skill 目录的 `config_template.json` 为工作区 `project_config.json`，
    把 null 换成真实值。字段说明与**口径决策表**都写在模板内：
     - 精度口径三选一：用户明说"像素精度X mm/pixel" → `pixel_precision`（mm/pixel，脚本×亚像素因子自动换算）；合同/用户明确设备精度 → `precision_requirement`；只有图纸公差 → `tolerance`（自动按公差/10反推）。**不确定就问用户，不要发明口径**
+    - **口径第4种：用户拍板指定相机（客户无精度要求）** → 用 `pixel_precision` 反推：基准=视野长边÷相机水平像素，再放宽使余量比>1.3（相机评分进"最佳区间"，--auto 自然选中指定相机，精度链余量也达标）。例：指定2000万（5472宽）+视野128 → 基准0.0234，取0.031
     - **单位铁律**：`precision_requirement` 的单位是毫米（设备检测精度），不是像素精度(mm/pixel)！像素精度上限 = precision_requirement ÷ pixel_per_precision（0.03÷3=0.01mm/pixel）。用户说"精度0.03"默认指设备精度；用户明说"像素精度是X mm/pixel"时填 `pixel_precision` 字段，**禁止塞进 precision_requirement**（会被再÷3，差3倍导致无解）
    - 尺寸三选一：`detection_area`（检测区域，推荐）> `part_size`（整体外形）> `field_of_view`（最终视野）
    - `template` 可省略：自动扫描工作目录 *.pptx；工作目录无模板时只输出选型结果（放模板后重跑即生成PPT）

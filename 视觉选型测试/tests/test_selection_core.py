@@ -164,6 +164,45 @@ class TestTelecentricTiering(unittest.TestCase):
                                               prefer_telecentric=False, top_n=3)
         self.assertTrue(result, msg='非测量场景普通镜头应正常命中')
 
+    # 2026-09-03 实际项目（视野128mm）：窗口上限0.103x < 库内远心最低0.259x，
+    # 日志先空搜远心层再打"无匹配根因"才回退——大视野远心物理不可行应直接短路
+    BIG_CAM = {'brand': '海康威视', 'model': 'MV-CS200-10GM', 'sensor_size': '1"',
+               'pixel_size': 2.4, 'lens_mount': 'C-Mount',
+               'resolution': {'width': 5472, 'height': 3648}, 'max_fps': 16.8}
+    BIG_FOV = {'width': 128, 'height': 22.5}
+
+    def test_large_fov_skips_telecentric_layer(self):
+        """回归: 窗口上限<库内远心最低倍率 → 跳过远心层直接回退普通镜头"""
+        import contextlib, io
+        sel = self._selector_with(keep_telecentric=True, add_normal=False)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = sel.select_lenses_for_camera(self.BIG_CAM, self.BIG_FOV,
+                                                  0.093, 3.0,
+                                                  prefer_telecentric=True, top_n=3)
+        out = buf.getvalue()
+        self.assertIn('跳过远心层', out,
+                      msg='大视野短路必须输出明确原因（远心物理做不了大视野）')
+        self.assertNotIn('搜索范围: 远心镜头', out,
+                         msg='远心层注定为空时不得再空搜一遍')
+        self.assertTrue(result, msg='库内有FA镜头（v1.10.0入库），回退必须命中')
+        self.assertTrue(all(l.get('telecentric_fallback') for l in result),
+                        msg='短路回退命中必须带 telecentric_fallback 标记供核验提示')
+
+    def test_small_fov_no_shortcut(self):
+        """注入防误伤: 窗口覆盖远心倍率时不得短路（远心层照常先搜）"""
+        import contextlib, io
+        sel = self._selector_with(keep_telecentric=True, add_normal=True)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = sel.select_lenses_for_camera(self.CAMERA, self.FOV, 0.03, 3.0,
+                                                  prefer_telecentric=True, top_n=3)
+        out = buf.getvalue()
+        self.assertNotIn('跳过远心层', out,
+                         msg='小视野场景误触发短路会架空远心优先策略')
+        self.assertTrue(result and all('远心' in l['type'] for l in result),
+                        msg='小视野测量场景远心层命中必须优先返回远心')
+
 
 class TestTelecentricFallbackValidation(unittest.TestCase):
     """核验层：远心回退方案的透视误差风险必须醒目提示（WARNING不拦死）"""

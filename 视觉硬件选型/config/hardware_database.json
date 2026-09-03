@@ -242,6 +242,37 @@
   ],
   "lenses": [
     {
+      "brand": "海康威视",
+      "series": "KF-P系列",
+      "model": "MVL-KF1624M-25MP",
+      "type": "FA镜头",
+      "magnification": 0.1026,
+      "working_distance": 156,
+      "focal_length": 16,
+      "supported_sensor_size": "1.2\"",
+      "supported_sensor_diameter": 19.3,
+      "mount": "C-Mount",
+      "f_number": 2.4,
+      "has_coaxial_light": false,
+      "features": [
+        "低畸变",
+        "可调焦FA镜头",
+        "2500万分辨率"
+      ],
+      "note": "FA镜头倍率/WD随对焦变化，库内值为本方案设计工作点（1\"靶面盖128mm视野，倍率0.1026x，WD≈156mm，WD=f/β=16/0.1026）；换视野/相机须重算工作点",
+      "verified": true,
+      "verification_url": "https://www.hikrobotics.com/cn/Api/Foreground/Vision/VisionProductIntroduction?id=12857",
+      "source_product_id": 12857,
+      "history": [
+        {
+          "date": "2026-09-03",
+          "action": "官网API查证入库",
+          "source": "https://www.hikrobotics.com/cn/Api/Foreground/Vision/VisionProductIntroduction?id=12857",
+          "note": "productName原文：16mm，F2.4，1.2\"，2500万分辨率，C接口镜头；特性含低畸变/高周边光亮比；productTrends=已发布；offeringName=KF-P系列镜头"
+        }
+      ]
+    },
+    {
       "brand": "视清科技",
       "series": "WWK系列",
       "model": "WWK03-110-230",

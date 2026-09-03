@@ -111,6 +111,27 @@ class LensSelector:
                 # 窗口无解与镜头类型无关，分层回退无意义，直接按无解处理
                 print(f"  [镜头] 该相机无解: {window.get('reason', '')}")
                 return []
+            # 大视野短路：窗口上限已低于库内远心最低倍率时，远心层注定为空
+            # （大视野=低倍率，而远心镜头做不出大视野低倍率——物方远心的前组
+            # 口径必须≥视野宽，成本/体积物理不可行）。再搜一遍远心层只是空转，
+            # 直接回退普通镜头并把原因讲清楚（2026-09-03 实际项目：视野128mm
+            # 窗口上限0.103x < 库内远心最低0.259x，日志先打一遍"无匹配根因"
+            # 再回退，用户看不懂远心为何不行）
+            tele_mags = sorted(l['magnification'] for l in self.lenses
+                               if '远心' in str(l.get('type', ''))
+                               and l.get('magnification') and l['magnification'] > 0)
+            if tele_mags and window['mag_max'] * 1.02 < tele_mags[0]:
+                print(f"  [镜头] 视野过大（窗口上限 {window['mag_max']:.3f}x < "
+                      f"库内远心最低倍率 {tele_mags[0]}x）：远心镜头物理上做不了"
+                      f"这么大视野，跳过远心层直接选普通镜头"
+                      f"（核验将提示确认透视误差风险）")
+                fallback = self._match_lenses_for_camera(
+                    camera, fov, required_precision_mm, pixel_per_precision,
+                    brand=brand, need_coaxial_light=need_coaxial_light,
+                    telecentric_only=False, top_n=top_n, window=window)
+                for lens in fallback:
+                    lens['telecentric_fallback'] = True
+                return fallback
             telecentric = self._match_lenses_for_camera(
                 camera, fov, required_precision_mm, pixel_per_precision,
                 brand=brand, need_coaxial_light=need_coaxial_light,
