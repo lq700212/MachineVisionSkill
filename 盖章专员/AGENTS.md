@@ -213,3 +213,12 @@ seal/keyword/default）→ 尺寸对齐 → 叠加盖章 → **压平** → [图
 | 扫描件"盖章"关键词定位落空，章盖默认右下角（工伤保险待遇申领表实测） | 三缺陷叠加：①det box_thresh=0.5 丢签名栏整行 ②文字层词宽=字号×字数与行框脱节（213→496pts）③max_word_width=200 误杀 213pts 签名行 | v1.1.1 三连修：det 降阈值+unclip 2.0、文字层词宽按行框校准、过滤阈值 300；另有骑压精对齐（章骑"盖章"二字而非长行几何中心） |
 | Excel 输入报 "No /Root object"，被误当"导出异步未写完"做了多轮无谓修复（怀疑大小稳定判据、改 fitz 探测等） | **src_pdf 未重指向转换后的 PDF**，pdfplumber 把 .xlsx（zip）当 PDF 解析——解析器对非 PDF 的合理报错。"修复"方向全错是因为没走数据流核实 | 铁律1：先沿数据链查 src_pdf 指到了哪；Excel 分支里 src_pdf = pdf_path（转换后）已固化+注释写明；"No /Root object"先怀疑"喂错了文件"，而不是"文件没写完" |
 | Excel 实验残留 excel.exe 进程 + 临时 PDF 删不掉（实验脚本 exp_probe 末尾未赋 None 释放 COM 引用） | COM 引用未彻底释放导致 Quit 未生效 | convert_excel_to_pdf 的 finally 中 wb.Close + excel.Quit + 赋 None 三步缺一不可（注释固化）；实验脚本同样必须释放 |
+| GBK 控制台打印 emoji 全崩 + 测试中文断言全灭（v1.2.1 修前基线 18/24） | print 非 ASCII 符号在 gbk stdout 抛 UnicodeEncodeError；测试按 utf-8 解码子进程 | 模块顶部即 reconfigure stdout/stderr 为 utf-8(errors=replace)；与视觉选型 check_ppt_quality 同类事故同根 |
+| cv2 缺失致 OCR 路径崩（只判 rapidocr 未判 cv2） | _polar 等处 import cv2 抛 ImportError | _need_cv2 统一守卫 + 公章 OCR 单角度 try 隔离 |
+| Excel 相对路径 COM 打开失败 | COM 按进程默认目录解析相对路径 | 传 abspath（注释固化） |
+| 默认兜底写死 A4 第一页（非 A4/多页盖错地方） | 硬编码 595×842/page=1 | _last_page_size 按实际末页尺寸比例定位 |
+| 禁忌区漏他角色明确栏 / 矩形相交误伤紧排签署栏 | "甲方（盖章）："不含"盖章："子串；125 章骑压 40pts 间距栏必交叠 | 追加明确栏搜索 + 命中语义只看章中心（T6 lock） |
+| 空 --keywords 匹配全词 / keywords=None 程序化崩溃 | "" in word 恒真；步骤3直写 for kw in keywords | 过滤空串+为空拒绝；用 (keywords or []) |
+| process_seal 返回 None 仍 exit 0（含 dry-run 入参非法） | main 未看返回值 | dry-run 成功返真值，其余 None→exit 1 |
+| 非红章透明化后隐形 / RGBA 透明底污染红质心 | 红检测全空→alpha 全0；直接丢 alpha | 过少红像素退回不透明；先白底合成 |
+| 压平/落盘/渲染抛异常漏清临时文件、无降级 | 成功路径才 cleanup | 失败分支逐个清理 + flatten 失败降级交付 + main 兜底 |

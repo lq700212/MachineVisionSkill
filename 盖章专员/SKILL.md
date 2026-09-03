@@ -3,7 +3,7 @@ name: "盖章专员"
 description: "专业盖章！支持文本版 PDF、扫描件 PDF（无文本层）、图片（拍照件）、Excel 工作簿四类输入，能自动匹配现有印章的大小和位置，为合同添加公司印章。需要为 PDF/扫描件/图片/Excel 合同加盖公司印章或签名章时找我。"
 ---
 
-# 公章添加工具 v1.2.0
+# 公章添加工具 v1.2.1
 
 自动将公章图片添加到合同上——**支持四类输入**：文本版 PDF、扫描件 PDF（无文本层，
 自动 OCR 建文字层）、图片文件（png/jpg/jpeg/bmp/webp，拍照件直接盖章）、Excel
@@ -240,7 +240,8 @@ python pdf_seal_stamper.py contract.pdf --keywords "签章,甲方盖章,乙方�
 
 ## 依赖
 
-需要安装：
+**无需手动安装**。脚本启动时自动检查并经阿里镜像源补装；核心依赖装不上才会
+退出并给出手动命令。手动安装命令（仅自动安装失败时用）：
 ```bash
-pip install pypdf pdfplumber pillow pymupdf numpy reportlab scipy
+pip install pypdf pdfplumber pillow pymupdf numpy reportlab scipy rapidocr_onnxruntime opencv-python -i https://mirrors.aliyun.com/pypi/simple/
 ```

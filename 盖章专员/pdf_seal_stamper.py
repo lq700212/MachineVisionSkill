@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PDF 公章添加工具 (PDF Seal Stamper) v1.2.0
+PDF 公章添加工具 (PDF Seal Stamper) v1.2.1
 =========================================
 自动将公章盖到合同文件上——支持文本版 PDF、扫描件 PDF（无文本层）、图片文件
 （png/jpg/jpeg/bmp/webp）、Excel 工作簿（xlsx/xls/xlsm/xlsb）四类输入。
@@ -68,6 +68,20 @@ import sys
 import io
 import tempfile
 from difflib import SequenceMatcher
+
+# ============================================================
+# 输出编码固定（v1.2.1 稳定性补丁，首要防线）
+# 根因：脚本大量打印 emoji/制表符（ℹ️/⚠️/❌/🔍/─），Windows GBK 控制台下
+# print 即抛 UnicodeEncodeError，整个盖章直接崩溃（exit=1）；且测试以 utf-8
+# 解码子进程输出，编码不确定则中文断言全灭。必须在任何 print（含依赖自检）
+# 之前把 stdout/stderr 固定为 utf-8，errors=replace 保证任何 print 永不崩。
+# ============================================================
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass  # 非标准 stdout（如被重定向为 StringIO）无 reconfigure，忽略即可
 
 # ============================================================
 # 依赖自检与自动安装（启动时执行，先于第三方 import）
@@ -170,6 +184,11 @@ def rgb_to_transparent_rgba(pil_image):
     # 深色文字区域：公章文字/边框
     dark_mask = (r < 150) & (g < 150) & (b < 150) & (r > 30)
     seal_mask = red_mask | dark_mask
+    if seal_mask.sum() < max(100, seal_mask.size * 0.005):
+        # 非红色章（蓝/黑章）或红色过少：按红色检测生成的 alpha 近乎全透明，
+        # 章盖上去将不可见——这是最坏结果。此时宁可保留原图不透明
+        # （章稍大但可见），绝不交出隐形章。
+        return pil_image.convert("RGBA")
 
     # 对 mask 做轻微膨胀 + 高斯模糊，让边缘过渡更自然
     from scipy import ndimage
@@ -199,12 +218,22 @@ def crop_seal_rgb(pil_image):
 
 
 def crop_seal_content(pil_image):
-    """统一裁剪接口"""
+    """统一裁剪接口（P/L/LA/CMYK 等非常见模式先归一化：原样返回会导致
+    白底遮挡合同文字或后续绘制异常；归一化失败才原样返回，不抛异常）"""
     if pil_image.mode == 'RGBA':
         return crop_seal_rgba(pil_image)
-    elif pil_image.mode == 'RGB':
+    if pil_image.mode == 'RGB':
         return crop_seal_rgb(pil_image)
-    return pil_image
+    if pil_image.mode in ('LA', 'PA'):
+        try:
+            return crop_seal_rgba(pil_image.convert('RGBA'))
+        except Exception:
+            return pil_image
+    # P/L/CMYK 等：先转 RGB 再走红色检测转透明（非红章由兜底保证不透明可见）
+    try:
+        return crop_seal_rgb(pil_image.convert('RGB'))
+    except Exception:
+        return pil_image
 
 
 # ============================================================
@@ -457,10 +486,15 @@ def flatten_stamped_page(pdf_path, page_number, dpi=300, jpeg_quality=92):
         out.close()
         src.close()
 
-    # 原子替换输出文件（Windows 瞬时文件锁重试见 _write_bytes_retry）
+    # 原子替换输出文件（Windows 预览窗格/杀软可能锁住目标，带重试；持续锁则
+    # 清理 tmp 后抛异常由上层转友好提示，不留半成品孤儿文件）
     tmp_path = pdf_path + ".flattening.tmp"
-    _write_bytes_retry(tmp_path, out_bytes)
-    os.replace(tmp_path, pdf_path)
+    try:
+        _write_bytes_retry(tmp_path, out_bytes)
+        _replace_retry(tmp_path, pdf_path)
+    except Exception:
+        _cleanup_tmp(tmp_path)
+        raise
 
 
 # ============================================================
@@ -520,6 +554,36 @@ def _write_bytes_retry(path, data, attempts=4, delay=0.5):
             time.sleep(delay)
 
 
+def _replace_retry(src, dst, attempts=4, delay=0.5):
+    """os.replace 的 Windows 文件锁重试版（预览窗格常锁住输出 PDF）。
+    持续锁住则抛异常，由调用方清理临时文件后转友好提示，不留孤儿 tmp。"""
+    import time
+    for attempt in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(delay)
+
+
+def _last_page_size(pdf_path):
+    """返回 (末页宽pts, 末页高pts, 末页号)。失败退回 A4/第1页，绝不抛异常。
+    用途：默认兜底定位必须按文档实际尺寸与末页（签署区在末页）计算，
+    写死 A4 第一页会在非 A4/多页文档上盖错地方。"""
+    try:
+        doc = fitz.open(pdf_path)
+        try:
+            n = max(len(doc) - 1, 0)
+            r = doc[n].rect
+            return r.width, r.height, n + 1
+        finally:
+            doc.close()
+    except Exception:
+        return 595.2, 841.9, 1
+
+
 def _lazy_ocr_engine():
     """懒加载 rec-only 识别引擎；OCR 依赖不可用返回 None（智能定位自动降级）"""
     try:
@@ -529,11 +593,42 @@ def _lazy_ocr_engine():
         return None
 
 
+def _need_cv2():
+    """取 cv2 模块；缺失返回 None（调用方诚实降级，绝不因 import 崩溃）。
+    根因：OPTIONAL 里只判了 rapidocr 未单独判 cv2，opencv 装不上时
+    _polar_unwrap 等处的 import cv2 直接抛 ImportError 崩全程。"""
+    try:
+        import cv2
+        return cv2
+    except Exception:
+        return None
+
+
 def _imread_bgr(path):
-    """cv2.imread 不支持中文路径，经 PIL 中转（RGB→BGR）"""
-    pil = Image.open(path).convert("RGB")
-    import cv2
-    return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+    """cv2.imread 不支持中文路径，经 PIL 中转（RGB→BGR）。
+    RGBA 图先以白底合成：透明 padding 底下的 RGB 可能是红/黑，直接丢 alpha
+    会污染红像素质心与极坐标展开。cv2 缺失或图片无法解码返回 None（上层降级，
+    不抛异常）。"""
+    try:
+        pil = Image.open(path)
+    except Exception:
+        return None
+    try:
+        if pil.mode == "RGBA":
+            bg = Image.new("RGB", pil.size, (255, 255, 255))
+            bg.paste(pil, mask=pil.split()[3])
+            pil = bg
+        else:
+            pil = pil.convert("RGB")
+    except Exception:
+        return None
+    cv2 = _need_cv2()
+    if cv2 is None:
+        return None
+    try:
+        return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+    except Exception:
+        return None
 
 
 def _red_mask(bgr):
@@ -546,8 +641,11 @@ def _red_mask(bgr):
 def _polar_unwrap(bgr, start_deg, band=(0.58, 0.92), out_w=2400):
     """以红像素质心为圆心做极坐标展开，把环形排列的公司名拉直成横排。
     轴向关键（曾因写反而整行镜像）：输出顶行=外半径（字头朝外的公章文字展开后正立），
-    列=角度顺时针。start_deg 为展开缝的起始角，用于多起始角避开文字被切断。"""
-    import cv2
+    列=角度顺时针。start_deg 为展开缝的起始角，用于多起始角避开文字被切断。
+    cv2 缺失或输入无效返回 None（上层换角度/降级，不抛异常）。"""
+    cv2 = _need_cv2()
+    if cv2 is None or bgr is None:
+        return None
     red = _red_mask(bgr)
     ys, xs = np.nonzero(red)
     if ys.size < 100:
@@ -566,8 +664,10 @@ def _polar_unwrap(bgr, start_deg, band=(0.58, 0.92), out_w=2400):
 
 
 def _crop_main_text_row(flat):
-    """展开图中按红像素垂直投影裁出主文字行（公司名行是红像素最多的行带）"""
-    import cv2
+    """展开图中按红像素垂直投影裁出主文字行（公司名行是红像素最多的行带）。
+    flat 无效返回 None（上层换角度，不抛异常）。"""
+    if flat is None:
+        return None
     red = _red_mask(flat)
     counts = red.sum(axis=1).astype(float)
     if counts.max() < 20:
@@ -587,8 +687,11 @@ def _rec_line_segments(rec_only, line_img, seg_chars=7):
     """行图缩到高48px后按字间隙切段分别 rec 再顺序拼接。
     为什么要切：rec 输入宽度被压到 ~320px，整行十几字会被压扁丢字（实测只出前8字）。
     为什么按字间隙切：等宽硬切会把字切成两半导致识别错字（实测"光电"→"光中"），
-    在红像素列投影的空隙处下刀保证每段都是完整字，拼接无需去重。"""
-    import cv2
+    在红像素列投影的空隙处下刀保证每段都是完整字，拼接无需去重。
+    cv2 缺失或输入无效返回 ""（上层视为该角度无结果，不抛异常）。"""
+    cv2 = _need_cv2()
+    if cv2 is None or line_img is None:
+        return ""
     h, w = line_img.shape[:2]
     if h < 8 or w < 32:
         return ""
@@ -659,14 +762,22 @@ def ocr_seal_company(seal_image_path, rec_only):
     except Exception as e:
         print(f"  ⚠️  公章图片读取失败: {e}")
         return None
+    if bgr is None:
+        # cv2 缺失 / 图片损坏或格式不支持：极坐标 OCR 做不了，交 --company 兜底
+        print("  ⚠️  公章图片无法解析（cv2 缺失或图片损坏），"
+              "可用 --company \"公司名\" 手动指定后重试")
+        return None
     for start in (0, 90, 180, 270):
-        flat = _polar_unwrap(bgr, np.deg2rad(start))
-        if flat is None:
-            continue
-        line = _crop_main_text_row(flat)
-        if line is None:
-            continue
-        text = _rec_line_segments(rec_only, line)
+        try:
+            flat = _polar_unwrap(bgr, np.deg2rad(start))
+            if flat is None:
+                continue
+            line = _crop_main_text_row(flat)
+            if line is None:
+                continue
+            text = _rec_line_segments(rec_only, line)
+        except Exception:
+            continue  # 单角度失败换下一个角度，绝不因一角崩全程
         cleaned = _clean_company_text(text)
         if cleaned:
             raw_candidates.append(cleaned)
@@ -755,7 +866,9 @@ def find_role_stamp_block(pdf_path, role, company=None):
     kws = []
     for mark in ("盖章", "公章", "签章"):
         kws += [f"{role}（{mark}", f"{role}({mark}", f"{role}{mark}"]
-    blocks = find_keyword_blocks(pdf_path, kws)
+    # 词宽 400（同策略3）：签署行常带公司名，整词宽易超默认 300 被滤，
+    # 曾致长签署行的明确盖章栏漏检
+    blocks = find_keyword_blocks(pdf_path, kws, max_word_width=400)
     if blocks:
         max_page = max(b["page"] for b in blocks)
         return _pick_block(blocks, max_page), "明确盖章栏"
@@ -771,12 +884,14 @@ def find_role_stamp_block(pdf_path, role, company=None):
         max_page = max(b["page"] for b in mark_blocks)
         best, best_dist = None, None
         for mb in [b for b in mark_blocks if b["page"] == max_page]:
-            # 只认角色块正下方（y 更大）且水平距离最近的配对
+            # 只认角色块正下方（y 更大）且距离最近的配对；用二维欧氏距离
+            # （曾只比水平距离：正文段落里同列的角色词会抢赢签署区近邻）
             above = [rb for rb in role_blocks
                      if rb["page"] == mb["page"] and rb["center_y"] < mb["center_y"]]
             if not above:
                 continue
-            rb = min(above, key=lambda r: abs(r["center_x"] - mb["center_x"]))
+            rb = min(above, key=lambda r: ((r["center_x"] - mb["center_x"]) ** 2
+                                           + (r["center_y"] - mb["center_y"]) ** 2) ** 0.5)
             dist = abs(rb["center_x"] - mb["center_x"])
             if best_dist is None or dist < best_dist:
                 best, best_dist = mb, dist
@@ -819,12 +934,15 @@ def find_role_stamp_block(pdf_path, role, company=None):
                 if _hits_other(cx, cy):
                     cx = (rb["x0"] + rb["x1"]) / 2
                     cy = om["y0"] - 8 - half
-            # 合成块=以目标中心为中心、章宽为宽的方块：保证定位走骑压分支精确落点
+            # 合成块=以目标中心为中心、章宽为宽的方块：保证定位走骑压分支精确落点；
+            # kw_words 必须清空（合成块无关键词明细，骑压分支退回块中心——
+            # 若复用角色块的词明细，角色文本恰含"盖章"时会把章拽偏）
             synthetic = dict(rb)
             synthetic.update({
                 "x0": cx - half, "x1": cx + half, "center_x": cx,
                 "y0": cy - 10, "y1": cy + 10, "center_y": cy,
                 "page": om["page"],
+                "kw_words": [],
             })
             return synthetic, "对侧对称(与他角色盖章栏同高,本角色列)"
 
@@ -865,6 +983,14 @@ def build_forbidden_zones(pdf_path, my_role, my_company):
     for b in find_keyword_blocks(pdf_path, _SEALMARK_KWS):
         if any(r in "".join(b["keywords_found"]) for r in other_roles):
             zones.append((b["x0"], b["y0"], b["x1"], b["y1"]))
+    # 他角色的明确盖章栏（"甲方（盖章）："式冒号在括号外，不含"盖章："子串，
+    # 上面的裸栏搜索扫不到——曾漏导致章压到对方明确栏文字上）
+    for r in other_roles:
+        rkws = []
+        for mark in ("盖章", "公章", "签章"):
+            rkws += [f"{r}（{mark}", f"{r}({mark}", f"{r}{mark}"]
+        for b in find_keyword_blocks(pdf_path, rkws, max_word_width=400):
+            zones.append((b["x0"], b["y0"], b["x1"], b["y1"]))
     if my_company:
         for p in extract_contract_parties(pdf_path):
             if p["role"] == my_role:
@@ -879,15 +1005,18 @@ def build_forbidden_zones(pdf_path, my_role, my_company):
 
 
 def adjust_avoid_forbidden(cx, cy, half_w, half_h, forbidden, page_w, page_h):
-    """落点禁忌区动态避让：章矩形与任一禁忌区相交时，以锚点为中心按半章宽步长
-    网格搜索最近的无碰撞位置（纯水平避让优先——尽量保住"同高对齐"等已有偏好，
+    """落点禁忌区动态避让：章中心落入任一禁忌区时，以锚点为中心按半章宽步长
+    网格搜索最近的中心合法位（纯水平避让优先——尽量保住"同高对齐"等已有偏好，
     范围±1.5章宽）；搜索不到返回原位由调用方警告人工确认。
-    返回 (cx, cy, moved)。"""
+    返回 (cx, cy, moved)。
+    命中语义只看章中心（v1.2.1）：整章矩形相交太严——上下紧排的双方签署栏
+    （如甲方栏 y=620、乙方栏 y=660，间距仅 40pts），125pts 的章骑压本方栏时
+    必然与对方栏矩形相交，那是正常压字；只有"章中心盖到对方栏/名上"才算真压
+    区（曾用矩形相交把章从乙方栏赶走 62pts，回归失败）。"""
     def hits(ox, oy):
-        r = (ox - half_w, oy - half_h, ox + half_w, oy + half_h)
         for z in forbidden:
-            if not (r[2] < z[0] - 4 or r[0] > z[2] + 4 or
-                    r[3] < z[1] - 4 or r[1] > z[3] + 4):
+            if (z[0] - 4 <= ox <= z[2] + 4 and
+                    z[1] - 4 <= oy <= z[3] + 4):
                 return True
         return False
 
@@ -959,13 +1088,18 @@ def _lazy_full_ocr_engine():
 
 
 def detect_input_kind(path):
-    """识别输入类型，返回 'image' / 'pdf-scan' / 'pdf-text' / 'excel'。"""
+    """识别输入类型，返回 'image' / 'pdf-scan' / 'pdf-text' / 'excel'。
+    PDF 打不开（损坏/加密/根本不是 PDF）时抛 RuntimeError 由上层转友好提示，
+    不直接甩 traceback 给用户。"""
     ext = os.path.splitext(path)[1].lower()
     if ext in IMAGE_INPUT_EXTS:
         return 'image'
     if ext in EXCEL_INPUT_EXTS:
         return 'excel'
-    doc = fitz.open(path)
+    try:
+        doc = fitz.open(path)
+    except Exception as e:
+        raise RuntimeError(f"文件无法作为 PDF 打开（可能已损坏、被加密或并非 PDF）: {e}")
     try:
         for page in doc:
             if len(page.get_text().strip()) >= SCAN_TEXT_MIN_CHARS:
@@ -992,16 +1126,20 @@ def convert_excel_to_pdf(excel_path, out_pdf_path, wait_sec=30):
     if _missing('win32com'):
         raise RuntimeError("缺少 pywin32（Excel→PDF 转换需要），请先执行："
                            "pip install pywin32 -i https://mirrors.aliyun.com/pypi/simple/")
-    import win32com.client
     excel = None
     wb = None
     try:
+        import win32com.client
+        # COM 按 Excel 进程默认目录解析相对路径：必须传绝对路径，
+        # 否则用户用相对路径调用时 Workbooks.Open 会打开失败（曾犯）。
+        excel_path_abs = os.path.abspath(excel_path)
+        out_pdf_abs = os.path.abspath(out_pdf_path)
         excel = win32com.client.DispatchEx('Excel.Application')
         excel.Visible = False
         excel.DisplayAlerts = False   # 避免宏安全等弹窗阻塞导出
-        wb = excel.Workbooks.Open(excel_path, ReadOnly=True, UpdateLinks=0)
+        wb = excel.Workbooks.Open(excel_path_abs, ReadOnly=True, UpdateLinks=0)
         # 0 = xlTypePDF；不指定 From/To Sheet → 导出工作簿全部可见工作表
-        wb.ExportAsFixedFormat(0, out_pdf_path)
+        wb.ExportAsFixedFormat(0, out_pdf_abs)
         # 落盘防御性等待：正常情况下 ExportAsFixedFormat 同步写完（实测受控
         # 实验 1.6s 内写全）。保留"pdfplumber 能打开且页数≥1"才放行的兜底——
         # 防杀毒实时扫描/慢磁盘/Office 后台补写的文件锁（_write_bytes_retry
@@ -1050,9 +1188,14 @@ def ocr_page_lines(pil_img, ocr):
     """整页 OCR，返回 [(x0,y0,x1,y1,text), ...]（像素坐标，顶部原点）。
     rapidocr 的 det 按文字行切块（每个 box 一行）——写入 PDF 文字层时必须整行
     一次 insert_text，pdfplumber 的 extract_text 才能按行还原（签署方正则
-    "需方：A 供方：B"同行多对匹配依赖行结构）。"""
-    arr = np.array(pil_img.convert("RGB"))
-    result, _ = ocr(arr)
+    "需方：A 供方：B"同行多对匹配依赖行结构）。
+    单页 OCR 抛异常返回 []（该页无文字层，后续定位对该页降级，绝不崩全程）。"""
+    try:
+        arr = np.array(pil_img.convert("RGB"))
+        result, _ = ocr(arr)
+    except Exception as e:
+        print(f"  ⚠️  本页 OCR 失败（跳过该页文字层，不影响盖章）: {e}")
+        return []
     lines = []
     for item in (result or []):
         box, text = item[0], item[1]
@@ -1076,7 +1219,10 @@ def _insert_invisible_lines(page, lines, sx, sy):
         # 铺成 496pts，超 max_word_width 被误过滤，关键词定位落空）。
         # 把文字层词宽缩放到与 OCR 行框一致，定位/搜索才反映真实版式。
         target_w = (x1 - x0) * sx
-        tl = fitz.get_text_length(text, fontname="china-s", fontsize=fontsize)
+        try:
+            tl = fitz.get_text_length(text, fontname="china-s", fontsize=fontsize)
+        except Exception:
+            tl = 0  # 特殊字符（如 emoji）量宽失败时退回未校准字号，该行仍可搜索
         if tl > 0:
             fontsize = max(fontsize * target_w / tl, 2.0)
         try:
@@ -1194,7 +1340,12 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
     print("─" * 55)
 
     orig_input = pdf_path
-    input_kind = detect_input_kind(pdf_path)
+    try:
+        input_kind = detect_input_kind(pdf_path)
+    except RuntimeError as e:
+        print(f"  ❌ {e}")
+        print("     请确认文件未损坏、未加密，或先用阅读器另存一份再试。")
+        return None
     src_pdf = pdf_path
     img_orig_w = None        # 图片输入的原始宽度（px），渲染回图片用
     tmp_excel_pdf = None     # Excel→PDF 临时文件，结束时清理
@@ -1393,13 +1544,21 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
                         print(f"  → 公章中心: ({block['center_x']:.1f}, {block['center_y']:.1f})")
 
             if positioning_mode == 'default':
-                print("\n  ⚠️  关键词定位失败，使用默认位置（右下角签名区）。")
+                print("\n  ⚠️  关键词定位失败，使用默认位置（末页右下角签名区）。")
+                print("      位置不可靠：知道角色请加 --role 角色名 重试，"
+                      "OCR 没出公司名请加 --company \"公司名\" 重试；交付前必须人工核对！")
+                # 默认点按文档实际末页尺寸比例计算（A4 下≈历史默认点 318,547；
+                # 写死 A4 第一页曾在非 A4/多页文档上盖错地方）。签署区在末页。
+                _dw, _dh, _dp = _last_page_size(src_pdf)
+                _dcx, _dcy = _dw * 0.535, _dh * 0.65
+                _dd = SEAL_DEFAULT_SIZE
                 reference = {
-                    'x0': 255, 'y0': 485, 'x1': 382, 'y1': 610,
-                    'width': 126.7, 'height': 124.2,
-                    'center_x': 318.5, 'center_y': 547.5,
-                    'page_width': 595.2, 'page_height': 841.9,
-                    'page': 1, 'pixel_width': 0, 'pixel_height': 0,
+                    'x0': _dcx - _dd / 2, 'y0': _dcy - _dd / 2,
+                    'x1': _dcx + _dd / 2, 'y1': _dcy + _dd / 2,
+                    'width': _dd, 'height': _dd,
+                    'center_x': _dcx, 'center_y': _dcy,
+                    'page_width': _dw, 'page_height': _dh,
+                    'page': _dp, 'pixel_width': 0, 'pixel_height': 0,
                 }
         else:
             reference = existing_seals[0]
@@ -1459,7 +1618,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
             kw_centers = []
             kw_hits = []
             for w_text, wx0, wx1 in reference.get('kw_words', []):
-                for kw in keywords:
+                for kw in (keywords or []):
                     idx = w_text.find(kw)
                     if idx >= 0 and len(w_text) > 0:
                         char_w = (wx1 - wx0) / len(w_text)
@@ -1542,13 +1701,30 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
             print(f"  ⚠️  落点压到他角色盖章栏/公司名，已自动避让: "
                   f"({target_cx:.0f},{target_cy:.0f}) → ({ncx:.0f},{ncy:.0f})")
             target_cx, target_cy = ncx, ncy
+        else:
+            # 网格搜不到合法位（禁忌区过大）且章中心仍在区内：保持原位但必须
+            # 明示，不能静默盖到对方签章区上（命中语义同 adjust：只看章中心）
+            _hit = any((z[0] - 4 <= target_cx <= z[2] + 4 and
+                        z[1] - 4 <= target_cy <= z[3] + 4) for z in forbidden)
+            if _hit:
+                print("  ⚠️  落点仍压到他角色盖章栏/公司名且附近无合法位，"
+                      "请人工核对输出位置（必要时加 --offset-x/--offset-y 微调）")
 
     # ---- 步骤 4: 处理新公章图片 ----
     print("\n" + "─" * 55)
     print("【步骤 4】处理新公章图片")
     print("─" * 55)
 
-    new_seal = Image.open(seal_image_path)
+    new_seal = None
+    try:
+        with Image.open(seal_image_path) as _im:
+            new_seal = _im.copy()  # copy 后立即释放文件句柄（Windows 下不关闭会锁文件）
+    except Exception as e:
+        print(f"  ❌ 公章图片无法打开（文件损坏或格式不支持）: {e}")
+        print("     请换一张 PNG/JPG 公章图片重试。")
+        _cleanup_tmp(tmp_normalized)
+        _cleanup_tmp(tmp_excel_pdf)
+        return None
     print(f"  原始图片: {new_seal.size[0]}x{new_seal.size[1]}, 模式={new_seal.mode}")
 
     if new_seal.mode == 'RGB':
@@ -1576,12 +1752,25 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
         print(f"  旋转: {rotate}°")
         _cleanup_tmp(tmp_normalized)
         _cleanup_tmp(tmp_excel_pdf)
-        return None
+        return "dry-run"  # dry-run 成功返回真值；所有失败路径返回 None，
+        # main 据此给退出码（dry-run 入参非法仍是失败，必须 exit 1）
 
     # ---- 步骤 5: 生成最终 PDF ----
     print("\n" + "─" * 55)
     print("【步骤 5】生成最终 PDF")
     print("─" * 55)
+
+    # 页号合法性钳制：页号越界会导致"章没盖上却显示成功"——最危险的静默失败，
+    # 必须拦截（正常路径页号合法，此分支只防损坏 PDF 等异常）
+    try:
+        _cnt_doc = fitz.open(src_pdf)
+        _n_pages = len(_cnt_doc)
+        _cnt_doc.close()
+    except Exception:
+        _n_pages = 0
+    if _n_pages and not (1 <= reference['page'] <= _n_pages):
+        print(f"  ⚠️  定位页号 {reference['page']} 超出文档范围(1~{_n_pages})，已钳到末页")
+        reference['page'] = max(min(reference['page'], _n_pages), 1)
 
     # 保存裁剪后的公章图片
     cropped_path = tempfile.mktemp(suffix='.png')
@@ -1634,6 +1823,16 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
                   os.path.splitext(output_path)[1].lower() != '.pdf')
     pdf_out_path = tempfile.mktemp(suffix='.stamped.pdf') if img_output else output_path
 
+    if not img_output:
+        # 输出父目录不存在时 open 直接抛 FileNotFoundError：提前拦截给指引
+        _parent = os.path.dirname(os.path.abspath(output_path))
+        if _parent and not os.path.isdir(_parent):
+            print(f"  ❌ 输出目录不存在: {_parent}")
+            print("     请先创建该目录，或换一个已存在的输出路径。")
+            _cleanup_tmp(tmp_normalized)
+            _cleanup_tmp(tmp_excel_pdf)
+            return None
+
     buf = io.BytesIO()
     writer.write(buf)
     try:
@@ -1648,6 +1847,12 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
             output_path = alt
         print(f"  ⚠️  目标文件被其他程序占用，已改写到: {alt}")
         print("      （关闭占用它的程序如预览窗格后，可重命名为原输出名，或删除旧文件重跑）")
+    except OSError as e:
+        print(f"  ❌ 输出文件写入失败: {e}")
+        print("     请确认磁盘空间充足、输出路径合法后重试。")
+        _cleanup_tmp(tmp_normalized)
+        _cleanup_tmp(tmp_excel_pdf)
+        return None
 
     # 尽早关闭读取器释放文件句柄（Windows 下不关闭会导致临时文件删不掉）
     for _r in (reader_original, reader_overlay):
@@ -1656,9 +1861,9 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
         except Exception:
             pass
 
-    # 清理临时文件
-    os.unlink(cropped_path)
-    os.unlink(overlay_path)
+    # 清理临时文件（被杀软瞬时锁定时只警告，绝不因此崩掉已成功的盖章）
+    _cleanup_tmp(cropped_path)
+    _cleanup_tmp(overlay_path)
 
     # 实际位置（以 PDF 坐标系）
     seal_x = target_cx - new_w / 2
@@ -1676,10 +1881,15 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
     print("─" * 55)
 
     if flatten:
-        flatten_stamped_page(pdf_out_path, reference['page'], dpi=dpi)
-        print(f"  盖章页（第 {reference['page']} 页）已压平: "
-              f"整页位图({dpi}dpi) + 隐形文字层（文字仍可搜索/复制）")
-        print("  → 公章与页面融为一体，编辑软件无法单独选中/移动/删除公章")
+        try:
+            flatten_stamped_page(pdf_out_path, reference['page'], dpi=dpi)
+        except Exception as e:
+            print(f"  ⚠️  压平失败（{e}）：保留未压平版本，公章仍是独立图片对象，"
+                  "可被编辑软件选中/移动——请关闭占用该文件的程序后重跑以获得防编辑版本")
+        else:
+            print(f"  盖章页（第 {reference['page']} 页）已压平: "
+                  f"整页位图({dpi}dpi) + 隐形文字层（文字仍可搜索/复制）")
+            print("  → 公章与页面融为一体，编辑软件无法单独选中/移动/删除公章")
     else:
         print("  ⚠️  未压平（--no-flatten）：公章仍是页面内独立图片对象，"
               "可被编辑软件选中/移动/删除，存在法律风险，仅限应急/内部核对使用")
@@ -1689,8 +1899,15 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
         print("\n" + "─" * 55)
         print("【步骤 7】渲染回图片")
         print("─" * 55)
-        render_pdf_page_to_image(pdf_out_path, reference['page'],
-                                 output_path, img_orig_w)
+        try:
+            render_pdf_page_to_image(pdf_out_path, reference['page'],
+                                     output_path, img_orig_w)
+        except Exception as e:
+            print(f"  ❌ 渲染回图片失败: {e}")
+            _cleanup_tmp(pdf_out_path)
+            _cleanup_tmp(tmp_normalized)
+            _cleanup_tmp(tmp_excel_pdf)
+            return None
         _cleanup_tmp(pdf_out_path)
         print(f"  已输出图片: {output_path}（宽 {img_orig_w}px，与原图同分辨率）")
         print("  → 章已融入图片像素，任何图片/PDF 编辑软件都无法单独选中或移除公章")
@@ -1706,7 +1923,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='公章添加工具 v1.2.0 — 支持文本版PDF/扫描件PDF/图片/Excel，智能定位 + 防编辑压平',
+        description='公章添加工具 v1.2.1 — 支持文本版PDF/扫描件PDF/图片/Excel，智能定位 + 防编辑压平',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -1754,8 +1971,18 @@ def main():
 
     args = parser.parse_args()
 
-    # 解析关键词
-    keywords = [kw.strip() for kw in args.keywords.split(',')]
+    # 解析关键词（过滤空串：空关键词 "" 会匹配所有文字导致定位错乱，曾犯）
+    keywords = [kw.strip() for kw in args.keywords.split(',') if kw.strip()]
+    if not keywords:
+        print("❌ --keywords 为空（请给出至少一个关键词，或去掉该参数用默认值）")
+        sys.exit(1)
+
+    if args.dpi <= 0:
+        print(f"❌ --dpi 必须为正整数，收到: {args.dpi}")
+        sys.exit(1)
+    if args.dpi > 600:
+        print(f"  ⚠️  --dpi={args.dpi} 过高：文件会很大且压平很慢，"
+              "一般 300 足够，确认需要才继续")
 
     # 如果未指定公章，使用默认公章
     if args.seal is None:
@@ -1797,22 +2024,32 @@ def main():
                   f"{out_ext or '(无扩展名)'}，请用 .pdf 结尾的输出路径")
             sys.exit(1)
 
-    process_seal(
-        pdf_path=args.pdf,
-        seal_image_path=args.seal,
-        output_path=args.output,
-        side=args.side,
-        rotate=args.rotate,
-        offset_x=args.offset_x,
-        offset_y=args.offset_y,
-        dry_run=args.dry_run,
-        keywords=keywords,
-        flatten=not args.no_flatten,
-        dpi=args.dpi,
-        auto=not args.no_auto,
-        company_hint=args.company,
-        role_hint=args.role,
-    )
+    try:
+        result = process_seal(
+            pdf_path=args.pdf,
+            seal_image_path=args.seal,
+            output_path=args.output,
+            side=args.side,
+            rotate=args.rotate,
+            offset_x=args.offset_x,
+            offset_y=args.offset_y,
+            dry_run=args.dry_run,
+            keywords=keywords,
+            flatten=not args.no_flatten,
+            dpi=args.dpi,
+            auto=not args.no_auto,
+            company_hint=args.company,
+            role_hint=args.role,
+        )
+    except Exception as e:
+        print(f"❌ 盖章过程出现未预期错误: {e}")
+        print("   请确认合同文件未损坏、磁盘空间充足后重试；仍失败请附上报错信息反馈。")
+        sys.exit(1)
+    if result is None:
+        # process_seal 已打印具体原因（Excel 转换失败/图片损坏/输出目录缺失/
+        # 输入损坏等，含 dry-run 入参非法的情形）；返回 None 即失败，必须非 0
+        # 退出，否则调用方会误判成功（曾犯）
+        sys.exit(1)
 
 
 if __name__ == '__main__':
