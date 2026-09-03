@@ -81,6 +81,21 @@ LIGHT_SOURCE_DATABASE = [
         "led_rows": 5,
         "working_distance_range": [150, 400],
         "recommended_wd": 250
+    },
+    {
+        "brand": "CCS",
+        "model": "LFV-300X10",
+        "type": "频闪光源",
+        "angle": 45,
+        "wavelength": "白光",
+        "inner_diameter": 60,
+        "outer_diameter": 150,
+        "led_rows": 3,
+        "working_distance_range": [60, 180],
+        "recommended_wd": 120,
+        "strobe": True,
+        "min_exposure_us": 10,
+        "max_exposure_us": 1000
     }
 ]
 
@@ -138,7 +153,9 @@ def calculate_light_working_distance(field_of_view: Dict,
 
 def select_light_source(fov_diagonal: float, 
                         required_wd: float = None,
-                        light_type: str = "环形光") -> List[Dict]:
+                        light_type: str = "环形光",
+                        is_fly_shooting: bool = False,
+                        max_exposure_us: float = None) -> List[Dict]:
     """
     根据视野和工作距离选择光源
     
@@ -146,6 +163,8 @@ def select_light_source(fov_diagonal: float,
         fov_diagonal: 视野对角线（mm）
         required_wd: 要求的光源工作距离（mm）
         light_type: 光源类型
+        is_fly_shooting: 是否飞拍场景
+        max_exposure_us: 最大允许曝光时间（微秒），飞拍时用于筛选支持频闪的光源
     
     Returns:
         推荐的光源列表
@@ -156,6 +175,17 @@ def select_light_source(fov_diagonal: float,
         # 检查光源类型
         if light_type and light["type"] != light_type:
             continue
+        
+        # 飞拍场景：优先选择频闪光源
+        if is_fly_shooting:
+            if not light.get("strobe", False):
+                continue  # 非频闪光源跳过
+            # 检查曝光时间是否在光源支持范围内
+            if max_exposure_us is not None:
+                min_exp = light.get("min_exposure_us", 0)
+                max_exp = light.get("max_exposure_us", float('inf'))
+                if max_exposure_us < min_exp or max_exposure_us > max_exp:
+                    continue
         
         # 检查工作距离是否满足
         if required_wd:

@@ -140,13 +140,13 @@
       "pixel_size": 2.4,
       "interface": "GigE",
       "max_fps": 16.8,
-      "shutter": "全局快门",
+      "shutter": "卷帘快门",
       "lens_mount": "C-Mount",
       "power": "9~24VDC/PoE",
       "operating_temp": "-30℃~60℃",
       "image_path": "images/MV-CS200-10GM.png",
       "verified": true,
-      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS200-10GM"
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/productdetail/?id=7712&pageNumber=1&pageSize=50"
     },
     {
       "brand": "海康威视",
@@ -161,27 +161,27 @@
       "pixel_size": 3.45,
       "interface": "GigE",
       "max_fps": 22.5,
-      "shutter": "全局快门",
+      "shutter": "卷帘快门",
       "lens_mount": "C-Mount",
       "power": "9~24VDC/PoE",
       "operating_temp": "-30℃~60℃",
       "image_path": "images/MV-CS120-10GM V5.png",
       "verified": true,
-      "verification_url": "https://www.hikrobotics.com/cn/machinevision/product/detail/MV-CS120-10GM"
+      "verification_url": "https://www.jiankongqicai.com/news/10545.html"
     },
     {
       "brand": "海康威视",
       "series": "CA系列",
       "model": "MV-CA400-10GM",
       "sensor": "Sony IMX477",
-      "sensor_size": "1.1\"",
+      "sensor_size": "1/2.3",
       "resolution": {
-        "width": 7200,
-        "height": 5400
+        "width": 4056,
+        "height": 3040
       },
-      "pixel_size": 2.4,
+      "pixel_size": 1.55,
       "interface": "GigE",
-      "max_fps": 7.5,
+      "max_fps": 40,
       "shutter": "全局快门",
       "lens_mount": "C-Mount",
       "power": "9~24VDC/PoE",
@@ -706,42 +706,7 @@
       "wd_spec": "110±2"
     }
   ],
-  "light_sources": [
-    {
-      "brand": "OPT",
-      "series": "环形光源",
-      "model": "RL-100-90-W",
-      "type": "LED环形光源",
-      "diameter": 100,
-      "height": 90,
-      "color": "白色",
-      "voltage": "24VDC",
-      "power": "8W",
-      "features": [
-        "可调亮度",
-        "均匀照明"
-      ],
-      "verified": true,
-      "verification_url": "https://www.opt-e.com/products/rl-100-90-w.html"
-    },
-    {
-      "brand": "OPT",
-      "series": "背光源",
-      "model": "BL-200-150-W",
-      "type": "LED背光源",
-      "width": 200,
-      "height": 150,
-      "color": "白色",
-      "voltage": "24VDC",
-      "power": "15W",
-      "features": [
-        "高均匀性",
-        "轮廓测量"
-      ],
-      "verified": true,
-      "verification_url": "https://www.opt-e.com/products/bl-200-150-w.html"
-    }
-  ],
+  "light_sources": [],
   "motion_platforms": [
     {
       "brand": "THK",

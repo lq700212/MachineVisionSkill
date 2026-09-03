@@ -372,6 +372,40 @@ class PrecisionCalculator:
             'magnification': magnification,
             'pixel_size_um': pixel_size_um
         }
+    
+    def calculate_max_exposure_time(self, pixel_precision_mm: float, conveyor_speed_mm_s: float, safety_factor: float = 0.5) -> Dict:
+        """计算飞拍最大允许曝光时间
+        
+        Args:
+            pixel_precision_mm: 像素精度（mm/pixel）
+            conveyor_speed_mm_s: 流水线速度（mm/s）
+            safety_factor: 安全系数（允许的运动模糊占像素精度的比例，默认0.5即半像素）
+        
+        Returns:
+            包含曝光时间计算结果的字典
+        """
+        if conveyor_speed_mm_s <= 0:
+            raise ValueError("流水线速度必须大于0")
+        
+        # 允许的运动模糊量（mm）
+        allowed_blur_mm = pixel_precision_mm * safety_factor
+        
+        # 最大曝光时间（秒）
+        max_exposure_s = allowed_blur_mm / conveyor_speed_mm_s
+        
+        # 转换为微秒
+        max_exposure_us = max_exposure_s * 1e6
+        
+        return {
+            'pixel_precision_mm': pixel_precision_mm,
+            'conveyor_speed_mm_s': conveyor_speed_mm_s,
+            'safety_factor': safety_factor,
+            'allowed_blur_mm': allowed_blur_mm,
+            'max_exposure_s': max_exposure_s,
+            'max_exposure_us': max_exposure_us,
+            'explanation': f"允许运动模糊 {allowed_blur_mm:.4f}mm = 像素精度 {pixel_precision_mm}mm × 安全系数 {safety_factor}，"
+                          f"最大曝光时间 = {allowed_blur_mm:.4f}mm / {conveyor_speed_mm_s}mm/s = {max_exposure_s:.6f}s ({max_exposure_us:.1f}μs)"
+        }
 
 
 def main():

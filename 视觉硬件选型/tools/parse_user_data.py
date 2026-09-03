@@ -44,6 +44,23 @@ class UserDataParser:
                 r'分辨率[要需]?求[：:]?\s*(\d+)\s*[x×*]\s*(\d+)',
                 r'相机分辨率[：:]?\s*(\d+)\s*[x×*]\s*(\d+)',
             ],
+            'fly_shooting': [
+                r'飞拍',
+                r'运动中拍照',
+                r'不停',
+                r'流水线',
+                r'移动中',
+                r'传送带',
+                r'conveyor',
+                r'moving',
+                r'fly.*shot',
+            ],
+            'conveyor_speed': [
+                r'速度[：:]?\s*([0-9.]+)\s*(mm/s|mm/秒|m/s|m/秒)',
+                r'流水线速度[：:]?\s*([0-9.]+)\s*(mm/s|mm/秒|m/s|m/秒)',
+                r'传送带速度[：:]?\s*([0-9.]+)\s*(mm/s|mm/秒|m/s|m/秒)',
+                r'移动速度[：:]?\s*([0-9.]+)\s*(mm/s|mm/秒|m/s|m/秒)',
+            ],
         }
     
     def parse_files(self, file_paths: List[str]) -> Dict:
@@ -251,6 +268,18 @@ class UserDataParser:
         if resolution:
             params['resolution_requirement'] = resolution
         
+        # 识别飞拍场景
+        fly_shooting_keywords = self.keywords.get('fly_shooting', [])
+        for keyword in fly_shooting_keywords:
+            if keyword in text:
+                params['is_fly_shooting'] = True
+                break
+        
+        # 提取流水线速度（如果提供）
+        conveyor_speed = self._extract_conveyor_speed(text)
+        if conveyor_speed:
+            params['conveyor_speed'] = conveyor_speed
+        
         # 提取检测项目
         detection_items = self._extract_detection_items(text)
         if detection_items:
@@ -399,6 +428,26 @@ class UserDataParser:
                     'height': int(match.group(2))
                 }
         
+        return None
+    
+    def _extract_conveyor_speed(self, text: str) -> Optional[float]:
+        """提取流水线速度（mm/s）"""
+        patterns = [
+            r'速度[：:]?\s*([0-9.]+)\s*(mm/s|mm/秒|m/s|m/秒)',
+            r'流水线速度[：:]?\s*([0-9.]+)\s*(mm/s|mm/秒|m/s|m/秒)',
+            r'传送带速度[：:]?\s*([0-9.]+)\s*(mm/s|mm/秒|m/s|m/秒)',
+            r'移动速度[：:]?\s*([0-9.]+)\s*(mm/s|mm/秒|m/s|m/秒)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                value = float(match.group(1))
+                unit = match.group(2).lower()
+                # 统一转换为 mm/s
+                if unit in ['m/s', 'm/秒']:
+                    value = value * 1000
+                return value
         return None
     
     def _extract_detection_items(self, text: str) -> List[str]:

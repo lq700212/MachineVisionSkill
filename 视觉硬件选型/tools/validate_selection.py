@@ -83,6 +83,7 @@ class SelectionValidator:
         self._check_telecentric_necessity(lens, params)
         self._check_verifiability(camera, lens)
         self._check_light_working_distance(lens, light)
+        self._check_fly_shooting(camera, lens, params, light)
 
         if verbose:
             self._print_validation_result()
@@ -109,6 +110,75 @@ class SelectionValidator:
                 "光源工作距离", CheckResult.PASS,
                 f"光源WD {light_wd}mm < 镜头物方WD {lens_wd}mm"))
 
+    def _check_fly_shooting(self, camera: Dict, lens: Dict, params: Dict, light: Dict = None):
+        """飞拍场景核验：检查曝光时间是否满足要求，光源是否支持频闪"""
+        # 检查是否为飞拍场景
+        is_fly_shooting = params.get('is_fly_shooting', False)
+        if not is_fly_shooting:
+            return
+        
+        # 获取流水线速度
+        conveyor_speed = params.get('conveyor_speed', 0)
+        if conveyor_speed <= 0:
+            self.checks.append(CheckItem(
+                "飞拍速度", CheckResult.WARNING,
+                "飞拍场景但未提供流水线速度，无法计算曝光时间",
+                "请提供流水线速度（mm/s）"))
+            return
+        
+        # 获取像素精度
+        pixel_precision = params.get('pixel_precision', 0)
+        if pixel_precision <= 0:
+            # 尝试从精度要求计算
+            precision = params.get('precision_requirement', 0)
+            k = params.get('pixel_per_precision', 3.0)
+            if precision > 0:
+                pixel_precision = precision / k
+            else:
+                self.checks.append(CheckItem(
+                    "飞拍精度", CheckResult.WARNING,
+                    "飞拍场景但未提供像素精度或精度要求，无法计算曝光时间",
+                    "请提供精度要求或像素精度"))
+                return
+        
+        # 计算最大允许曝光时间
+        calculator = PrecisionCalculator()
+        try:
+            exposure_result = calculator.calculate_max_exposure_time(pixel_precision, conveyor_speed)
+            max_exposure_us = exposure_result['max_exposure_us']
+        except ValueError as e:
+            self.checks.append(CheckItem(
+                "飞拍计算", CheckResult.FAIL,
+                f"曝光时间计算失败: {e}",
+                "检查流水线速度是否大于0"))
+            return
+        
+        # 检查光源是否支持频闪
+        if light:
+            if not light.get('strobe', False):
+                self.checks.append(CheckItem(
+                    "飞拍光源", CheckResult.FAIL,
+                    "飞拍场景需要频闪光源，当前光源不支持频闪",
+                    "更换为频闪光源（如CCS LFV系列）"))
+            else:
+                # 检查曝光时间是否在光源支持范围内
+                min_exp = light.get('min_exposure_us', 0)
+                max_exp = light.get('max_exposure_us', float('inf'))
+                if max_exposure_us < min_exp or max_exposure_us > max_exp:
+                    self.checks.append(CheckItem(
+                        "飞拍曝光时间", CheckResult.WARNING,
+                        f"计算的最大曝光时间 {max_exposure_us:.1f}μs 不在光源支持范围 [{min_exp}, {max_exp}]μs 内",
+                        "调整光源型号或优化系统参数"))
+                else:
+                    self.checks.append(CheckItem(
+                        "飞拍曝光时间", CheckResult.PASS,
+                        f"最大曝光时间 {max_exposure_us:.1f}μs 在光源支持范围内"))
+        else:
+            self.checks.append(CheckItem(
+                "飞拍光源", CheckResult.WARNING,
+                "飞拍场景未提供光源信息，无法核验频闪支持",
+                "请提供光源型号或选择频闪光源"))
+    
     def _check_completeness(self, camera: Dict, lens: Dict, params: Dict):
         for param in ['brand', 'model', 'sensor_size', 'resolution', 'pixel_size', 'lens_mount']:
             if camera.get(param):

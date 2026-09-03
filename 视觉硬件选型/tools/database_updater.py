@@ -594,6 +594,35 @@ def cmd_fetch(args):
             print("  [无头渲染] 失败（未找到浏览器/站点拒绝/超时）")
 
     # 通道3：AI浏览器接管兜底（前两级均失败时）
+    # 尝试自动执行浏览器接管
+    browser_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'browser_fetch.py')
+    if os.path.exists(browser_script) and args.url:
+        print(f"  [浏览器接管] 尝试自动执行浏览器接管...")
+        try:
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, browser_script, args.url, args.model],
+                capture_output=True, text=True, timeout=60
+            )
+            if result.returncode == 0:
+                print(result.stdout)
+                # 解析输出的HTML文件路径
+                for line in result.stdout.split('\n'):
+                    if '页面已保存到:' in line:
+                        html_file = line.split('页面已保存到:')[1].strip()
+                        if os.path.exists(html_file):
+                            print(f"  [浏览器接管] 自动执行成功，继续入库流程...")
+                            with open(html_file, 'r', encoding='utf-8') as f:
+                                html_content = f.read()
+                            plain = _html_to_plain(html_content)
+                            if _extract_and_save(plain, html_content, args, dtype, brand, '浏览器接管') == 0:
+                                return 0
+            else:
+                print(f"  [浏览器接管] 自动执行失败: {result.stderr}")
+        except Exception as e:
+            print(f"  [浏览器接管] 自动执行异常: {e}")
+    
+    # 如果自动执行失败，输出SOP供AI手动执行
     print_browser_guide(brand, args.model, args.url, dtype)
     return 2  # 退出码2=需浏览器接管
 
