@@ -172,19 +172,22 @@ def select_light_source(fov_diagonal: float,
     candidates = []
     
     for light in LIGHT_SOURCE_DATABASE:
-        # 检查光源类型
+        # 检查光源类型（飞拍场景的频闪光源不受 light_type 过滤：
+        # 此前默认 light_type='环形光' 会把唯一频闪光源提前滤掉，飞拍查询恒为空）
         if light_type and light["type"] != light_type:
-            continue
+            if not (is_fly_shooting and light.get("strobe", False)):
+                continue
         
         # 飞拍场景：优先选择频闪光源
         if is_fly_shooting:
             if not light.get("strobe", False):
                 continue  # 非频闪光源跳过
-            # 检查曝光时间是否在光源支持范围内
+            # 检查曝光时间是否在光源支持范围内：
+            # 系统要求曝光 ≤ max_exposure_us，光源只需能打到一样短
+            # （max_exposure_us < 光源min 才装不住；系统上限比光源max宽松是正常余量，不得过滤）
             if max_exposure_us is not None:
                 min_exp = light.get("min_exposure_us", 0)
-                max_exp = light.get("max_exposure_us", float('inf'))
-                if max_exposure_us < min_exp or max_exposure_us > max_exp:
+                if max_exposure_us < min_exp:
                     continue
         
         # 检查工作距离是否满足

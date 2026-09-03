@@ -387,11 +387,18 @@ def main():
     lines.append("  断行/溢出   → 值变长导致：WD标注需word_wrap=False；短标注框只写短词")
     lines.append("  数值不合理  → 重跑选型（vision_proposal_generator --config ... --auto）")
     report = "\n".join(lines)
-    print(report)
+    # 根因注释：报告必须先落盘再打印——此前先 print(report)，
+    # gbk 控制台遇到 ✓/✗ 直接 UnicodeEncodeError 崩溃，--out 文件没写、
+    # 主流程验收误报"存在FAIL项"。且打印本身做容错，避免刷屏 traceback
     if args.out:
         with open(args.out, 'w', encoding='utf-8') as f:
             f.write(report + "\n")
         print(f"\n报告已保存: {args.out}")
+    try:
+        print(report)
+    except UnicodeEncodeError:
+        safe = report.replace('✓', 'PASS').replace('✗', 'FAIL')
+        print(safe.encode('gbk', errors='replace').decode('gbk'))
     return 0 if n_fail == 0 else 1
 
 

@@ -121,5 +121,34 @@ class TestNonInteractiveGuard(unittest.TestCase):
                       msg='缺尺寸必须报可执行指引')
 
 
+class TestFlyShootingParsing(unittest.TestCase):
+    """飞拍关键词匹配回归（此前用子串 in 匹配 keywords 表：
+    正则式 fly.*shot 永远命中不了，且大小写敏感漏掉 Conveyor）"""
+
+    def setUp(self):
+        self.parser = UserDataParser()
+
+    def test_regex_keyword_fly_shot(self):
+        """回归: 英文 fly shot 必须命中飞拍（正则分支）"""
+        d = self.parser._extract_params_from_text(
+            'system uses fly shot on the line, 检测区域38.5x22mm')
+        self.assertTrue(d.get('is_fly_shooting'),
+                       msg=f'fly.*shot 正则未命中: {d}')
+
+    def test_case_insensitive_conveyor(self):
+        """回归: Conveyor 首字母大写也必须命中（大小写不敏感）"""
+        d = self.parser._extract_params_from_text(
+            'Conveyor speed 100mm/s, 检测区域38.5x22mm')
+        self.assertTrue(d.get('is_fly_shooting'),
+                       msg=f'大写 Conveyor 未命中: {d}')
+
+    def test_chinese_still_works(self):
+        """回归: 中文"流水线上不停"照常命中（不因改正则误伤中文）"""
+        d = self.parser._extract_params_from_text(
+            '零件在流水线上不停，检测区域38.5x22mm')
+        self.assertTrue(d.get('is_fly_shooting'),
+                       msg=f'中文飞拍关键词未命中: {d}')
+
+
 if __name__ == '__main__':
     unittest.main()

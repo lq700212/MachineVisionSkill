@@ -6,6 +6,7 @@
 """
 
 import json
+import math
 import os
 from typing import Dict, List, Tuple, Optional
 
@@ -113,11 +114,12 @@ class PrecisionCalculator:
             f"推荐检测精度为 {result['required_precision_mm']:.3f}mm ({result['required_precision_um']:.0f}μm)"
         )
         
-        # 计算安全区间
+        # 计算安全区间（数值越小精度越严：
+        # 保守=更严取下限，宽松=放宽取上限；此前两者写反）
         result['precision_range'] = {
-            'conservative': result['required_precision_mm'] * 1.5,  # 保守：精度更高
+            'conservative': result['required_precision_mm'] * 0.7,  # 保守：精度更高
             'standard': result['required_precision_mm'],            # 标准
-            'relaxed': result['required_precision_mm'] * 0.7,       # 放松：精度略低
+            'relaxed': result['required_precision_mm'] * 1.5,       # 放松：精度略低
         }
         
         return result
@@ -175,8 +177,8 @@ class PrecisionCalculator:
         px_x = fov['width'] / pixel_resolution_mm
         px_y = fov['height'] / pixel_resolution_mm
         return {
-            'x': int(px_x + 0.999),  # 向上取整
-            'y': int(px_y + 0.999),
+            'x': math.ceil(px_x),  # 向上取整（此前 int(x+0.999) 在小数部分<0.001 时少进一位）
+            'y': math.ceil(px_y),
             'total_mp': (px_x * px_y) / 1000000
         }
 
@@ -386,6 +388,8 @@ class PrecisionCalculator:
         """
         if conveyor_speed_mm_s <= 0:
             raise ValueError("流水线速度必须大于0")
+        if pixel_precision_mm <= 0:
+            raise ValueError("像素精度必须大于0")
         
         # 允许的运动模糊量（mm）
         allowed_blur_mm = pixel_precision_mm * safety_factor

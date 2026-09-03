@@ -296,6 +296,7 @@ class LensSelector:
                      camera_sensor_size: str = None,
                      camera_pixel_size: float = None,
                      required_precision_mm: float = 0.012,
+                     pixel_per_precision: float = 3.0,
                      lens_type: str = None,
                      min_working_distance: float = None,
                      max_working_distance: float = None,
@@ -310,6 +311,7 @@ class LensSelector:
             camera_sensor_size: 相机传感器尺寸
             camera_pixel_size: 相机像元尺寸（μm）
             required_precision_mm: 要求精度（mm）
+            pixel_per_precision: 亚像素因子（默认3，与主流程一致）
             lens_type: 镜头类型（远心/定焦/变焦等）
             min_working_distance: 最小工作距离（mm）
             max_working_distance: 最大工作距离（mm）
@@ -375,8 +377,11 @@ class LensSelector:
                     object_resolution = self.calculator.calculate_object_resolution(
                         camera_pixel_size, magnification
                     )
+                    # 根因注释：精度链判据是"像素精度 ≤ 精度/k"（与主流程
+                    # _match_lenses_for_camera 一致）；此前传整精度，宽松3倍，
+                    # 临界镜头在旧接口通过、在主流程/核验被FAIL
                     is_satisfied, safety_factor = self.calculator.verify_precision(
-                        object_resolution, required_precision_mm
+                        object_resolution, required_precision_mm / pixel_per_precision
                     )
                     
                     if not is_satisfied:

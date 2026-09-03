@@ -131,7 +131,7 @@ class SelectionValidator:
         if pixel_precision <= 0:
             # 尝试从精度要求计算
             precision = params.get('precision_requirement', 0)
-            k = params.get('pixel_per_precision', 3.0)
+            k = params.get('pixel_per_precision') or 3.0
             if precision > 0:
                 pixel_precision = precision / k
             else:
@@ -161,14 +161,17 @@ class SelectionValidator:
                     "飞拍场景需要频闪光源，当前光源不支持频闪",
                     "更换为频闪光源（如CCS LFV系列）"))
             else:
-                # 检查曝光时间是否在光源支持范围内
+                # 检查曝光时间是否在光源支持范围内：
+                # 系统要求曝光 ≤ max_exposure_us，光源只需能打到一样短
+                # （系统上限比光源max宽松是正常余量，不得告警；仅当系统上限
+                # 比光源最短还短时光源装不住）
                 min_exp = light.get('min_exposure_us', 0)
                 max_exp = light.get('max_exposure_us', float('inf'))
-                if max_exposure_us < min_exp or max_exposure_us > max_exp:
+                if max_exposure_us < min_exp:
                     self.checks.append(CheckItem(
                         "飞拍曝光时间", CheckResult.WARNING,
-                        f"计算的最大曝光时间 {max_exposure_us:.1f}μs 不在光源支持范围 [{min_exp}, {max_exp}]μs 内",
-                        "调整光源型号或优化系统参数"))
+                        f"计算的最大曝光时间 {max_exposure_us:.1f}μs 短于光源最短 {min_exp}μs",
+                        "更换响应更快的频闪光源或降低流水线速度"))
                 else:
                     self.checks.append(CheckItem(
                         "飞拍曝光时间", CheckResult.PASS,
@@ -197,7 +200,7 @@ class SelectionValidator:
         pixel_um = camera.get('pixel_size', 0)
         mag = lens.get('magnification', 0) or 0
         precision_mm = params.get('precision_requirement', 0)
-        k = params.get('pixel_per_precision', 3.0)
+        k = params.get('pixel_per_precision') or 3.0
 
         if pixel_um <= 0 or mag <= 0 or precision_mm <= 0:
             self.checks.append(CheckItem("精度链", CheckResult.FAIL,
@@ -247,7 +250,7 @@ class SelectionValidator:
         precision_mm = params.get('precision_requirement', 0)
         if not fov or precision_mm <= 0:
             return
-        k = params.get('pixel_per_precision', 3.0)
+        k = params.get('pixel_per_precision') or 3.0
         window = self.calculator.magnification_window(camera, fov, precision_mm, k)
         mag = lens.get('magnification', 0) or 0
         if not window.get('feasible'):
@@ -298,9 +301,12 @@ class SelectionValidator:
                     "需要转接环并确认法兰距兼容"))
 
     def _check_performance_margin(self, camera: Dict, lens: Dict, params: Dict):
-        # 帧率余量
+        # 帧率余量（cycle_time 允许缺省：config 模板该字段可为 null，
+        # 此前 params.get('cycle_time', 3) 在显式 null 时返回 None 直接崩溃）
         fps = camera.get('max_fps', 0)
         cycle_time = params.get('cycle_time', 3)
+        if cycle_time is None:
+            cycle_time = 3
         if fps > 0 and cycle_time > 0:
             required_fps = 1 / cycle_time
             margin = fps / required_fps

@@ -170,7 +170,7 @@ class VisionProposalGenerator:
         output_path = os.path.join(output_dir, f"{project_name}_{timestamp}.pptx")
         
         # 8. 保存选型结果（无论是否有模板，selection_result.json 都要落盘）
-        self._save_selection_result(validated_params, selection_result, algorithm_design, output_dir)
+        result_json = self._save_selection_result(validated_params, selection_result, algorithm_design, output_dir)
         # 无模板：不在终端留错误，输出选型结果正常结束（用户放模板后重跑即可生成PPT）
         if not self.template_ppt:
             print("\n[提示] 未找到模板PPT（--template / 工作目录均无），本次只输出选型结果，不生成PPT")
@@ -305,6 +305,28 @@ class VisionProposalGenerator:
             print("\n[步骤2] 使用配置文件中的硬件参数")
             print("  相机: {} {}".format(config['camera']['brand'], config['camera']['model']))
             print("  镜头: {} {}".format(config['lens']['brand'], config['lens']['model']))
+            # 根因注释：显式硬件=用户拍板，只核验不换型；此前本分支跳过核验，
+            # 落盘的 validation_passed 恒为 False 且无效硬件会带着生成PPT
+            print("\n[步骤2.5] 选型核验（显式硬件同样必须过核验）...")
+            from validate_selection import SelectionValidator as _SV
+            _validator = _SV()
+            _checks = _validator.validate(
+                selection_result['camera'], selection_result['lens'], validated_params,
+                light=selection_result.get('light_source'))
+            _fail_count = sum(1 for c in _checks if c.result.value == '[FAIL]')
+            selection_result['validation'] = [
+                {'name': c.name, 'result': c.result.value,
+                 'message': c.message, 'suggestion': c.suggestion}
+                for c in _checks
+            ]
+            selection_result['validation_passed'] = _fail_count == 0
+            if _fail_count > 0:
+                print(f"\n错误: 核验存在 {_fail_count} 项FAIL，方案不可用，已中止")
+                for c in _checks:
+                    if c.result.value == '[FAIL]':
+                        print(f"  [FAIL] {c.name}: {c.message} → {c.suggestion}")
+                return None
+            self._print_selection_summary(validated_params, selection_result)
         else:
             # 执行硬件选型
             print("\n[步骤2] 执行硬件选型...")
@@ -597,6 +619,17 @@ class VisionProposalGenerator:
         if _has('field_of_view') and isinstance(params.get('field_of_view'), dict):
             fov = params['field_of_view']
             print(f"\n  [视野] 使用用户提供的视野: {fov['width']:.1f} x {fov['height']:.1f} mm")
+        elif _has('field_of_view') and isinstance(params.get('field_of_view'), str):
+            # 根因注释：config 手填 "60x40" 字符串时此前会穿透全部分支、
+            # 误报【内部错误】；与 field_of_view_input 同规则解析
+            try:
+                parts = str(params['field_of_view']).lower().replace('mm', '').replace('fov:', '').replace('fov：', '').split('x')
+                params['field_of_view'] = {'width': float(parts[0]), 'height': float(parts[1])}
+                print(f"\n  [视野] 使用用户提供的视野: {params['field_of_view']['width']:.1f} x {params['field_of_view']['height']:.1f} mm")
+            except (ValueError, IndexError):
+                raise ValueError(
+                    f"【尺寸格式错误】field_of_view=\"{params['field_of_view']}\" 无法解析。\n"
+                    "  正确格式如 {\"width\": 60, \"height\": 40} 或 \"60x40\"（宽x高，mm），修改 config 后重跑。")
         elif _has('field_of_view_input'):
             # 用户直接输入了视野值
             fov_str = params['field_of_view_input']
@@ -895,7 +928,11 @@ class VisionProposalGenerator:
             if abs(params.get('pixel_per_precision', 3.0) - 3.0) > 1e-9:
                 retry = dict(params)
                 retry['pixel_per_precision'] = 3.0
-                retry['pixel_precision_max_mm'] = ppm / 3.0
+                # 根因注释：标准口径 ppm=检测精度/3（不是旧ppm再÷3；
+                # 旧公式 ppm/3 实为 精度/(k旧×3)，k旧≠1 时越算越严，永远无解）
+                retry['pixel_precision_max_mm'] = params['precision_requirement'] / 3.0
+                retry['required_pixels'] = self.calculator.required_pixels(
+                    params['field_of_view'], retry['pixel_precision_max_mm'])
                 print("  → 按标准口径重试（像素精度上限 = 检测精度 / 3）...")
                 fixed = self._select_candidates(retry)
                 if fixed:
@@ -1165,14 +1202,28 @@ class VisionProposalGenerator:
             light_wd = light_wd_cap
 
         # 从光源数据库选择：照射范围直径需覆盖视野对角线，工作距离匹配
+        # 根因注释：飞拍必须频闪（核验 _check_fly_shooting 对非频闪直接FAIL）；
+        # 此前本函数忽略 is_fly_shooting，飞拍项目随机拿到普通环形光→核验必FAIL
+        pool = LIGHT_SOURCE_DATABASE
+        if params.get('is_fly_shooting'):
+            strobe_pool = [l for l in LIGHT_SOURCE_DATABASE if l.get('strobe')]
+            if strobe_pool:
+                print("  [光源] 飞拍场景：优先频闪光源")
+                pool = strobe_pool
+            else:
+                print("  [光源] ⚠ 飞拍场景但库内无频闪光源，按普通光源选型（核验将FAIL，须扩库）")
         best = None
         best_score = -1
-        for light in LIGHT_SOURCE_DATABASE:
+        is_fly = bool(params.get('is_fly_shooting'))
+        for light in pool:
             outer_d = light.get('outer_diameter', 0)
             if outer_d < fov_diagonal * 1.1:
                 continue  # 照射范围不足
             wd_min, wd_max = light['working_distance_range']
-            if not (wd_min <= light_wd <= wd_max):
+            # 与 light_selector.select_light_source 同容差（0.8/1.2）：
+            # 此前本函数用精确区间，频闪 LFV 下限60 vs 公式值51 差9mm 即被滤掉，
+            # 飞拍回退到普通环形光→核验必FAIL
+            if not (wd_min * 0.8 <= light_wd <= wd_max * 1.2):
                 continue
             # 分数：外径接近视野对角线×1.5，工作距离居中
             size_score = 1 - abs(outer_d - fov_diagonal * 1.5) / (fov_diagonal * 1.5)
@@ -1184,20 +1235,30 @@ class VisionProposalGenerator:
                 best = light
 
         if best is None:
-            # 兜底：数据库中固定型号
+            # 兜底：数据库中固定型号（飞拍场景下兜底仍是非频闪→核验FAIL拦死，不静默交付错光源）
             best = {'brand': 'OPT', 'model': 'RL-100-90-W', 'type': '环形光',
                     'angle': 90, 'outer_diameter': 100,
                     'working_distance_range': [80, 200]}
-            print("  [光源] 无精确匹配，使用通用环形光源")
+            if is_fly:
+                print("  [光源] ⚠ 频闪池内无尺寸/WD匹配，兜底普通环形光（核验将FAIL，须扩库频闪型号）")
+            else:
+                print("  [光源] 无精确匹配，使用通用环形光源")
 
+        # 类型标签：DB 的 type 已含"光源"后缀（如频闪光源）时不再追加，避免"LED频闪光源光源"
+        _t = best.get('type', '环形光')
+        _label = f"LED{_t}" if _t.endswith('光源') else f"LED{_t}光源"
         return {
             'brand': best.get('brand', 'OPT'),
             'model': best.get('model', ''),
-            'type': f"LED{best.get('type', '环形光')}光源",
+            'type': _label,
             'features': ['可调亮度', '均匀照明'],
             'working_distance': light_wd,
             'light_angle': light_angle,
             'outer_diameter': best.get('outer_diameter'),
+            # 频闪三字段必须透传：缺失时核验拿不到 strobe 标记，飞拍误判FAIL
+            'strobe': bool(best.get('strobe', False)),
+            'min_exposure_us': best.get('min_exposure_us', 0),
+            'max_exposure_us': best.get('max_exposure_us', float('inf')),
             'calculation': result['formula']
         }
     
@@ -1356,6 +1417,7 @@ class VisionProposalGenerator:
             json.dump(result, f, ensure_ascii=False, indent=2)
         
         print(f"  选型结果已保存: {result_path}")
+        return result_path
 
 
 def main():
@@ -1435,6 +1497,12 @@ def main():
 
     if result == 'SELECTION_ONLY':
         print("\n本次运行结束：已输出选型方案结果（未找到模板PPT，未生成PPT文件）")
+
+    if result is None:
+        # 根因注释：选型无解/核验FAIL 时各链返回 None，此前 main 仍 exit 0，
+        # CI 与调用方无法感知失败；显式非零退出
+        print("\n[失败] 未生成可用方案（见上方错误/缺口报告），已中止")
+        sys.exit(1)
 
 
 if __name__ == '__main__':

@@ -268,10 +268,11 @@ class UserDataParser:
         if resolution:
             params['resolution_requirement'] = resolution
         
-        # 识别飞拍场景
+        # 识别飞拍场景（keywords 表里含正则如 fly.*shot，必须走 re.search；
+        # 此前用子串 in 匹配：正则式永远命中不了，且大小写敏感漏掉 Conveyor）
         fly_shooting_keywords = self.keywords.get('fly_shooting', [])
         for keyword in fly_shooting_keywords:
-            if keyword in text:
+            if re.search(keyword, text, re.IGNORECASE):
                 params['is_fly_shooting'] = True
                 break
         

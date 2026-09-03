@@ -6,6 +6,7 @@
 """
 
 import json
+import math
 import os
 from typing import Dict, List, Optional
 from precision_calculator import PrecisionCalculator
@@ -104,8 +105,11 @@ class CameraSelector:
 
             # 推荐分数
             score = 0
-            # 像素精度余量（实际最佳像素精度 vs 允许上限）
-            best_pixel_precision = fov['width'] / res_w  # mm/pixel @ 倍率上限
+            # 像素精度余量（实际最佳像素精度 vs 允许上限）：
+            # 最佳可达像素精度取双轴最大值（mag 受 min(宽上限,高上限) 约束，
+            # 此前只算宽轴，高向受限时余量比虚高数倍）
+            best_pixel_precision = max(fov['width'] / res_w,
+                                       fov['height'] / res_h)  # mm/pixel @ 倍率上限
             ratio = pixel_precision_max / best_pixel_precision  # ≥1
             if 1.0 <= ratio < 1.3:
                 score += 60   # 刚好满足，余量小
@@ -136,8 +140,8 @@ class CameraSelector:
             info = camera.copy()
             info.update({
                 'resolution_mp': resolution_mp,
-                'required_pixels': {'x': int(need_px_x + 0.999),
-                                    'y': int(need_px_y + 0.999)},
+                'required_pixels': {'x': math.ceil(need_px_x),
+                                    'y': math.ceil(need_px_y)},
                 'pixel_precision_max_mm': pixel_precision_max,
                 'best_pixel_precision_mm': best_pixel_precision,
                 'precision_margin_ratio': round(ratio, 2),

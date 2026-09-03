@@ -4,6 +4,53 @@
 
 ## [Unreleased]
 
+### 修复：全链逻辑审查 12 项（v1.11.1）
+
+- **背景**：用户要求检查 skill 脚本逻辑 bug；逐文件通读 + 执行复现确认，
+  修完跑测试套件（75 用例 73 过 2 跳 0 失败，含本次新增 17 用例）
+- **崩溃类**：
+  - `vision_proposal_generator.py` files 链无模板分支引用未定义的 `result_json`
+    → NameError 崩溃（已复现）；`_save_selection_result` 改为返回落盘路径并接住
+  - `validate_selection.py` `_check_performance_margin` 在 `cycle_time: null`
+    时 `None > 0` 直接 TypeError（已复现）；缺省改 3，各核验的 k 取值同步防 null
+  - `_calculate_field_of_view` 对字符串型 `field_of_view`（如 `"60x40"`）
+    穿透全部分支误报【内部错误】；与 `field_of_view_input` 同规则解析
+- **飞拍链三处断裂**（飞拍项目此前恒 FAIL 或误选）：
+  - `light_selector.select_light_source` 的类型过滤把唯一频闪光源提前滤空
+    （默认 `light_type='环形光'`）；飞拍时频闪免于类型过滤
+  - 曝光上下限检查方向反了：系统上限比光源 max 宽松是正常余量，
+    仅当系统上限短于光源最短时才过滤（`validate_selection` 同改）
+  - `_recommend_light_source` 忽略 `is_fly_shooting` 且丢弃 strobe 三字段，
+    飞拍随机拿普通环形光→核验必 FAIL；改为频闪池优先 + 透传 strobe 标记，
+    与 `select_light_source` 取同 WD 容差（0.8/1.2），类型标签去重
+    （`LED频闪光源光源` → `LED频闪光源`）
+  - `parse_user_data.py` 飞拍关键词用子串 `in` 匹配：正则 `fly.*shot`
+    永远命中不了且大小写敏感；改 `re.search(..., IGNORECASE)`
+- **数值类**：
+  - `camera_selector.py` 余量比只算宽轴，高向受限时虚高（实例虚高约 8 倍）；
+    改取双轴最大值；两处 `int(x+0.999)` 改 `math.ceil`
+    （小数部分 <0.001 时少进一位），`precision_calculator.required_pixels` 同改
+  - `recommend_precision_from_tolerance` 的 conservative/relaxed 写反
+    （保守 ×1.5 更松）；对调为 ×0.7 / ×1.5
+  - `calculate_max_exposure_time` 对像素精度 ≤0 返回 0μs 无意义结果；改抛错
+  - 旧接口 `lens_selector.select_lenses` 传整精度不除亚像素因子，
+    比主流程宽松 3 倍（0.3x 物方 11.5μm＞上限 10μm 旧接口放行）；
+    新增 `pixel_per_precision` 参数（默认 3.0）并对齐主链
+  - `_perform_selection` 标准口径重试公式 `ppm/3` 实为精度/(k旧×3)，
+    k旧≠1 时越算越严；改精度/3 并同步 `required_pixels`
+- **链路一致性**：
+  - config 显式硬件分支跳过核验（`validation_passed` 恒 False，
+    无效硬件照生成 PPT）；补核验 + FAIL 中止 + 选型摘要（显式硬件只核验不换型）
+  - `main` 在选型无解/核验 FAIL（返回 None）时仍 exit 0；改非零退出
+- **控制台编码崩溃**（端到端自包含测试暴露）：
+  - `check_ppt_quality.py` 先 `print(report)` 再写 `--out` 文件；
+    gbk 控制台遇到 ✓/✗ 直接 UnicodeEncodeError 崩溃，报告没落盘、
+    主流程验收误报"存在FAIL项"；改先落盘再打印，打印失败降级为 PASS/FAIL 纯文本
+- **测试**：视觉选型测试套件新增 17 用例（飞拍解析 3/数值 3/相机轴 1/
+  旧口径 1/核验防崩 1/飞拍光源链 5/显式硬件 2/字符串视野 1），全绿；
+  另将 workspace 门控的 2 个端到端用例改写为自包含（临时目录现场合成
+  config＋最小硬件模板），任何环境实跑不跳过
+
 ### 新功能：FA镜头入库范式 + "用户指定相机"反推口径用法（v1.10.0）
 
 - **背景**：实际项目（85×15mm 零件、视野 128×22.5mm、节拍 3件/秒不停线、
