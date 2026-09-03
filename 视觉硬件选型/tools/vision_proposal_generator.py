@@ -24,7 +24,7 @@ if not ensure_environment():
     sys.exit(1)
 
 from parse_user_data import UserDataParser
-from precision_calculator import PrecisionCalculator
+from precision_calculator import PrecisionCalculator, is_measurement_scene
 from camera_selector import CameraSelector
 from lens_selector import LensSelector
 from generate_ppt import generate_ppt
@@ -123,6 +123,15 @@ class VisionProposalGenerator:
         # 5. 获取用户确认的方案
         selection_result = selection_candidates[selected_index]
         print(f"\n已选择方案 {selected_index + 1}")
+
+        # 5.2 库保鲜：选中超龄条目自动官网刷新（有变化自动用新值重跑选型）
+        print("\n[步骤4.2] 数据保鲜检查...")
+        refreshed = self._refresh_selection_fresh(validated_params, selection_result)
+        if refreshed is None:
+            print("\n错误: 官网参数更新后重跑选型无解")
+            self._print_gap_report(validated_params)
+            return None
+        selection_result = refreshed
 
         # 5.5 选型核验（相当于发版前的回归测试，全项FAIL则中止）
         print("\n[步骤4.5] 选型核验...")
@@ -311,6 +320,16 @@ class VisionProposalGenerator:
             selected_index = self._present_candidates(selection_candidates)
             selection_result = selection_candidates[selected_index]
             print(f"\n已选择方案 {selected_index + 1}")
+
+            # 库保鲜：选中超龄条目自动官网刷新（有变化自动用新值重跑选型，
+            # 与files链共用同一代码路径）
+            print("\n[数据保鲜检查]...")
+            refreshed = self._refresh_selection_fresh(validated_params, selection_result)
+            if refreshed is None:
+                print("\n错误: 官网参数更新后重跑选型无解")
+                self._print_gap_report(validated_params)
+                return None
+            selection_result = refreshed
 
             # 选型核验（与files链一致：全项FAIL则中止）
             print("\n[步骤3.5] 选型核验...")
@@ -773,6 +792,84 @@ class VisionProposalGenerator:
         except Exception as e:
             print(f"  (缺口报告生成失败: {e})")
 
+    # ==================================================================
+    # 库保鲜：选中超龄条目自动官网刷新（库=官网缓存，数据可信度以官网为准）
+    # ==================================================================
+    def _refresh_selection_fresh(self, params: Dict, selection_result: Dict) -> Optional[Dict]:
+        """数据可信度策略：库是官网的缓存，官网为准。
+        - 库内条目近期（默认180天）官网核验过 → 直接用（不重复联网）
+        - 选中超龄条目 → 自动走官网 refresh 三级通道查证：
+            无变化 → 自动续期核验时间戳；有变化 → 自动apply更新库
+            （verified回退false待人工复核）+ 用新参数重跑一次选型
+        - 联网失败 → 诚实WARNING降级用库内值继续，提示人工refresh，不阻断
+
+        Returns:
+            可能替换后的selection_result（库值变化重跑时取新Top1）；
+            重跑后无解返回None（调用方打印缺口报告中止）
+        """
+        from database_updater import (cmd_refresh, _entry_age_days,
+                                      DEFAULT_FRESHNESS_DAYS, DEFAULT_DB,
+                                      GOVERNANCE_FIELDS)
+        reselect_needed = False
+        for kind in ('camera', 'lens'):
+            entry = selection_result.get(kind) or {}
+            model = entry.get('model', '')
+            if not model or not entry.get('verified'):
+                continue  # 未verified条目本就要求人工复核（核验环节有WARNING）
+            age = _entry_age_days(entry)
+            if age is None or age <= DEFAULT_FRESHNESS_DAYS:
+                continue  # 新鲜缓存直接用
+
+            print(f"\n[保鲜] {kind} {model} 已 {age} 天未官网核验"
+                  f"（阈值{DEFAULT_FRESHNESS_DAYS}天），参数可能有变化")
+            print("  → 自动联网官网查证刷新（静态快抓→无头渲染→AI接管）...")
+            ns = argparse.Namespace(cmd='refresh', model=model, html=None, url=None,
+                                    apply=True, dry_run=False, render_ms=12000,
+                                    db=DEFAULT_DB)
+            rc = cmd_refresh(ns)
+            if rc != 0:
+                print(f"  ⚠ 官网刷新未完成（返回码{rc}），本次按库内值继续；"
+                      f"建议人工执行: database_updater.py refresh --model {model}")
+                continue
+
+            # 库已被续期/更新 → 重读库对比，参数有变化则需用新值重跑选型
+            fresh_entry = self._reload_db_entry(model)
+            if fresh_entry is None:
+                continue
+            changed = [k for k, v in fresh_entry.items()
+                       if k not in GOVERNANCE_FIELDS and k != 'model'
+                       and entry.get(k) != v]
+            if changed:
+                print(f"  ↑ 官网参数有更新: {changed}"
+                      f"（verified已回退false，人工复核后 verify --model {model}）")
+                reselect_needed = True
+            else:
+                print("  ✓ 官网参数与库一致，已续期核验时间戳")
+
+        if not reselect_needed:
+            return selection_result
+
+        print("\n[保鲜] 库内参数已按官网更新 → 用新参数重跑选型（仅一次，防循环）...")
+        candidates = self._perform_selection(params)
+        if not candidates:
+            return None
+        print("[保鲜] 重跑完成，采用新的Top1方案（选择标准不变：综合分最高）")
+        return candidates[0]
+
+    def _reload_db_entry(self, model: str) -> Optional[Dict]:
+        """refresh后重读库条目（selection_result里持有的是选型时的旧副本）"""
+        from database_updater import DEFAULT_DB
+        try:
+            with open(DEFAULT_DB, 'r', encoding='utf-8') as f:
+                db = json.load(f)
+        except Exception:
+            return None
+        for category in ('cameras', 'lenses', 'light_sources'):
+            for entry in db.get(category, []):
+                if entry.get('model') == model:
+                    return entry
+        return None
+
     def _perform_selection(self, params: Dict) -> List[Dict]:
         """执行硬件选型；无解时做根因定位与口径自动复核（防调参死循环）"""
         candidates = self._select_candidates(params)
@@ -865,6 +962,9 @@ class VisionProposalGenerator:
                 fov=fov,
                 required_precision_mm=precision,
                 pixel_per_precision=pixel_per_precision,
+                # 尺寸测量场景远心优先（库内远心无匹配自动回退普通镜头）；
+                # 判定条件单点在 is_measurement_scene，与核验共用防两链漂移
+                prefer_telecentric=is_measurement_scene(params),
                 top_n=2
             )
 
@@ -1222,6 +1322,7 @@ class VisionProposalGenerator:
             'project_info': {
                 'name': params.get('project_name', ''),
                 'created_at': datetime.now().isoformat(),
+                'detection_type': params.get('detection_type'),
                 'precision_requirement': params.get('precision_requirement'),
                 'tolerance': params.get('tolerance'),
                 'cycle_time': params.get('cycle_time'),

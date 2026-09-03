@@ -4,6 +4,41 @@
 
 ## [Unreleased]
 
+### 新功能：尺寸测量远心优先分层选型 + 库保鲜官网闭环（v1.9.0）
+
+- **背景**：用户明确两条策略——① 尺寸测量优先远心镜头，库内远心无匹配时
+  回退普通镜头（不再硬卡类型导致无解）；② 数据以官网为准，库=缓存：
+  新鲜直接用，超龄必须官网查证后更新库再用于选型
+- **远心优先分层**（lens_selector.py）：
+  - `select_lenses_for_camera` 新增 `prefer_telecentric` 参数：测量场景先只搜
+    远心层（type 含"远心"，兼容物方/双远心/百万像素远心），命中即返回并标记
+    `telecentric_preferred`；无匹配自动回退普通镜头层，命中标记
+    `telecentric_fallback`；倍率窗口无解时提前返回不做无意义分层
+  - 旧接口 `select_lenses` 的"精度≤0.01 强制远心（精确匹配'物方远心镜头'）"
+    同步改为远心优先+回退（原逻辑会漏掉双远心/百万像素远心两类）
+  - 回退方案不 FAIL 拦死：透视误差风险由核验 WARNING 醒目提示
+    （建议扩库远心+向用户说明），交用户拍板
+- **测量场景判定单点化**（precision_calculator.py `is_measurement_scene`）：
+  detection_type 含测量关键词 / application=measurement / 精度≤0.01mm 三条件
+  之一；选型分层与核验判定共用同一函数，杜绝两链条件漂移（历史事故模式）
+- **detection_type 解析**（parse_user_data.py）：--text 新增
+  `_extract_detection_type`（尺寸测量/外径测量/位置度测量等 17 个关键词，
+  "检测区域"类几何描述不误伤）；config_template 新增 `detection_type` 字段；
+  selection_result.json 的 project_info 落盘该字段可追溯
+- **库保鲜闭环**（vision_proposal_generator.py `_refresh_selection_fresh`）：
+  files/config 两链在选定方案后、核验前检查选中相机/镜头的新鲜度——
+  超龄（>180天）条目自动走 `cmd_refresh`（apply 模式，三级通道官网查证）：
+  无变化自动续期时间戳；有变化自动 apply 入库（verified 回退 false 待人工
+  复核）并用新参数重跑一次选型；联网失败诚实 WARN 降级用库内值继续不阻断
+- **核验**（validate_selection.py）：`_check_telecentric_necessity` 改用
+  `is_measurement_scene` 单点判定；新增回退方案专属文案（"库内无匹配远心
+  已回退普通镜头"+透视误差风险建议）
+- **测试**：视觉选型测试套件新增 10 用例（场景判定4/文本解析2/分层行为3含
+  注入"全层无匹配必须空手而归"/核验文案2），单文件 17/17 绿；全量 56 用例
+  54 过 2 失败——2 失败为工作区 config 当日被改为 85x15+精度0.1（倍率窗口
+  0.07~0.13x 低于库内最低 0.259x，库内无普通镜头可回退），stash 基线复现
+  一致，与本次改动无关；该场景正确走缺口报告扩库指引
+
 ### 修复：用户指定像素精度时弱模型思考死循环（v1.8.1）
 - **根因**：脚本链路没有"像素级口径"入口——用户明说"像素精度X mm/pixel"时，
   ① --text 解析的 `_extract_precision` 正则会把"像素精度：0.01mm"误抓成设备精度

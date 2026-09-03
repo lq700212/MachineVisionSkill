@@ -19,7 +19,7 @@ from typing import Dict, List
 from dataclasses import dataclass, asdict
 from enum import Enum
 
-from precision_calculator import PrecisionCalculator
+from precision_calculator import PrecisionCalculator, is_measurement_scene
 
 
 class CheckResult(Enum):
@@ -267,22 +267,31 @@ class SelectionValidator:
                         "需要调焦机构或减小倍率"))
 
     def _check_telecentric_necessity(self, lens: Dict, params: Dict):
+        """远心必要性核验：测量场景必须远心（FAIL）；库内远心无匹配由选型层
+        分层回退到普通镜头（lens带telecentric_fallback标记）——回退是"库内
+        无货的权宜方案"，必须醒目提示与用户确认透视误差风险（WARNING）。"""
         precision_mm = params.get('precision_requirement', 0)
-        detection_type = str(params.get('detection_type', '')).lower()
-        is_measurement = ('尺寸' in detection_type or '测量' in detection_type
-                          or params.get('application') == 'measurement')
-        needs_telecentric = is_measurement or (0 < precision_mm <= 0.01)
+        # 场景判定复用单点函数（与lens_selector选型分层同一条件，防两链漂移）
+        is_measurement = is_measurement_scene(params)
         lens_type = lens.get('type', '')
         is_tele = '远心' in lens_type
-        if needs_telecentric and is_tele:
+        if is_measurement and is_tele:
             self.checks.append(CheckItem(
                 "远心必要性", CheckResult.PASS,
                 f"测量/高精度场景(精度{precision_mm}mm)使用远心镜头，正确"))
-        elif needs_telecentric and not is_tele:
-            self.checks.append(CheckItem(
-                "远心必要性", CheckResult.WARNING,
-                f"精度{precision_mm}mm的测量场景建议使用远心镜头（当前{lens_type}）",
-                "普通镜头透视误差会吃掉精度余量"))
+        elif is_measurement and not is_tele:
+            if lens.get('telecentric_fallback'):
+                self.checks.append(CheckItem(
+                    "远心必要性", CheckResult.WARNING,
+                    f"测量场景(精度{precision_mm}mm)库内无匹配远心镜头，已回退普通镜头"
+                    f"（{lens_type} {lens.get('model', '')}）",
+                    "远心无货的权宜方案：普通镜头存在透视误差，安装需严格控制物距"
+                    "一致性，建议扩库远心型号后重跑选型，并向用户说明该风险"))
+            else:
+                self.checks.append(CheckItem(
+                    "远心必要性", CheckResult.WARNING,
+                    f"精度{precision_mm}mm的测量场景建议使用远心镜头（当前{lens_type}）",
+                    "普通镜头透视误差会吃掉精度余量"))
         # 非测量场景不强制
 
     def _check_verifiability(self, camera: Dict, lens: Dict):

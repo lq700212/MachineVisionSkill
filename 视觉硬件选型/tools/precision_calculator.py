@@ -9,6 +9,30 @@ import json
 import os
 from typing import Dict, List, Tuple, Optional
 
+
+def is_measurement_scene(params) -> bool:
+    """尺寸测量场景判定（单点维护：选型分层与核验共用同一条件，防两链漂移）。
+
+    判定依据（满足其一即为测量场景）：
+      1. detection_type 含测量关键词（"尺寸测量"等，来自 --text 解析或 config 手填）
+      2. application == 'measurement'
+      3. 精度 ≤ 0.01mm（超高精度，透视误差不可接受，行业默认必须远心）
+    测量场景的选型策略：远心优先，库内远心无匹配时回退普通镜头（lens_selector）。
+    """
+    if not isinstance(params, dict):
+        return False
+    detection_type = str(params.get('detection_type') or '')
+    if any(kw in detection_type for kw in ('尺寸', '测量', '量测')):
+        return True
+    if params.get('application') == 'measurement':
+        return True
+    try:
+        precision = float(params.get('precision_requirement') or 0)
+    except (TypeError, ValueError):
+        return False
+    return 0 < precision <= 0.01
+
+
 class PrecisionCalculator:
     """精度计算器"""
     

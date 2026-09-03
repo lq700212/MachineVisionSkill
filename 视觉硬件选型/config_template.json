@@ -9,11 +9,14 @@
 
   "_字段4_cycle_time": "节拍要求（秒）。必须来自用户/合同，不要默认。",
 
+  "_字段5_detection_type": "检测类型，如 '尺寸测量' / '外观缺陷检测'。填'尺寸测量'类关键词时启用远心优先策略：优先匹配远心镜头，库内无匹配远心时自动回退普通镜头并在核验报告提示透视误差风险（需与用户确认）；不填则按精度判断（≤0.01mm 视为测量场景）。--text 模式会自动从需求文字提取，config 模式可手填。",
+
   "project_name": null,
   "precision_requirement": null,
   "tolerance": null,
   "pixel_precision": null,
   "cycle_time": null,
+  "detection_type": null,
   "detection_area": null,
   "part_size": null,
   "fov_margin": 1.2,

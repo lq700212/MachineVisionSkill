@@ -38,13 +38,15 @@
 ## 架构地图（tools/）
 
 ```
-vision_proposal_generator.py  主流程编排：需求校验→选型→核验→PPT→自动验收→预览
-├── parse_user_data.py        用户资料/需求文本参数提取（--files/--text 入口）
-├── precision_calculator.py   精度链计算：像素精度上限=精度/k；倍率窗口；无解诊断
+vision_proposal_generator.py  主流程编排：需求校验→选型→库保鲜(超龄自动官网refresh)→核验→PPT→自动验收→预览
+├── parse_user_data.py        用户资料/需求文本参数提取（--files/--text 入口；detection_type测量场景识别）
+├── precision_calculator.py   精度链计算：像素精度上限=精度/k；倍率窗口；无解诊断；
+│                             is_measurement_scene测量场景单点判定（选型分层与核验共用）
 ├── camera_selector.py        相机选型（视野+精度双约束，需求侧推导）
-├── lens_selector.py          镜头联动匹配（倍率闭区间∩库内镜头）+ 无匹配根因分类
+├── lens_selector.py          镜头联动匹配（倍率闭区间∩库内镜头）+ 测量场景远心优先分层
+│                             （远心层无匹配自动回退普通镜头，标记telecentric_fallback）+ 无匹配根因分类
 ├── light_selector.py         光源选型（WD≤镜头WD-15 物理约束）
-├── validate_selection.py     9项选型核验（FAIL中止），含光源WD<镜头WD
+├── validate_selection.py     9项选型核验（FAIL中止），含光源WD<镜头WD、远心回退风险WARNING
 ├── generate_ppt.py           模板数据替换（触发词规则；WD显示优先wd_spec）
 ├── check_ppt_quality.py      PPT规则自查7项（历史缺陷全部机检化）
 ├── export_ppt_images.py      预览三件套（PNG/联系表/index.html；COM→LibreOffice降级）
@@ -67,6 +69,9 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→核验�
 | 光源工作距离 | 必须 < 镜头物方WD（光源装镜头与工件之间） | 经验公式值仅是起点，超约束自动cap |
 | magnification | 物方放大倍率β | 不能从型号名猜（64H≠0.64x） |
 | verified | 官网人工对照过=true | fetch自动提取=false，选型参与但带警告 |
+| detection_type / is_measurement_scene | 测量场景判定（单点函数：类型关键词/application/精度≤0.01mm） | 选型远心分层与核验判定必须共用同一函数，两链各写一套必漂移 |
+| telecentric_fallback | 测量场景远心无匹配回退普通镜头的标记 | 是权宜方案不是错误：核验WARNING提示透视误差，交用户拍板，不FAIL拦死 |
+| 库=官网缓存 | 选中超龄条目主流程自动官网refresh（无变化续期/有变化入库重跑选型） | 官网才是数据源；联网失败WARN降级用库内值，不阻断交付 |
 
 ## 运行时工作区约定（开发测试时也要遵守）
 

@@ -203,7 +203,13 @@ class UserDataParser:
     def _extract_params_from_text(self, text: str) -> Dict:
         """从文本中提取参数"""
         params = {}
-        
+
+        # 提取检测类型（"尺寸测量"等关键词 → 远心优先分层选型的依据；
+        # 判定条件单点在 precision_calculator.is_measurement_scene）
+        detection_type = self._extract_detection_type(text)
+        if detection_type:
+            params['detection_type'] = detection_type
+
         # 提取像素精度（用户明说"像素精度X mm/pixel"的像素级口径，必须先于设备精度提取，
         # 否则会被 _extract_precision 的"精度"正则误抓成 precision_requirement，差3倍导致无解死循环）
         pixel_precision = self._extract_pixel_precision(text)
@@ -252,6 +258,23 @@ class UserDataParser:
         
         return params
     
+    def _extract_detection_type(self, text: str) -> Optional[str]:
+        """提取检测类型：识别"尺寸测量"场景（决定远心优先分层选型是否启用）。
+
+        关键词必须是明确的测量意图表述，避免被"检测区域"这类几何描述误伤；
+        未命中返回 None（非测量场景按普通选型，不做远心优先分层）。
+        """
+        measurement_keywords = [
+            '尺寸测量', '尺寸检测', '检测尺寸', '测量尺寸', '精密测量',
+            '测量精度', '高精度测量', '量测', '长度测量', '宽度测量',
+            '高度测量', '厚度测量', '直径测量', '孔径测量', '外径测量',
+            '位置度测量', '轮廓测量',
+        ]
+        for keyword in measurement_keywords:
+            if keyword in text:
+                return '尺寸测量'
+        return None
+
     def _extract_tolerance(self, text: str) -> Optional[float]:
         """提取图纸公差（±X 形式，如 38.50±0.25 / ±0.25mm；系统按公差/10反推精度）"""
         match = re.search(r'±\s*([0-9]+(?:\.[0-9]+)?)', text)

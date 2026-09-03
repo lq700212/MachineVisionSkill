@@ -81,6 +81,7 @@ class LensSelector:
                                  lens_type: str = None,
                                  brand: str = None,
                                  need_coaxial_light: bool = None,
+                                 prefer_telecentric: bool = False,
                                  top_n: int = 3) -> List[Dict]:
         """
         为指定相机匹配镜头（视野-精度双约束联动，取代固定倍率假设）
@@ -92,19 +93,77 @@ class LensSelector:
           2. 筛选倍率落在区间内的镜头
           3. 逐项验证：像圆覆盖、接口、精度链、实际视野
           4. 评分：倍率靠近上限（视野刚好覆盖、精度利用充分）得分高
+          5. 测量场景（prefer_telecentric=True）远心优先分层：
+             先只搜远心镜头，无匹配才回退普通镜头（透视误差风险由核验
+             WARNING 提示，交用户确认，而不是硬卡类型导致无解）
 
         Returns:
-            通过验证的镜头列表（附实际视野、安全系数、验证明细）
+            通过验证的镜头列表（附实际视野、安全系数、验证明细；
+            测量场景回退命中的条目带 telecentric_fallback=True）
         """
-        window = self.calculator.magnification_window(
-            camera, fov, required_precision_mm, pixel_per_precision)
+        if prefer_telecentric and not lens_type:
+            # 根因注释：尺寸测量对透视误差敏感，远心是行业默认首选；但库内
+            # 远心无匹配时硬卡类型只会无解死局 → 分层回退普通镜头并打标记，
+            # 风险提示交给 validate_selection 的远心必要性核验（WARNING）
+            window = self.calculator.magnification_window(
+                camera, fov, required_precision_mm, pixel_per_precision)
+            if not window.get('feasible'):
+                # 窗口无解与镜头类型无关，分层回退无意义，直接按无解处理
+                print(f"  [镜头] 该相机无解: {window.get('reason', '')}")
+                return []
+            telecentric = self._match_lenses_for_camera(
+                camera, fov, required_precision_mm, pixel_per_precision,
+                brand=brand, need_coaxial_light=need_coaxial_light,
+                telecentric_only=True, top_n=top_n, window=window)
+            if telecentric:
+                print(f"  [镜头] 测量场景远心优先：命中 {len(telecentric)} 款远心镜头")
+                for lens in telecentric:
+                    lens['telecentric_preferred'] = True
+                return telecentric
+            print("  [镜头] 测量场景库内无匹配远心镜头 → 按策略回退普通镜头"
+                  "（核验将提示确认透视误差风险）")
+            fallback = self._match_lenses_for_camera(
+                camera, fov, required_precision_mm, pixel_per_precision,
+                brand=brand, need_coaxial_light=need_coaxial_light,
+                telecentric_only=False, top_n=top_n, window=window)
+            for lens in fallback:
+                lens['telecentric_fallback'] = True
+            return fallback
+
+        return self._match_lenses_for_camera(
+            camera, fov, required_precision_mm, pixel_per_precision,
+            lens_type=lens_type, brand=brand, need_coaxial_light=need_coaxial_light,
+            telecentric_only=False, top_n=top_n)
+
+    def _match_lenses_for_camera(self,
+                                 camera: Dict,
+                                 fov: Dict,
+                                 required_precision_mm: float,
+                                 pixel_per_precision: float = 3.0,
+                                 lens_type: str = None,
+                                 brand: str = None,
+                                 need_coaxial_light: bool = None,
+                                 telecentric_only: bool = False,
+                                 window: Dict = None,
+                                 top_n: int = 3) -> List[Dict]:
+        """单层镜头匹配：倍率窗口∩库内镜头 + 逐项验证 + 评分排序。
+
+        telecentric_only=True 时只搜 type 含"远心"的镜头（测量场景第一层）。
+        window 可传入已算好的倍率窗口（分层时复用，避免重复计算/重复打印）。
+        无匹配的根因分类只在调用方确认这是最终层时才有决策意义，
+        因此本方法只打印过滤统计，根因指引由最终层无匹配时输出。
+        """
+        if window is None:
+            window = self.calculator.magnification_window(
+                camera, fov, required_precision_mm, pixel_per_precision)
         if not window.get('feasible'):
             print(f"  [镜头] 该相机无解: {window.get('reason', '')}")
             return []
 
         mag_min, mag_max = window['mag_min'], window['mag_max']
+        scope = "远心镜头" if telecentric_only else "全部镜头"
         print(f"  [镜头] 倍率窗口: [{mag_min:.3f}x, {mag_max:.3f}x] "
-              f"(精度下限 + 视野上限)")
+              f"(精度下限 + 视野上限，搜索范围: {scope})")
 
         camera_sensor = camera.get('sensor_size', '')
         camera_mount = camera.get('lens_mount', '')
@@ -119,6 +178,8 @@ class LensSelector:
                 continue  # 倍率未确认的镜头不参与（如DTCM110-56-AL）
 
             # 类型/品牌/同轴光过滤
+            if telecentric_only and '远心' not in str(lens.get('type', '')):
+                continue
             if lens_type and lens.get('type', '') != lens_type:
                 continue
             if brand and lens.get('brand', '') != brand:
@@ -192,17 +253,19 @@ class LensSelector:
 
         if not suitable:
             # 根因分类：窗口与库内镜头倍率的关系决定下一步动作，避免盲目调参
-            mags = sorted(l['magnification'] for l in self.lenses
-                          if l.get('magnification') and l['magnification'] > 0)
+            pool = [l for l in self.lenses
+                    if l.get('magnification') and l['magnification'] > 0 and
+                    (not telecentric_only or '远心' in str(l.get('type', '')))]
+            mags = sorted(l['magnification'] for l in pool)
             if mags and mag_max < mags[0] * 1.02:
-                print(f"    [镜头无匹配·根因] 窗口上限 {mag_max:.3f}x 低于库内最低倍率 "
+                print(f"    [镜头无匹配·根因] 窗口上限 {mag_max:.3f}x 低于库内{scope}最低倍率 "
                       f"{mags[0]}x → 该相机靶面太小盖不住视野，换更大靶面/更高分辨率相机"
                       f"（不是调镜头）")
             elif mags and mag_min > mags[-1]:
-                print(f"    [镜头无匹配·根因] 窗口下限 {mag_min:.3f}x 高于库内最高倍率 "
+                print(f"    [镜头无匹配·根因] 窗口下限 {mag_min:.3f}x 高于库内{scope}最高倍率 "
                       f"{mags[-1]}x → 精度要求超出库存能力，扩库或与用户确认口径")
             else:
-                print(f"    [镜头无匹配·根因] 库内有镜头倍率落在窗口 "
+                print(f"    [镜头无匹配·根因] 库内{scope}有倍率落在窗口 "
                       f"[{mag_min:.3f}x, {mag_max:.3f}x]，但被像圆/接口/同轴光/视野验证过滤")
 
         suitable.sort(key=lambda x: x.get('recommend_score', 0), reverse=True)
@@ -231,26 +294,34 @@ class LensSelector:
             max_working_distance: 最大工作距离（mm）
             need_coaxial_light: 是否需要同轴光
             brand: 品牌
-            force_telecentric: 是否强制使用远心镜头（高精度时自动启用）
+            force_telecentric: 是否优先使用远心镜头（高精度时自动启用；
+                库内远心无匹配时回退普通镜头，与主流程分层策略一致）
             top_n: 返回前N个推荐方案
             
         Returns:
             通过验证的镜头列表（最多top_n个）
         """
-        # 高精度测量（≤0.01mm）强制使用远心镜头
+        # 高精度测量（≤0.01mm）优先使用远心镜头（与主流程 select_lenses_for_camera
+        # 的分层策略一致：远心层无匹配回退普通层，透视误差风险由核验提示确认）
+        prefer_telecentric_only = force_telecentric
         if required_precision_mm <= 0.01:
-            force_telecentric = True
-            lens_type = "物方远心镜头"
-            print(f"  [约束] 高精度测量（{required_precision_mm}mm），强制使用远心镜头")
-        
+            prefer_telecentric_only = True
+            print(f"  [约束] 高精度测量（{required_precision_mm}mm），远心镜头优先")
+
         suitable_lenses = []
+        fallback_lenses = []  # 非远心候选：仅当远心层无匹配时启用
         camera_sensor_diameter = self._calculate_sensor_diameter(camera_sensor_size) if camera_sensor_size else 0
         
         for lens in self.lenses:
             # 检查镜头类型
             if lens_type and lens.get('type', '') != lens_type:
                 continue
-            
+
+            # 远心优先分层：用户未显式指定类型时，非远心候选进兜底池
+            # （远心池有匹配时兜底池整池弃用）
+            use_fallback_pool = (prefer_telecentric_only and not lens_type and
+                                 '远心' not in str(lens.get('type', '')))
+
             # 检查品牌
             if brand and lens.get('brand', '') != brand:
                 continue
@@ -330,12 +401,19 @@ class LensSelector:
                     lens_info['safety_factor'] = safety_factor
                     lens_info['recommend_score'] = score
                     lens_info['validated'] = True  # 标记为已验证
-                    suitable_lenses.append(lens_info)
+                    (fallback_lenses if use_fallback_pool else suitable_lenses).append(lens_info)
             else:
                 # 没有相机参数时，只做基本检查
                 lens_info = lens.copy()
                 lens_info['validated'] = False
-                suitable_lenses.append(lens_info)
+                (fallback_lenses if use_fallback_pool else suitable_lenses).append(lens_info)
+
+        # 远心优先分层回退：远心池无匹配时整池启用普通镜头兜底
+        if prefer_telecentric_only and not lens_type and not suitable_lenses and fallback_lenses:
+            print("  [回退] 库内无匹配远心镜头 → 回退普通镜头（透视误差风险需与用户确认）")
+            suitable_lenses = fallback_lenses
+            for lens_info in suitable_lenses:
+                lens_info['telecentric_fallback'] = True
         
         # 按推荐分数降序排序
         suitable_lenses.sort(key=lambda x: x.get('recommend_score', 0), reverse=True)
