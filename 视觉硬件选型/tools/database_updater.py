@@ -594,29 +594,36 @@ def cmd_fetch(args):
             print("  [无头渲染] 失败（未找到浏览器/站点拒绝/超时）")
 
     # 通道3：AI浏览器接管兜底（前两级均失败时）
-    # 尝试自动执行浏览器接管
+    # 尝试自动执行浏览器接管（browser_fetch.py CLI 约定：<型号> [品牌] [--headless]）
     browser_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'browser_fetch.py')
-    if os.path.exists(browser_script) and args.url:
+    if os.path.exists(browser_script) and args.model:
         print(f"  [浏览器接管] 尝试自动执行浏览器接管...")
         try:
-            import subprocess
             result = subprocess.run(
-                [sys.executable, browser_script, args.url, args.model],
-                capture_output=True, text=True, timeout=60
+                [sys.executable, browser_script, args.model, brand or '海康威视', '--headless'],
+                capture_output=True, text=True, timeout=240,
+                encoding='utf-8', errors='replace',
             )
             if result.returncode == 0:
                 print(result.stdout)
-                # 解析输出的HTML文件路径
+                # 解析输出的HTML文件路径（browser_fetch 的成功行：文件路径: xxx.html）
+                html_file = None
                 for line in result.stdout.split('\n'):
-                    if '页面已保存到:' in line:
-                        html_file = line.split('页面已保存到:')[1].strip()
-                        if os.path.exists(html_file):
-                            print(f"  [浏览器接管] 自动执行成功，继续入库流程...")
-                            with open(html_file, 'r', encoding='utf-8') as f:
-                                html_content = f.read()
-                            plain = _html_to_plain(html_content)
-                            if _extract_and_save(plain, html_content, args, dtype, brand, '浏览器接管') == 0:
-                                return 0
+                    for marker in ('页面已保存到:', '文件路径:'):
+                        if marker in line:
+                            html_file = line.split(marker)[1].strip()
+                            break
+                    if html_file:
+                        break
+                if html_file and os.path.exists(html_file):
+                    print(f"  [浏览器接管] 自动执行成功，继续入库流程...")
+                    with open(html_file, 'r', encoding='utf-8') as f:
+                        html_content = f.read()
+                    plain = html_to_plain(html_content)
+                    if _extract_and_save(plain, html_content, args, dtype, brand, '浏览器接管') == 0:
+                        return 0
+                else:
+                    print(f"  [浏览器接管] 自动执行未取得HTML文件，转人工SOP")
             else:
                 print(f"  [浏览器接管] 自动执行失败: {result.stderr}")
         except Exception as e:

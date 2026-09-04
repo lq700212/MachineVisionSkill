@@ -260,7 +260,9 @@ def main():
     if html_file:
         print(f"\n{'='*60}")
         print(f"[成功] 产品详情页已获取")
+        # 两种标记行都输出：database_updater 通道3按这两行解析HTML路径
         print(f"文件路径: {html_file}")
+        print(f"页面已保存到: {html_file}")
         print(f"下一步执行:")
         print(f"python tools/database_updater.py add --html {html_file} \\")
         print(f"           --url <详情页网址> --type camera --model {model} --brand {brand}")

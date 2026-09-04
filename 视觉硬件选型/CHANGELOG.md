@@ -4,7 +4,32 @@
 
 ## [Unreleased]
 
-### 修复：全链逻辑审查 12 项（v1.11.1）
+### 修复：fetch 通道3（浏览器接管自动执行）4处链路断裂（v1.11.2）
+
+- **背景**：用户反馈"代理浏览器不完美"，评估 Selenium 接入时实查代码发现
+  通道3（AI浏览器接管自动兜底）自上线以来从未成功过——4处缺陷叠加使其
+  形同虚设，fetch 永远落到人工SOP。结论：不接入 Selenium（与通道3的
+  Playwright 同层重复且引入驱动版本耦合），修通既有通道3即可
+- **4处缺陷与修复**（`database_updater.py` + `browser_fetch.py`）：
+  1. 子进程参数错位：传 `[url, model]` 而 browser_fetch CLI 约定
+     `<型号> [品牌]`——url 被当型号搜索必然失败；改为
+     `[型号, 品牌, '--headless']`，触发条件同步改为按 `--model` 而非 `--url`
+  2. 输出协议不匹配：只认 `页面已保存到:`，browser_fetch 实际输出
+     `文件路径:`——HTML 路径永远解析不到；改为双标记兼容解析，
+     browser_fetch 侧也补打印 `页面已保存到:` 行（双向兼容）
+  3. `timeout=60` 太短：browser_fetch 含模拟人工随机延迟+多次 networkidle
+     等待，60s 必超时；放宽到 240s，并显式 `encoding='utf-8'`
+     （防 GBK 控制台解码崩溃）
+  4. AttributeError：调用不存在的 `_html_to_plain`（模块内只有
+     `html_to_plain`）——即使前三关全过，最后一步也崩；已改正
+- **测试**：新增 `视觉选型测试/tests/test_channel3.py`（5用例，全离线
+  mock，不碰真实库与网络）：参数顺序契约、timeout≥180s、双协议解析、
+  HTML→提取→草稿全链路无 AttributeError、子进程失败诚实降级 exit=2
+- **验证**：全量 80/80 通过（原75 + 新增5），0失败 0跳过
+
+## [Unreleased]（v1.11.1）
+
+### 修复：全链逻辑审查 12 项
 
 - **背景**：用户要求检查 skill 脚本逻辑 bug；逐文件通读 + 执行复现确认，
   修完跑测试套件（75 用例 73 过 2 跳 0 失败，含本次新增 17 用例）
