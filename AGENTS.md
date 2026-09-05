@@ -40,7 +40,7 @@
   `.gitignore` 加 `!路径` 放行**，否则 `git status` 完全不显示、提交时静默漏掉
   （CHANGELOG.md 就踩过：创建后曾因未放行而不可见）。
 - 当前已放行的根文件：`README.md`、`CHANGELOG.md`；已放行的 skill 目录：
-  视觉硬件选型 / 视觉选型测试 / git自动提交推送 / 盖章专员。
+  视觉硬件选型 / 视觉选型测试 / git自动提交推送 / winforms-ui-debug / 上位机通讯封装 / opencode-cache-cleaner / 盖章专员。
 - `盖章专员/**/*.png|jpg|jpeg|gif|bmp` 被忽略（防误传公司公章），新增同类图片注意。
 
 ## 历史教训（每次提交前扫一眼）

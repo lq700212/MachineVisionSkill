@@ -9,6 +9,9 @@
 | [视觉硬件选型](视觉硬件选型/) | 机器视觉选型专家：相机/镜头/光源自动选型计算、方案 PPT 生成、官网产品图自动获取 | [SKILL.md](视觉硬件选型/SKILL.md) |
 | [视觉选型测试](视觉选型测试/) | 视觉硬件选型专用测试套件：回归 + 注入用例，开发迭代后一键全量验证 | [SKILL.md](视觉选型测试/SKILL.md) |
 | [git自动提交推送](git自动提交推送/) | 本地工程一键 commit + push：自动读 CHANGELOG 生成 message（含要点提炼），提交前安全检查（可联动仓库卫生体检），现场目录用显式暂存 | [SKILL.md](git自动提交推送/SKILL.md) |
+| [winforms-ui-debug](winforms-ui-debug/) | 跨项目 WinForms 界面像素级调试：harness 指哪打哪直启目标窗体，反射探查 + 截图 + 像素扫描，附矩形枚举/置顶截图脚本 | [SKILL.md](winforms-ui-debug/SKILL.md) |
+| [上位机通讯封装](上位机通讯封装/) | 上位机设备通讯范式：PLC/相机/仪表/Modbus 连接管理、心跳重连、UI 解耦 | [SKILL.md](上位机通讯封装/SKILL.md) |
+| [opencode-cache-cleaner](opencode-cache-cleaner/) | 清理 opencode 残留项目记录与孤儿快照：列出→选择→备份→删除→验证 | [SKILL.md](opencode-cache-cleaner/SKILL.md) |
 | [盖章专员](盖章专员/) | PDF 合同自动盖章：自动匹配现有印章的大小与位置 | [SKILL.md](盖章专员/SKILL.md) |
 
 > 各 skill 的版本与变化记录见其目录内的 CHANGELOG.md。
@@ -36,4 +39,4 @@ ZCode 用户也可链接到 `.agents\skills\`；直接复制目录同样可用�
 
 ## 仓库范围
 
-本仓库按白名单跟踪 skill 目录（见 `.gitignore`）：当前只跟踪 `视觉硬件选型`、`视觉选型测试`、`git自动提交推送`、`盖章专员*`。新开发的 skill 需要入库时，在 `.gitignore` 加一行 `!目录名/` 并同步更新上表。
+本仓库按白名单跟踪 skill 目录（见 `.gitignore`）：当前只跟踪 `视觉硬件选型`、`视觉选型测试`、`git自动提交推送`、`winforms-ui-debug`、`上位机通讯封装`、`opencode-cache-cleaner`、`盖章专员*`。新开发的 skill 需要入库时，在 `.gitignore` 加一行 `!目录名/` 并同步更新上表。

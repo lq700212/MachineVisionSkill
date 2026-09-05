@@ -3,6 +3,67 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-05（本次·上位机通讯封装+opencode-cache-cleaner纳入追踪）
+
+### 改动范围
+
+本次新增追踪 **2 个 skill：`上位机通讯封装`（SKILL.md + 新建 CHANGELOG.md）+**
+**`opencode-cache-cleaner`（SKILL.md + clean.py + 新建 CHANGELOG.md）**，
+既有内容零改动。另同步 `.gitignore` 白名单、README 一览表与仓库范围、根 AGENTS 放行列表。
+
+### 上位机通讯封装（v1.0.0，基线入库）
+
+- 范式：PLC/相机/仪表/Modbus 通讯层（手动超时连接、锁串行化、心跳重连、UI 解耦），
+  沉淀自 CommandCenter、AgingTestSystem 两个现场项目。
+
+### opencode-cache-cleaner（v1.0.0，基线入库）
+
+- 功能：清理 opencode 残留项目记录与孤儿快照（列出→选择→备份→删除→验证→提示重启），
+  `global` 项目不可删。
+
+### 验证结论
+
+- 放行后两目录 `git status` 均可见（`?? 上位机通讯封装/`、`?? opencode-cache-cleaner/`），
+  `git check-ignore` 不再命中；既有未提交改动（winforms-ui-debug 相关）不受影响，未做提交。
+
+### 建议 commit message
+
+chore(skills): 纳入追踪上位机通讯封装 v1.0.0 + opencode-cache-cleaner v1.0.0，白名单与文档同步
+
+---
+
+## 2026-09-05（本次·新建winforms-ui-debug全局skill，四项目合并）
+
+### 改动范围
+
+本次新增 **1 个 skill：`winforms-ui-debug`（SKILL.md + AGENTS.md + CHANGELOG.md + scripts/ 四脚本）**，
+并删除 4 处项目内源 skill（见下）。另同步 `.gitignore` 白名单、README 一览表、根 AGENTS 放行列表。
+
+### winforms-ui-debug（v1.0.0，新建）
+
+- 合并来源：AgingTestSystem（方法论底稿：总流程/harness/三大工具/血泪1-12/高DPI/收尾）、
+  CommandCenter（Maximized禁缩放专项/点击双击判定/ComboBox选中高亮）、
+  HJVision（CheckBox膨胀/ElementHost/无边框标准/V4.7.3系列12条）、
+  kaleidoscope 的 ui-layout-debug（矩形枚举与真实截图§十 + 四脚本原型）。
+- 合并修坑：三份旧 SKILL 的构建/bin/窗体引用全写 AgingTestSystem（两份从未适配）→
+  通用模板 + 附录A项目档案；ShowDialog 双法合并一条；脚本业务默认值全参数化；
+  ControlTree.py 的 taskkill 全同名清理改为精确清理；PrintWindow/CopyFromScreen 收敛为条件选用表。
+- PS 双脚本 UTF-8 带 BOM，Python 双脚本 `py_compile` 通过，三态参数校验正确。
+- （同日追补：SKILL.md §十三附录 B 已删除——与 skill 内 CHANGELOG v1.0.0 重复，
+  改为一句指向；附录 A 项目档案完整保留。）
+
+### 验证结论
+
+- `py_compile` 双 py 通过；PS 双脚本 `[Parser]::ParseFile` 0 报错 + BOM 头断言通过；
+  `--exe` 缺失/`--attach` 缺 `--process`/`--help` 三态行为正确；
+  新目录 `git status` 可见（白名单已放行）。
+
+### 建议 commit message
+
+feat(winforms-ui-debug): v1.0.0 四项目UI调试skill合并为全局唯一版本，附取证脚本与项目档案
+
+---
+
 ## 2026-09-05（本次·git提交推送合并+卫生联动）
 
 ### 改动范围
