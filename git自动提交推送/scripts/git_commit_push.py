@@ -11,12 +11,16 @@ git_commit_push.py — 一键提交并推送 Git 仓库（自动生成 commit me
   3. 无 CHANGELOG 或提取不到时，回退为按改动文件统计生成的类型化摘要；
   4. 所有破坏性动作前都有预览与确认，支持 --dry-run / --no-push / --force 等开关。
 
-用法：
-  python git_commit_push.py                 # 提交全部改动并推送（自动生成消息，需确认）
-  python git_commit_push.py -m "fix: xxx"   # 手动指定 commit message
-  python git_commit_push.py --no-push       # 只提交不推送
-  python git_commit_push.py --dry-run       # 只预览将执行的动作，不真正提交/推送
-  python git_commit_push.py --force         # 跳过确认（CI 等无人值守场景）
+ 用法：
+   python git_commit_push.py                 # 提交全部改动并推送（自动生成消息，需确认）
+   python git_commit_push.py -m "fix: xxx"   # 手动指定 commit message
+   python git_commit_push.py --no-push       # 只提交不推送
+   python git_commit_push.py --dry-run       # 只预览将执行的动作，不真正提交/推送
+   python git_commit_push.py --force         # 跳过确认（CI 等无人值守场景）
+   python git_commit_push.py --explicit --force  # 显式暂存模式：跳过自动 add -A，
+                                             # 只提交已暂存内容（现场运行目录必用）
+   提交前自动跑两道检查：precommit_check（待提交增量）+ 仓库自带的
+   repo-hygiene 体检（.gitignore 规则/全库健康，有则跑，无则跳过）。
 
 依赖：Python 3.8+，git 在 PATH 中。无第三方库，标准库实现。
 """
@@ -118,7 +122,7 @@ def extract_latest_version(changelog: Path) -> tuple:
     解析失败返回 ("", [])。
     """
     try:
-        lines = changelog.read_text(encoding="utf-8").splitlines()
+        lines = changelog.read_text(encoding="utf-8-sig").splitlines()
     except (OSError, UnicodeDecodeError):
         return "", []
     version_line = None
@@ -180,6 +184,117 @@ def build_changelog_subject(version_line: str, subsections: list) -> str:
 # 中文信息密度高，放宽到 100 字符；超出部分进正文而非硬塞主题
 SUBJECT_MAX_LEN = 100
 
+# ---------- 正文要点细节提炼（2026-09-05 从 HJVision 项目 skill 合并进来） ----------
+# 背景：V4.3.2 的 commit 正文曾只有"对应 CHANGELOG.md 最新版本条目"一句空话——
+# 主题只抄了版本头、真正的干货（### 小节下的 - 条目与 ①②③ 续行）全丢了。
+# 以下规则把"版本小节 → 结构化正文"的提炼固定下来，AI 不再手打正文：
+BULLET_MAX_LEN = 140   # 单条要点上限（截断加 …；关键词不断腰靠 140 冗余保证）
+MAX_PER_SECTION = 8    # 每个 ### 小节最多收录条数
+MAX_BULLETS = 32       # 全文最多收录条数（超限加"完整改动见 CHANGELOG"尾行）
+BULLET_ENUM_RE = re.compile(r"^[\u2460-\u2468]\s*(.+)$")  # ①②③④⑤⑥⑦⑧⑨ 枚举行
+BULLET_DASH_RE = re.compile(r"^\s*-\s+(.+)$")              # - 条目行
+BULLET_CONT_RE = re.compile(r"^\s+\S")                     # 缩进续行（拼回上一条）
+
+
+def _clean_bullet(text: str) -> str:
+    """清洗单条要点：去 markdown 标记、压空白、超长截断（与 clean_markdown 互补，专供正文）。"""
+    text = clean_markdown(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) > BULLET_MAX_LEN:
+        text = text[:BULLET_MAX_LEN - 1].rstrip() + "…"
+    return text
+
+
+def _is_pure_title(bullet: str) -> bool:
+    """纯标题头判定：太短或以 ：/ : 结尾的是分组标签不是干货，直接丢弃。"""
+    return len(bullet) <= 6 or bullet.endswith("：") or bullet.endswith(":")
+
+
+def extract_latest_sections(changelog: Path) -> tuple:
+    """
+    解析 CHANGELOG 最新版本小节的结构化正文，返回 (版本头文本, sections)。
+
+    sections = [{"title": 小节标题, "bullets": [要点, ...]}, ...]，要点已按
+    BULLET_MAX_LEN / MAX_PER_SECTION / MAX_BULLETS 截断前的原始上限做节内截断
+    （总量截断由调用方做，以便统一追加溢出尾行）。
+
+    抓取规则（与 HJVision 原 New-CommitMessage.ps1 对齐）：
+      - `### 标题` 开新节；
+      - `- xxx` 条目行收一条；
+      - `①②③… xxx` 枚举行收一条；
+      - 缩进续行拼回上一条（CHANGELOG 把长干货写在续行里，只抓 - 行会丢信息）；
+      - 以 ：/: 结尾的纯标题头丢弃。
+    解析失败返回 ("", [])。
+    """
+    try:
+        raw = changelog.read_bytes()
+    except OSError:
+        return "", []
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("gbk")
+        except (OSError, UnicodeDecodeError):
+            return "", []
+    if not text or "\ufffd" in text:
+        return "", []  # 含替换符 = 已损坏，不硬拼正文，调用方回退标题清单
+    if text and text[0] == "\ufeff":
+        text = text[1:]
+    lines = text.splitlines()
+
+    version_line = ""
+    sections: list = []
+    cur = None  # {"title": str, "raw": [str, ...]}
+    in_latest = False
+    for ln in lines:
+        s = ln.strip()
+        if s.startswith("## "):
+            if not in_latest:
+                version_line = clean_markdown(s[3:].strip())
+                in_latest = True
+            else:
+                break  # 下一个版本条目 → 最新条目收集完毕
+            continue
+        if not in_latest:
+            continue  # 版本头出现前的散落 ### 不算
+        m_sec = re.match(r"^###\s+(.+)$", ln.strip())
+        if m_sec:
+            if cur is not None:
+                sections.append(cur)
+            cur = {"title": _clean_bullet(m_sec.group(1)), "raw": []}
+            continue
+        if cur is None:
+            continue
+        m_dash = BULLET_DASH_RE.match(ln)
+        if m_dash:
+            cur["raw"].append(m_dash.group(1))
+            continue
+        m_enum = BULLET_ENUM_RE.match(ln.strip())
+        if m_enum:
+            cur["raw"].append(m_enum.group(1))
+            continue
+        if BULLET_CONT_RE.match(ln) and cur["raw"]:
+            cur["raw"][-1] += " " + ln.strip()
+    if cur is not None:
+        sections.append(cur)
+
+    if not version_line:
+        return "", []
+    # 清洗 + 过滤 + 节内截断
+    cleaned: list = []
+    for sec in sections:
+        bullets: list = []
+        for r in sec["raw"]:
+            if len(bullets) >= MAX_PER_SECTION:
+                break
+            b = _clean_bullet(r)
+            if _is_pure_title(b):
+                continue
+            bullets.append(b)
+        cleaned.append({"title": sec["title"], "bullets": bullets})
+    return version_line, cleaned
+
 
 def clean_markdown(text: str) -> str:
     """去掉 commit 标题里常见的 markdown 标记（`、**、[x](url)）。"""
@@ -219,7 +334,6 @@ def find_changelog(repo: Path) -> Path:
 
 
 # ---------- 提交前安全检查（precommit_check.py 集成） ----------
-
 def run_precommit_check(repo: Path) -> int:
     """
     调用同目录 precommit_check.py 做提交前检查（机密变体/禁入文件/编码/大文件），
@@ -239,25 +353,82 @@ def run_precommit_check(repo: Path) -> int:
         return 2
 
 
+def run_repo_hygiene(repo: Path) -> int:
+    """
+    仓库自带卫生体检（repo-hygiene）的提交前联动。
+
+    发现 `<repo>/.opencode/skills/repo-hygiene/Test-GitignoreHygiene.ps1` 即用
+    非 Strict 模式跑一遍。必须用非 Strict：Strict 下 H6 见脏即 FAIL，而待提交
+    的改动本身就是脏（硬用 Strict 会挡住每一次正常提交）；非 Strict 下只有
+    H1-H5 的硬伤（.gitignore 规则失效/必跟踪文件被误伤/死规则/敏感内容/坏编码）
+    才 exit 1，H6 工作区脏列表（含本次待提交改动，属正常）仅 WARN 展示。
+
+    返回：0=通过或无自带脚本（不阻断）；1=有 FAIL 必须处理；2=环境不支持
+    （非 Windows 或无 powershell，降级跳过并提示）。
+    """
+    script = repo / ".opencode" / "skills" / "repo-hygiene" / "Test-GitignoreHygiene.ps1"
+    if not script.is_file():
+        return 0  # 通用仓库无自带体检：precommit_check 已覆盖待提交增量，不阻断
+    if os.name != "nt":
+        warn("仓库自带 repo-hygiene 体检为 PowerShell 脚本，非 Windows 环境跳过。")
+        return 2
+    try:
+        proc = subprocess.run(
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+            cwd=str(repo), capture_output=True, text=True, encoding="utf-8",
+            errors="replace",
+        )
+    except FileNotFoundError:
+        warn("未找到 powershell，跳过 repo-hygiene 体检。")
+        return 2
+    except Exception as ex:
+        warn(f"repo-hygiene 体检执行异常（不阻断提交）：{ex}")
+        return 2
+    out = (proc.stdout or "").strip()
+    if out:
+        print(out)
+    if proc.returncode != 0:
+        return 1
+    return 0
+
+
 def build_commit_message(repo: Path, changed: list) -> tuple:
     """
     组装 commit message。
 
     返回 (subject, body)：
-      - subject 优先用 CHANGELOG 最新版本条目标题；
-      - body 记录本次改动的文件明细（来自 git diff --stat / --name-status）；
-      - 无 CHANGELOG 时 subject 用类型摘要，body 附文件清单。
+      - subject 优先用 CHANGELOG 最新版本条目标题（三种格式自适应，见上）；
+      - body 为结构化正文：版本条目标注 + 每个 ### 小节的 `· 标题` /
+        `  - 要点`（要点来自 - 条目与 ①②③ 续行，纯标题头已过滤）；
+        无要点可抓时回退为小节标题清单；无 CHANGELOG 时回退为类型摘要+文件清单。
+      - 正文绝不只剩"对应 CHANGELOG.md 最新版本条目"一句空话（V4.3.2 教训）。
     """
     changelog = find_changelog(repo)
     if changelog is not None:
         version_line, subs = extract_latest_version(changelog)
         if version_line:
             subject = build_changelog_subject(version_line, subs)
-            # 正文：标注对应的 CHANGELOG 条目；Keep-a-Changelog 格式时把全部小节
-            # 标题列全（主题行截断掉的改动在这里补齐，保证 commit 自身可追溯）
-            body_lines = [f"对应 {changelog.name} 最新版本条目：{version_line}"]
-            if subs:
-                body_lines.append("")
+            _v2, sections = extract_latest_sections(changelog)
+            body_lines = [f"对应 {changelog.name} 最新版本条目：{version_line}", ""]
+            used = 0
+            truncated = False
+            for sec in sections:
+                if used >= MAX_BULLETS:
+                    truncated = True
+                    break
+                body_lines.append(f"· {sec['title']}")
+                for b in sec["bullets"]:
+                    if used >= MAX_BULLETS:
+                        truncated = True
+                        break
+                    body_lines.append(f"  - {b}")
+                    used += 1
+            if truncated:
+                m_ver = re.search(r"\[?V[\d.]+\]?", version_line)
+                ver = m_ver.group(0) if m_ver else version_line[:20]
+                body_lines.append(f"  …（完整改动见 {changelog.name} {ver} 小节）")
+            elif used == 0 and subs:
+                # 有小节标题但无 - /①②③ 干货：标题清单进正文，保证不丢信息
                 body_lines.extend(f"- {s}" for s in subs)
             return subject, "\n".join(body_lines)
 
@@ -282,7 +453,10 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="只预览将执行的动作，不真正提交/推送")
     parser.add_argument("--force", action="store_true", help="跳过确认（无人值守场景）")
     parser.add_argument("--skip-check", action="store_true",
-                        help="跳过提交前安全检查（precommit_check：机密/禁入文件/编码）")
+                        help="跳过提交前安全检查（precommit_check + repo-hygiene 联动）")
+    parser.add_argument("--explicit", action="store_true",
+                        help="显式暂存模式：跳过自动 git add -A，只提交已暂存内容；"
+                             "无已暂存时中止（现场运行目录/含运行时数据仓库必用，防误收）")
     args = parser.parse_args()
 
     repo = Path(args.path).resolve()
@@ -322,6 +496,17 @@ def main() -> int:
         if args.dry_run and check_code == 0:
             info("[precommit] OK。")
 
+    # 1.6 仓库自带卫生体检联动（repo-hygiene：.gitignore 规则/全库编码/敏感内容）
+    # 非 Strict：H1-H5 的 FAIL 阻断提交；H6 脏列表仅展示（待提交改动本身会上榜，正常）
+    if not args.skip_check:
+        print("\n===== 仓库卫生体检（repo-hygiene，仓库自带时）=====")
+        hyg_code = run_repo_hygiene(repo)
+        print("=" * 64)
+        if hyg_code == 1:
+            err("仓库卫生体检 FAIL：请先处理上方 [FAIL] 问题（.gitignore/机密/编码），"
+                "确属误报可用 --skip-check 强制提交。")
+            return 1
+
     # 2. 生成 commit message
     if args.message.strip():
         subject = args.message.strip()
@@ -343,7 +528,14 @@ def main() -> int:
 
     if args.dry_run:
         info("\n[dry-run] 将执行：")
-        info("  git add -A")
+        if args.explicit:
+            staged_preview = git_lines("diff", "--cached", "--name-only", cwd=repo)
+            if not staged_preview:
+                info("  （显式模式：暂存区为空 → 真实运行时将中止，需先逐个 git add）")
+            else:
+                info(f"  （显式模式：跳过 git add，只提交已暂存的 {len(staged_preview)} 个文件）")
+        else:
+            info("  git add -A")
         info(f"  git commit -m \"{subject}\"")
         if not args.no_push:
             info("  git push")
@@ -359,10 +551,18 @@ def main() -> int:
             info("已取消。")
             return 0
 
-    # 4. 暂存 + 提交
-    info("\n暂存全部改动...")
-    git("add", "-A", cwd=repo)
-    ok("暂存完成。")
+    # 4. 暂存 + 提交（显式模式跳过自动 add，只收已暂存；防现场数据误入库）
+    if args.explicit:
+        staged = git_lines("diff", "--cached", "--name-only", cwd=repo)
+        if not staged:
+            err("显式模式（--explicit）下暂存区为空，已中止：请先逐个 "
+                "`git add <路径>` 确认范围后再跑（禁止用 git add -A 盲加）。")
+            return 1
+        info(f"\n显式模式：跳过自动暂存，仅提交已暂存的 {len(staged)} 个文件。")
+    else:
+        info("\n暂存全部改动...")
+        git("add", "-A", cwd=repo)
+        ok("暂存完成。")
 
     if args.message.strip():
         proc = subprocess.run(

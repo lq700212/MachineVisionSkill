@@ -3,6 +3,37 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-05（本次·git提交推送合并+卫生联动）
+
+### 改动范围
+
+本次改动 **1 个 skill：`git自动提交推送`（脚本 + SKILL 文档 + 新建 CHANGELOG/AGENTS）**。
+
+### git自动提交推送（v1.0.0 → v1.2.0）
+
+**v1.1.0**：合并 HuaJiVision 项目 skill `git-auto-commit-push`（该项目版已删除）
+- `git_commit_push.py` 新增 `extract_latest_sections`：`###` 小节下 `-` 条目 +
+  `①②③` 枚举 + 缩进续行合并，纯标题头丢弃，140字/节8条/总量32条截断，
+  正文按 `· 小节` + `  - 要点` 组装；新增 `--explicit` 显式暂存模式
+- SKILL.md 新增"正文组装"规则、四节步骤、验证项与合并说明（八节）
+
+**v1.2.0**：提交前自动联动仓库自带 repo-hygiene 体检
+- 新增 `run_repo_hygiene`：有 `<repo>/.opencode/skills/repo-hygiene/...ps1` 则非 Strict 跑一遍，
+  H1-H5 的 FAIL 阻断提交（`--skip-check` 可逃生）；无脚本/非 Windows 降级跳过
+- 必须非 Strict：Strict 下 H6 见脏即 FAIL，而待提交改动本身就是脏
+
+### 验证结论
+
+- `py_compile` 通过；合成仓库 `--dry-run` 正文结构化要点正确（续行合并、纯标题头过滤）、
+  `--explicit` 空暂存中止提示正常；HuaJiVision 真仓库 `--dry-run --explicit` 实测
+  hygiene 段 H1-H5 全 PASS、H6 仅 WARN 不阻断，结论 OK 后正常出 message 预览
+
+### 建议 commit message
+
+feat(git自动提交推送): v1.2.0 正文细节提炼+显式暂存+卫生联动，项目版skill已合并删除
+
+---
+
 ## 2026-09-04（本次·视觉选型通道3修复+Selenium评估结论）
 
 ### 改动范围
