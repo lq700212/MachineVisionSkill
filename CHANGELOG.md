@@ -3,6 +3,32 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-05（本次·winforms-ui-debug补血泪第28条）
+
+### 改动范围
+
+本次仅改动 **1 个 skill：`winforms-ui-debug`**（SKILL.md + skill 内 CHANGELOG.md
+`[Unreleased]` 同步），根 CHANGELOG.md 顶部追加本条记录。无新增文件，
+`.gitignore` 白名单无需动。
+
+### winforms-ui-debug（Unreleased 追补，未升版）
+
+- SKILL.md 新增血泪第 28 条（HuaJiVision V4.4.7 实测）：TableLayoutPanel 固定列
+  高 DPI 余量（各加 12px + AutoEllipsis 保险）+ 单行输入框余量（窗加宽 40，
+  输入框 296→336）+ `PerformAutoScale(SizeF,SizeF)` 假绿探针修法（1.5x 字体实测
+  + 余量阈值 + 反向验证）。
+
+### 验证结论
+
+- 仅文档追补（SKILL.md 血泪条目 + CHANGELOG 同步），未改 `scripts/`，
+  无需重跑 py_compile / BOM 断言 / 三态校验；`git status` 仅见上述 3 个文件改动。
+
+### 建议 commit message
+
+fix(winforms-ui-debug): 追补血泪第28条高DPI余量与假绿探针修法，同步两处CHANGELOG
+
+---
+
 ## 2026-09-05（本次·上位机通讯封装+opencode-cache-cleaner纳入追踪）
 
 ### 改动范围
