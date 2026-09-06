@@ -4,7 +4,17 @@
 
 ## [Unreleased]
 
-（暂无未发布改动）
+### 新增：分支识别前置铁律（SKILL.md 四节第 0 条）
+
+- **改动**：仅 SKILL.md 文档补强，脚本零改动。AI 使用步骤新增第 0 条
+  （V4.4.8 血泪铁律）：任何提交/推送/撤回判断之前必做
+  `git branch --show-current` + `git status -sb`，之后一切"是否已推送/
+  领先几个/要不要 force"的参照系只能是当前分支的对应远程（`git log @{u}..HEAD`），
+  禁止拿 main 或其它分支当参照。
+- **背景**：HuaJiVision 实测事故——在 Pro_Lin 分支上用 `origin/main..HEAD`
+  判断"V4.4.8 未推送"，实际早已推到 origin/Pro_Lin，参照系一错结论全错。
+  同时固化：推送目标=当前分支 upstream（不问不猜）；撤回已推送提交覆盖前
+  先 fetch 确认远程 HEAD，只允许 `--force-with-lease`，禁用裸 `--force`。
 
 ## [v1.2.0] - 2026-09-05
 

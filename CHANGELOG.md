@@ -3,6 +3,33 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-06（本次·git自动提交推送补分支识别前置铁律）
+
+### 改动范围
+
+本次仅改动 **1 个 skill：`git自动提交推送`**（SKILL.md + skill 内 CHANGELOG.md
+`[Unreleased]` 同步），根 CHANGELOG.md 顶部追加本条记录。无新增文件，
+`.gitignore` 白名单无需动。
+
+### git自动提交推送（Unreleased 追补，未升版）
+
+- SKILL.md 四节新增第 0 条（V4.4.8 血泪铁律）：提交/推送/撤回判断前必先
+  `git branch --show-current` + `git status -sb` 确认当前分支与上游，参照系
+  只能用当前分支的远程（`git log @{u}..HEAD`），禁止拿 main 等其它分支当参照；
+  推送目标=当前分支 upstream，覆盖只允许 `--force-with-lease`（先 fetch 确认）。
+- 仅文档补强，`scripts/` 零改动。
+
+### 验证结论
+
+- 仅文档改动，无需跑脚本回归；改动范围经 `git diff` 复核为 SKILL.md 单文件
+  9 行新增，与本次记录一致。
+
+### 建议 commit message
+
+fix(git自动提交推送): SKILL.md补第0条分支识别前置铁律（参照系只用当前分支upstream，禁裸--force）
+
+---
+
 ## 2026-09-05（本次·winforms-ui-debug补血泪第28条）
 
 ### 改动范围
