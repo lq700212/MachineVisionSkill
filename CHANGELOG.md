@@ -3,6 +3,32 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-07（本次·winforms-ui-debug补血泪第29条）
+
+### 改动范围
+
+本次仅改动 **1 个 skill：`winforms-ui-debug`**（SKILL.md + skill 内 CHANGELOG.md
+`[Unreleased]` 同步），根 CHANGELOG.md 顶部追加本条记录。无新增文件，
+`.gitignore` 白名单无需动。
+
+### winforms-ui-debug（Unreleased 追补，未升版）
+
+- SKILL.md 新增血泪第 29 条（HuaJiVision V4.4.8 实测）：Sunny UIForm 客户区顶部
+  35px 自绘标题禁区，Y<35 控件 Add 时被强制搬到 Y=35；修法首行从 Y≥40 起排
+  （本案模式行→50/52、组框→84、窗高同步+36）；验证 new 完即打印 Bounds +
+  截图确认组框标题。
+
+### 验证结论
+
+- 仅文档追补（SKILL.md 血泪条目 + CHANGELOG 同步），未改 `scripts/`，
+  无需重跑 py_compile / BOM 断言 / 三态校验；`git status` 仅见上述 3 个文件改动。
+
+### 建议 commit message
+
+fix(winforms-ui-debug): 追补血泪第29条UIForm顶部35px标题禁区，同步两处CHANGELOG
+
+---
+
 ## 2026-09-06（本次·git自动提交推送补分支识别前置铁律）
 
 ### 改动范围
