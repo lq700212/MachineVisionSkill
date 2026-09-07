@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+- 新增 SKILL.md 血泪第 35b 条（DarkGlyph 扩展到 ToolStripItem + 老资源先像素普查再定策略，HuaJiVision V4.4.17）：菜单项独立原图本；Designer 的 ImageTransparentColor 声明可能是残留，实测为准；§十清单第 5 条同步。
+- 新增 SKILL.md 血泪第 35c 条（下拉菜单换肤走 ToolStripManager 全局接管，HuaJiVision V4.4.17）：逐个设下拉 Renderer 粘不住读回默认；浅色还接管前原值+ForeColor=Empty；Empty 读回的是继承默认值，断言用读回值；§十清单第 6 条同步。
+
 - 新增 SKILL.md §十"深色模式换肤专项"（HuaJiVision V4.4.13→V4.4.16 四轮沉淀）：新界面一步到位 10 条 + 落点对照表（色板/三 Tag/探针 I14〜I17·SG22〜SG25）；frontmatter 触发词补"深色模式/换肤/主题"。
 - 新增 SKILL.md 血泪第 32〜38 条（换肤快照先整树后刷色 / 禁用组标题系统灰字 / ToolStripItem 不在 Controls / 字形按钮暗底白字三件套 / 预乘 Alpha 断言容差 250 / Sunny 组框认 FillColor / 探针必配反向验证）；章节重排（新§十深色，原§十〜十三顺延为§十一〜十四；§四注记的§十一引用现有所指正确）。
 - 新增 SKILL.md 血泪第 29 条（Sunny UIForm 客户区顶部 35px 自绘标题禁区，HuaJiVision V4.4.8 实测）：Y<35 控件 Add 时被强制搬到 Y=35；修法首行从 Y≥40 起排；验证 new 完即打印 Bounds + 截图确认组框标题。

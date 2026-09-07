@@ -3,6 +3,41 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-07（本次·winforms-ui-debug补35b/35c + git提交前回检）
+
+### 改动范围
+
+本次改动 **2 个 skill：`winforms-ui-debug`、`git自动提交推送`**（各 SKILL.md +
+skill 内 CHANGELOG.md `[Unreleased]` 同步），根 CHANGELOG.md 顶部追加本条记录。
+无新增文件，`.gitignore` 白名单无需动。
+
+### winforms-ui-debug（Unreleased 追补，未升版）
+
+- SKILL.md 新增血泪第 35b 条（DarkGlyph 扩展到 ToolStripItem + 老资源先像素普查
+  再定策略，HuaJiVision V4.4.17）：菜单项独立原图本；Designer 的
+  ImageTransparentColor 声明可能是残留，实测为准；§十清单第 5 条同步。
+- SKILL.md 新增血泪第 35c 条（下拉菜单换肤走 ToolStripManager 全局接管，
+  HuaJiVision V4.4.17）：逐个设下拉 Renderer 粘不住读回默认；浅色还接管前原值+
+  ForeColor=Empty；Empty 读回的是继承默认值，断言用读回值；§十清单第 6 条同步。
+
+### git自动提交推送（Unreleased 追补，未升版）
+
+- SKILL.md 四节新增第 5 条（V4.4.17 教训）：提交前回检 CHANGELOG——`--dry-run`
+  打出的标题正文当审稿单，逐项核对最新源码/diff，过期措辞先改 CHANGELOG、
+  重跑 dry-run 确认后再提交；旧 5〜7 条顺延为 6〜8 条，八节引用同步。
+- 仅文档补强，`scripts/` 零改动。
+
+### 验证结论
+
+- 仅文档追补（SKILL.md 血泪/步骤条目 + CHANGELOG 同步），未改 `scripts/`，
+  无需重跑 py_compile / BOM 断言 / 三态校验；`precommit_check.py` 已跑 RESULT: OK。
+
+### 建议 commit message
+
+fix(skills): winforms补35b/35c换肤血泪+git补提交前回检，同步三处CHANGELOG
+
+---
+
 ## 2026-09-07（本次·winforms-ui-debug深色模式换肤专项）
 
 ### 改动范围

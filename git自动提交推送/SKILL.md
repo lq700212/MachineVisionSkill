@@ -122,15 +122,22 @@ markdown 标记（`**`、`` ` ``）已剥除；单条超 140 字符截断加 `�
    （除非逐条确认是误报）；
 4. 常规调用：`python scripts\git_commit_push.py <repo> --force`（无人值守）；
    需要预览用 `--dry-run`；只提交用 `--no-push`；用户给了文案用 `-m "..."`；
-5. **现场运行目录/含运行时数据的仓库（如同时是编译输出目录的）必须用 `--explicit`**：
+5. **提交前回检 CHANGELOG（V4.4.17 教训：描述与代码对不上就先改 CHANGELOG 再提交，
+   不许"先提交、事后再补改"又多一次提交）**：`--dry-run` 会打出"对应 CHANGELOG.md
+   最新版本条目 + 提炼正文"——把这段输出当审稿单，逐项核对最新源码/diff：方法名、
+   类名、色值、数量（几个调用点/几项探针）、机制描述（全局接管还是逐个设置）是否一致。
+   发现过期措辞（如实现从"两处三元"改成独立方法后验证描述没同步）→ 先改 CHANGELOG，
+   重跑 `--dry-run` 确认标题正文已更新，再真正提交。CHANGELOG 是 commit message 的
+   唯一信源，信源错了提交就错了；
+6. **现场运行目录/含运行时数据的仓库（如同时是编译输出目录的）必须用 `--explicit`**：
    先 `git status` + `git diff` 确认范围，逐个 `git add <路径>`（**禁止 `git add -A` 盲加**），
    再跑主脚本 `--explicit --force` 只收已暂存内容；
-6. 仓库若自带工程卫生体检（如 HuaJiVision 的 `repo-hygiene/Test-GitignoreHygiene.ps1`），
+7. 仓库若自带工程卫生体检（如 HuaJiVision 的 `repo-hygiene/Test-GitignoreHygiene.ps1`），
    主脚本已自动跑一遍（非 Strict：H1-H5 的 FAIL 阻断提交，H6 脏列表仅展示；
    必须非 Strict——Strict 下 H6 见脏即 FAIL，而待提交改动本身就是脏）。
    它管"仓库规则与全库健康"，本技能的 precheck 管"待提交增量安不安全"，互补不替代；
    手动改 `.gitignore`（每改一条复测一次）/新增机密文件时才需单独跑它，交付前手动跑加 `-Strict`；
-7. 汇报只讲关键结果：commit 标题 + 是否推送成功，不复述脚本输出。
+8. 汇报只讲关键结果：commit 标题 + 是否推送成功，不复述脚本输出。
 
 > ⚠️ 铁律：**不主动提交/推送**——只有用户明确要求时才执行；主脚本内置的 precheck
 > 不替代 AI 对"改动是否符合用户预期"的判断（脚本管安全卫生，AI 管业务范围对不对）。
@@ -156,7 +163,10 @@ markdown 标记（`**`、`` ` ``）已剥除；单条超 140 字符截断加 `�
 4. `--explicit` 下暂存区为空时中止并提示逐个 add，已暂存时只收暂存内容（`--dry-run` 可预览）；
 5. `precommit_check.py` 对故意放置的 .pem / api_key 测试文件必须报 NG（退出码 1），
    删除后恢复 OK（退出码 0）；
-6. `git push` 成功（远程已配好、凭据有效）。
+6. `git push` 成功（远程已配好、凭据有效）；
+7. CHANGELOG 回检做过：`--dry-run` 打出的标题正文与最新代码逐项核对过，
+   过期措辞先改完、重跑 dry-run 确认更新后再提交（V4.4.17：SG28 实现变更后验证描述
+   未同步，提交后才补改了一次）。
 
 ## 八、合并说明（2026-09-05：HuaJiVision 项目 skill 已并入本技能）
 
@@ -165,6 +175,6 @@ markdown 标记（`**`、`` ` ``）已剥除；单条超 140 字符截断加 `�
   - "禁止手打正文/禁止空话正文" → 3.2 节与脚本行为双固化；
   - "禁止 `git add -A` 盲加" → `--explicit` 模式；
   - 原 `-Subject "主题"` 传参 → `-m "主题"`（AI 先读 CHANGELOG 再起草，效果相同）；
-  - 原 `Test-GitignoreHygiene.ps1 -Strict` 前置卫生 → 步骤 6 衔接（各仓库自带时跑，不在本脚本内硬编码路径）。
+   - 原 `Test-GitignoreHygiene.ps1 -Strict` 前置卫生 → 步骤 7 衔接（各仓库自带时跑，不在本脚本内硬编码路径）。
 - 历史文档（README/CHANGELOG 里提到的 `git-auto-commit-push`）是当时事实记录，保持不动；
   只有各仓库 AGENTS.md 这类"活规则"需要把 skill 名改指到本技能。
