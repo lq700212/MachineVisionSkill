@@ -3,6 +3,38 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-07（本次·winforms-ui-debug深色模式换肤专项）
+
+### 改动范围
+
+本次仅改动 **1 个 skill：`winforms-ui-debug`**（SKILL.md + skill 内 CHANGELOG.md
+`[Unreleased]` 同步），根 CHANGELOG.md 顶部追加本条记录。无新增文件，
+`.gitignore` 白名单无需动。
+
+### winforms-ui-debug（Unreleased 追补，未升版）
+
+- SKILL.md 新增 §十"深色模式换肤专项"（HuaJiVision V4.4.13→V4.4.16 四轮沉淀）：
+  新界面一步到位 10 条 + 落点对照表（色板/三 Tag/探针 I14〜I17·SG22〜SG25）；
+  frontmatter 触发词补"深色模式/换肤/主题"。
+- SKILL.md 新增血泪第 30〜38 条（表头 EnableHeadersVisualStyles / PrintWindow
+  渲染完整 / 换肤快照先整树后刷色 / 禁用组标题系统灰字 / ToolStripItem 不在
+  Controls / 字形按钮暗底白字三件套 / 预乘 Alpha 断言容差 250 / Sunny 组框认
+  FillColor / 探针必配反向验证）；章节重排（新§十深色，原§十〜十三顺延为
+  §十一〜十四）。
+- 删除 SKILL.md §十三附录 B（来源与版本）：与 skill 内 CHANGELOG v1.0.0 节重复，
+  改为一句指向；附录 A 项目档案完整保留。
+
+### 验证结论
+
+- 仅文档追补（SKILL.md 新章节 + 血泪条目 + CHANGELOG 同步），未改 `scripts/`，
+  无需重跑 py_compile / BOM 断言 / 三态校验；`precommit_check.py` 已跑 RESULT: OK。
+
+### 建议 commit message
+
+fix(winforms-ui-debug): 新增§十深色换肤专项+血泪30〜38，同步两处CHANGELOG
+
+---
+
 ## 2026-09-07（本次·winforms-ui-debug补血泪第29条）
 
 ### 改动范围

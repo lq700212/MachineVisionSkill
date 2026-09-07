@@ -1,6 +1,6 @@
 ---
 name: winforms-ui-debug
-description: 跨项目 WinForms/.NET Framework + SunnyUI 界面像素级调试：编译独立 harness 指哪打哪直启目标窗体（绕过登录/主流程），反射探私有字段 + PrintWindow/真实截图 + 像素扫描定位根因并验证修复。用户提到界面竖线/横线/颜色不对/叠色/裁剪/滚动条/DPI 缩放/控件错位遮挡，或点名具体窗体/页面时使用。沉淀多项目血泪与可复用脚本（矩形枚举/置顶截图）。
+description: 跨项目 WinForms/.NET Framework + SunnyUI 界面像素级调试与深色模式换肤：编译独立 harness 指哪打哪直启目标窗体（绕过登录/主流程），反射探私有字段 + PrintWindow/真实截图 + 像素扫描定位根因并验证修复；深色/浅色主题换肤的坑位总表与新界面一步到位清单。用户提到界面竖线/横线/颜色不对/叠色/裁剪/滚动条/DPI 缩放/控件错位遮挡、深色模式/换肤/主题，或点名具体窗体/页面时使用。沉淀多项目血泪与可复用脚本（矩形枚举/置顶截图）。
 ---
 
 # WinForms 界面像素级调试（指哪打哪）
@@ -226,6 +226,16 @@ Console.WriteLine("lastCol cell0=" + cr);                            // Right=13
 
 29. **Sunny UIForm 客户区顶部 35px 是自绘标题禁区，Y<35 的控件会被静默搬家**（HuaJiVision 独有，V4.4.8 实测）：UIForm 的 `FormBorderStyle=None` + 自绘蓝标题栏约 35px 高；`Controls.Add` 时 Y<35 的控件会被强制搬到 Y=35（harness 实测：`Location=(16,5)` 的 Label 加完读回即 `(16,35)`，与 Show 无关、建造前/后一致）。症状极具迷惑性——Designer 坐标全对、其他控件位置全对，只有顶行压住下方组框顶边（mFormAirtight 首版模式行 Y=14/16 被搬到 35，正好盖住 grpIO 组框标题）。**修法：首行从 Y≥40 起排**（本案模式行→50/52、组框→84、窗高同步+36）；DevPanel 首控件 Y=52 天然免疫。**验证**：harness 里 new 完立刻打印顶行 `Bounds`（不等 Show），设计值≠读回值即中招；再截一帧确认组框标题无横线穿过。注意与坑 11 区分：这是 Add 时强制搬家，不是 AutoScale 固化（本案 `AutoScaleDimensions` 全程 0,0）。
 
+30. **DataGridView 换肤表头惨白 = `EnableHeadersVisualStyles` 没关**（HuaJiVision 独有，V4.4.13 实测）：开着时表头/行头走系统视觉样式绘制，代码设的 `ColumnHeadersDefaultCellStyle.BackColor` 根本画不上——深色下整个表头一片惨白（harness 深色截图抓获，设置页 PLC/TCP 两表）。**修法：换肤时 `EnableHeadersVisualStyles=false`**，再设五件套（底/字/表头/网格/选中）；浅色表头用 Control 实色，与系统渐变肉眼无差。通用规则：任何"设了颜色却没变化"的表头/行头，先查这个开关。
+31. **HuaJiVision 魔改版 SunnyUI 窗体 PrintWindow 渲染完整**（V4.4.13 实测，与 Kaleidoscope 例外相反）：三个 Sunny 窗体（震动盘/开发者面板/设置页）深/浅双版 PrintWindow 截图，标题/按钮/输入框/下拉/表格全渲染、无裁剪——本项目做换肤目检可直接用 PrintWindow，不必上真实截图。WPF 混合窗（脚本编辑器）仍须 `f=2`（坑 17 不变）。
+32. **换肤快照必须"整树先快照、再整树刷色"，禁止边读边刷**（HuaJiVision 独有，V4.4.13 实测）：WinForms 底色/字色是环境继承属性——子控件未显式设色时读到的是父级颜色。若先刷黑父窗再逐个"读原值"，读到的就是继承来的深色，切回浅色等于没恢复（组框/输入框残留深色，harness 深→浅截图抓获）。**修法：快照遍与刷色遍严格分离**，快照时继承链全是设计色；改换肤动了哪个属性，快照/恢复两处同步加行（三处一一对应，缺一行浅色就恢复不出来）。
+33. **原生 GroupBox 整组禁用后标题恒黑，换肤救不回来**（HuaJiVision 独有，V4.4.15 实测）：`Enabled=false` 的组框标题走系统灰字、无视 `ForeColor`（决定性实验：运行时设 `ForeColor=Red`，标题条 0 红像素）——深色下只有被禁用的那组标题发黑（用户截图：TCP 组黑、上面三组浅）。**修法：组内控件级禁用**（组框本身恒启用，只禁里面表格/按钮，语义不变），标题保持换肤色。
+34. **ToolStripItem 不在 Controls 里，换肤递归碰不到**（HuaJiVision 独有，V4.4.15 实测）：状态条/菜单条的 Item 设了语义底色（Lime/Yellow），深色继承来的灰白字看不见。**修法：赋值处直接钉死文字色**（`ForeColor=Black`，双主题常驻），别指望换肤递归。另：菜单项状态判据用 `Available` 而非 `Visible`（父下拉未展开时 Visible 恒 false）。
+35. **单色字形按钮深色三连：底刷深则字形隐身、留浅底用户不要、转白要配暗底**（HuaJiVision 独有，V4.4.15→V4.4.16 两轮）：字形资源是按浅色底画的深色线条（resx 实测 200×200 单色深灰、半透明抗锯齿边）——底刷深=深字压深底隐身；留设计浅底能看但用户要"和菜单栏一整块"。**正解三件套**：①换肤只认 `Tag="DarkGlyph"` 注册（构造期挂，换肤不认控件名；**彩色图标按钮千万别挂**，转白洗色不可逆）；②底对齐所在容器/菜单栏主体色（别自创第 N 种灰）；③字形转白（Alpha 原样保留、RGB 全白，原图快照、浅色引用级恢复）。**验证铁律**：真机资源逐像素断言（尺寸/Alpha/全白/缓存）+ 反向验证（去掉换白、删一个 Tag 都必须 FAIL）。
+36. **预乘 Alpha 舍入：Bitmap 拷贝后 GetPixel 白变 254**（HuaJiVision 独有，V4.4.16 实测）：半透明像素经 32bpp 预乘存取，`GetPixel` 读回 254/254/254 而非 255——断言写 `==255` 全员假失败。**修法：白色断言容差 250**（肉眼无差），Alpha 仍要求逐像素一致。
+37. **Sunny UIGroupBox 自绘认 FillColor/RectColor，不认 BackColor**（HuaJiVision 独有，V4.4.15 实测，反射列属性确认）：`BackColor` 设了也画不上，深色下组框一直白底。**修法：反射设 `FillColor=底`/`RectColor=框`**，快照与换肤一一对应。连带：Sunny 蓝色按钮组（UIButton 等 chrome 系）深浅通吃，保持不动，别去"统一刷色"。
+38. **深色断言必须配反向验证，否则等于没测**（HuaJiVision 独有，V4.4.7 + V4.4.15/16 三轮共识）："全绿"可能是断言从未执行（`PerformAutoScale(SizeF,SizeF)` 反射根本无此重载，异常被 catch 吞掉即假绿，见坑 28）。**铁律**：新探针落地后，往源码 temporarily 改坏一处（删一行赋值/注掉一个分支），重跑必须精准 FAIL，再改回来。静态结构探针还要先剥注释再匹配（注释里的历史教训词会假 FAIL）。
+
 ## 六、窗口全屏 / 禁缩放 / 边框行为专项（V1.11.0 CommandCenter 沉淀）
 
 "开机全屏、禁缩放、但保留最小化/关闭按钮"是工控界面的常见需求，也是 WinForms 最容易反复翻车的点。核心原则：**让"固定"成为真实状态，而不是看起来固定**。下表是各方案的实测结果（客户现场逐版验证过）：
@@ -342,7 +352,36 @@ exe.config 模板：
 - 各项目界面文件类 XML 注释里都有一张用 `┌─┐│└┘` 画的界面布局图，**框内标注控件名与关键交互点**。AI 无法看图，改界面全靠这张图（AgingTestSystem：`Views/*.cs`、`Dialogs/*.cs`，参考 `RecipeManagerForm.cs` / `WorkstationGridView.cs` 头部；HuaJiVision：`SubForm/mForm*.cs`）。
 - 改布局前先读目标窗体的 ASCII 图，确认控件名/坐标；**改完必须同步更新该图**（坐标、控件名、按钮文字都要和实际一致），否则下次维护的 AI 拿到错图会改错布局。
 
-## 十、矩形枚举与真实截图工具（Kaleidoscope 沉淀，本目录 scripts/）
+## 十、深色模式换肤专项（新界面一步到位清单）
+
+做"新增窗体/页面深色适配"或"深色漏网补漏"时，按本节清单走一遍再交工——HuaJiVision
+V4.4.13→V4.4.16 四轮返工的全部教训已收拢，逐条对照就不用反复改。通用坑见§五
+32〜38，HuaJiVision 完整样板是 `SubClass/AppTheme.cs`（文件头注释即用法）。
+
+### 一步到位 10 条
+
+1. **接入只走三行**：`OnShown` 里 `ApplyTo + 订阅 Changed`，`OnFormClosed` 退订（静态事件不退订=窗体泄漏），私有转发方法判 `IsDisposed`。常驻窗体（主窗）无需退订。
+2. **颜色只用既定色板，不自创第 N 种灰**：按钮底对齐所在容器/菜单栏主体色，字只用前景色；新色=下次补漏的源头。
+3. **自绘区/图像区/看图区按名跳过**：黑底看图、第三方图像控件不换肤（换了也看不清，还可能破坏渲染）。
+4. **禁用态不用整组 `Enabled=false`**（坑 33）：组框/容器本身恒启用，只禁里面子控件；标题/文字保持换肤色。
+5. **带图按钮先分类再动手**（坑 35）：单色字形挂 Tag 走"容器底+转白"；彩色图标/照片按钮不动底不动图；纯文字按钮正常刷底。
+6. **表格/输入/下拉走既定分支**：表头先关 `EnableHeadersVisualStyles`（坑 30）；语义色（红/绿/黄底）赋值处直接钉死文字色，别指望递归（坑 34）。
+7. **快照/换肤/恢复三处同步加行**（坑 32）：改换肤动了哪个属性，快照遍与恢复遍各加一行；浅色必须像素级还原设计稿，不设"近似浅色"。
+8. **Sunny 控件认自绘属性**（坑 37）：组框体 `FillColor`/`RectColor`，输入框 `FillColor`/`ForeColor`/`RectColor`；蓝色按钮组深浅通吃，保持不动。
+9. **探针=功能断言+反向验证**（坑 38）：每条修复配一条能触达链路的像素/反射断言，落地后改坏源码重跑必须 FAIL；静态文本探针先剥注释再匹配。
+10. **双版截图目检**：深/浅各截一帧（PrintWindow 能渲染全的直接用；WPF 混合窗用 `f=2`，Sunny 自绘渲染不全的上真实截图，见§四.1 与§十一末尾对照表）。
+
+### HuaJiVision 落点对照（在本项目做深色改造时直接取用）
+
+| 项 | 值 |
+|---|---|
+| 样板/色板 | `GYZVision/SubClass/AppTheme.cs`（深 `#1E1E1E/#252526/#2D2D30/#3E3E42/#D4D4D4`，浅=系统色零偏差） |
+| 三个 Tag | `NoTheme` 整棵跳过 / `NoThemeSelf` 只跳自身 / `DarkGlyph` 字形转白（构造期挂） |
+| 功能探针 | I14 主题开关 / I15 Sunny 组框 / I16 字形按钮 / I17 禁用组标题（`DeviceFrameworkProbe.cs`） |
+| 结构守护 | SG22 开关在位 / SG23 语义色配黑字 / SG24 字形三件套+底色 / SG24b Tag 计数 / SG25 组内禁用（`StartupGuardProbe.cs`） |
+| 项目红线 | 授权码只存 `HslLicense.dat`（禁入库）；`MainSetting.ini` 的探针副作用提交前 revert；详见该项目 AGENTS |
+
+## 十一、矩形枚举与真实截图工具（Kaleidoscope 沉淀，本目录 scripts/）
 
 harness 适合"直启目标窗体做像素探针"；**布局错位/遮挡类问题**（显示不全、控件被盖、Bottom 对不齐）另有专用工具：不启动调试器，直接对目标 exe 跑脚本拿**全部子窗口实际屏幕矩形**（决定性证据）+ 真实截图（视觉证据）。脚本 Python 与 PowerShell 双版本同功能，Python 版需 pywin32（截图另需 Pillow），PS 版零依赖（现场无 Python 时用；**.ps1 必须 UTF-8 带 BOM**，PS 5.1 无 BOM 按 ANSI 解析中文会语法错误）。
 
@@ -392,7 +431,7 @@ python scripts/Get-WindowShot.py --exe "<bin>\<主exe>" --click <X> <Y> --out sh
 3. 定位到具体控件后，查它的**父容器 Controls 添加顺序**与 **Visible 切换后的重排调用**；
 4. 改完用 `Get-WindowShot` 截图 + 再跑一次 `Get-ControlTree` 双重验证（Bounds 与渲染都要对）。
 
-## 十一、验证与收尾（必做）
+## 十二、验证与收尾（必做）
 
 - 构建通过（MSBuild 输出 exe、无 error）。
 - harness 复跑，对比修复前/后同坐标像素颜色，确认目标线/色消失且不引入新问题。
@@ -402,7 +441,7 @@ python scripts/Get-WindowShot.py --exe "<bin>\<主exe>" --click <X> <Y> --out sh
 - UTF-8 自检：`[IO.File]::ReadAllText(path, [Text.Encoding]::UTF8).Contains("预期中文")`。
 - 调试完有可复用的新套路/新踩坑：回写到本 skill（新增/补充小节、追加踩坑条目），并给来源项目记一笔。
 
-## 十二、附录 A：项目档案（开工先查表）
+## 十三、附录 A：项目档案（开工先查表）
 
 > 保鲜约定：本项目改构建输出（csproj 路径/输出目录/主 exe 名）时同步改对应行
 > （各项目 AGENTS 里有同样一句话，双保险）；附录 A 没有本项目时，按表头补一行再开工。
@@ -419,7 +458,7 @@ python scripts/Get-WindowShot.py --exe "<bin>\<主exe>" --click <X> <Y> --out sh
 - **HuaJiVision**：对照 `mFormScriptEdit`（ElementHost）/ `mFormLaserMark` / `mFormDevPanel`；界面文件头 ASCII 图约定见该项目 AGENTS；注意运行目录现场文件与授权码红线（只读该项目 AGENTS，不在本 skill 展开）。
 - **Kaleidoscope**：本 skill `scripts/` 原型来源项目；对照 `ConfigEditor MainForm`（`UpdateBrandCombo` / `LayoutPresetBar`）；界面布局关键点见该项目 AGENTS。
 
-## 十三、来源
+## 十四、来源
 
 本 skill 由 4 个项目 skill 合并而成，完整来源、合并修坑与版本历史见本目录
 `CHANGELOG.md`（v1.0.0 节）。四处源 skill 已删除，后续沉淀统一回写到本 skill。

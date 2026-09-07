@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+- 新增 SKILL.md §十"深色模式换肤专项"（HuaJiVision V4.4.13→V4.4.16 四轮沉淀）：新界面一步到位 10 条 + 落点对照表（色板/三 Tag/探针 I14〜I17·SG22〜SG25）；frontmatter 触发词补"深色模式/换肤/主题"。
+- 新增 SKILL.md 血泪第 32〜38 条（换肤快照先整树后刷色 / 禁用组标题系统灰字 / ToolStripItem 不在 Controls / 字形按钮暗底白字三件套 / 预乘 Alpha 断言容差 250 / Sunny 组框认 FillColor / 探针必配反向验证）；章节重排（新§十深色，原§十〜十三顺延为§十一〜十四；§四注记的§十一引用现有所指正确）。
 - 新增 SKILL.md 血泪第 29 条（Sunny UIForm 客户区顶部 35px 自绘标题禁区，HuaJiVision V4.4.8 实测）：Y<35 控件 Add 时被强制搬到 Y=35；修法首行从 Y≥40 起排；验证 new 完即打印 Bounds + 截图确认组框标题。
 - 新增 SKILL.md 血泪第 28 条（TableLayoutPanel 固定列高 DPI 余量 + 单行输入框余量 + 假绿探针三连坑，HuaJiVision V4.4.7 实测）：固定列各加 12px + AutoEllipsis 保险；授权码输入框窗加宽 40；反射模拟改 1.5x 字体实测 + 余量阈值 + 反向验证。
 - 删除 SKILL.md §十三附录 B（来源与版本）：与本文件 v1.0.0 节重复，改为一句指向
