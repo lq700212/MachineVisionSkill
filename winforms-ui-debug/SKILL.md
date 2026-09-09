@@ -452,7 +452,7 @@ python scripts/Get-WindowShot.py --exe "<bin>\<主exe>" --click <X> <Y> --out sh
 |---|---|---|---|---|
 | AgingTestSystem | `E:\Project\AgingTestSystem` | `AgingTestSystem/AgingTestSystem.csproj` | `AgingTestSystem\bin\Debug\` | `AgingTestSystem.exe` |
 | CommandCenter | `E:\Project\CommandCenter` | `CommandCenter/CommandCenter.csproj` | `CommandCenter\bin\Debug\` | `CommandCenter.exe` |
-| HuaJiVision | `E:\Project\HJVision` | `GYZVision/HuaJiVision.csproj` | `00_ExeBuild\`（运行目录） | `HuaJiVision.exe` |
+| HuaJiVision | `E:\Project\HJVision` | `GYZVision/HuaJiVision.csproj` | `00_ExeBuild\`（运行目录） | `HuaJiVision.exe`（另有提权帮手 `Tools/NetAdminHelper/NetAdminHelper.csproj` → 同目录 `NetAdminHelper.exe`，改网口 IP/改名用，随主 exe 部署） |
 | Kaleidoscope | `E:\Project\kaleidoscope` | `ConfigEditor/KaleidoscopeConfigEditor.csproj` | `ConfigEditor\bin\Debug\` | `KaleidoscopeConfigEditor.exe` |
 
 - **AgingTestSystem**：harness 依赖 `SunnyUI.dll` / `SunnyUI.Common.dll` / `NModbus.dll` / `NModbus.Serial.dll` / `Newtonsoft.Json.dll` / `DocumentFormat.OpenXml.dll` / `DocumentFormat.OpenXml.Framework.dll`；对照窗体 `SettingsForm(DeviceConfig)` / `RecipeManagerForm()` / `WorkstationGridView`；文档 `docs/通讯接入.md`；坐标配置模型 `Models/PanelLayoutConfig.cs`（可被 `PanelLayout.json` 覆盖）。
