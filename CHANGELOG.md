@@ -3,6 +3,32 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-12（本次·新增viewturbo-checkin入库）
+
+### 改动范围
+
+本次新增 **1 个 skill：`viewturbo-checkin`**（SKILL.md + checkin.py +
+accounts.json.example 模板首次入库），`.gitignore` 白名单放行该目录并
+忽略真实 `accounts.json`，根 CHANGELOG.md 顶部追加本条记录。
+
+### viewturbo-checkin（首次入库）
+
+- 每日签到领流量：`accounts.json` 多账号逐个登录（密码 MD5）→ 查签到状态 →
+  未签则签到 → 回显剩余流量，单账号异常不影响其他，网络抖动重试 3 次。
+- 安全隔离：真实 `accounts.json`（含明文密码）永不入库，只提交
+  `accounts.json.example` 模板；SKILL.md 已注明复制模板后填真实账号。
+
+### 验证结论
+
+- 新目录首次入库，`precommit_check.py` 已跑 RESULT: OK；
+  真实 `accounts.json` 已被忽略（`git status` 不可见）。
+
+### 建议 commit message
+
+feat(viewturbo-checkin): 每日签到skill首次入库，仅代码+模板，隔离真实账号
+
+---
+
 ## 2026-09-12（本次·winforms-ui-debug补血泪39〜42条）
 
 ### 改动范围
