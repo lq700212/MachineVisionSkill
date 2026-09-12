@@ -3,6 +3,33 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-12（本次·winforms-ui-debug补血泪39〜42条）
+
+### 改动范围
+
+本次仅改动 **1 个 skill：`winforms-ui-debug`**（SKILL.md + skill 内 CHANGELOG.md
+`[Unreleased]` 同步），根 CHANGELOG.md 顶部追加本条记录。无新增文件，
+`.gitignore` 白名单无需动。
+
+### winforms-ui-debug（Unreleased 追补，未升版）
+
+- SKILL.md 新增血泪第 39〜42 条（AgingTestSystem V1.63.2/V1.71 实测）：
+  39 条 UITabControl 必须走 AddPage（手写 TabPage 包裹漏 Show 致空白页）；
+  40 条 Designer 声明/实例化配对扫描（多行替换吞 new 致 NRE）；
+  41 条 Sunny 自绘控件类型判定三兄弟（UIButton/UITextBox/UIComboBox 非原生子类）；
+  42 条 UIForm 标题禁区两种姿势（绝对布局下移 35px、Dock 布局加 Padding）。
+
+### 验证结论
+
+- 仅文档追补（SKILL.md 血泪条目 + CHANGELOG 同步），未改 `scripts/`，
+  无需重跑 py_compile / BOM 断言 / 三态校验；`precommit_check.py` 已跑 RESULT: OK。
+
+### 建议 commit message
+
+fix(winforms-ui-debug): 补血泪39〜42条AddPage/配对扫描/类型判定/标题禁区，同步两处CHANGELOG
+
+---
+
 ## 2026-09-07（本次·winforms-ui-debug补35b/35c + git提交前回检）
 
 ### 改动范围

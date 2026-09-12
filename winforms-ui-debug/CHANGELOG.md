@@ -4,6 +4,7 @@
 
 ## [Unreleased]
 
+- 新增 SKILL.md 血泪第 39〜42 条（AgingTestSystem V1.63.2/V1.71 实测）：UITabControl 必须走 AddPage（手写 TabPage 包裹漏 Show 致空白页）/ Designer 声明/实例化配对扫描（多行替换吞 new 致 NRE）/ Sunny 自绘控件类型判定三兄弟（UIButton/UITextBox/UIComboBox 非原生子类）/ UIForm 标题禁区两种姿势（绝对布局下移 35px、Dock 布局加 Padding）。
 - 新增 SKILL.md 血泪第 35b 条（DarkGlyph 扩展到 ToolStripItem + 老资源先像素普查再定策略，HuaJiVision V4.4.17）：菜单项独立原图本；Designer 的 ImageTransparentColor 声明可能是残留，实测为准；§十清单第 5 条同步。
 - 新增 SKILL.md 血泪第 35c 条（下拉菜单换肤走 ToolStripManager 全局接管，HuaJiVision V4.4.17）：逐个设下拉 Renderer 粘不住读回默认；浅色还接管前原值+ForeColor=Empty；Empty 读回的是继承默认值，断言用读回值；§十清单第 6 条同步。
 
