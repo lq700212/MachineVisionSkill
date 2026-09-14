@@ -241,6 +241,7 @@ Console.WriteLine("lastCol cell0=" + cr);                            // Right=13
 40. **AI 改 Designer 必须做"声明/实例化配对"扫描**（AgingTestSystem 独有，V1.71 血泪）：Edit 工具的多行块替换会模糊匹配、静默吞掉被跳过的间隔行（本案 27 行块吞掉 3 个 `new`，编译照过、构造即 NRE）。**修法**：每次改完 Designer 跑配对扫描——每个 `private Xxx field;` 必须有 `this.field = new ...`（PowerShell 正则 10 行）；再 harness 里把改过的窗体 new 一次（NRE 当场现形）；再截图目检。**教训：多行 oldString 只许覆盖已用 Read 逐行核对过的连续行**，跨段批量改名用单行 replaceAll。
 41. **SunnyUI 自绘控件的类型判定三兄弟**（AgingTestSystem 独有，V1.71 实测，反射列继承链确认）：`UILabel : Label`（`is Label` 照用无碍）；`UIButton : UIControl`、`UITextBox : UIPanel`、`UIComboBox : UIDropControl`（全不是原生子类，`is Button/TextBox/ComboBox` 永远 false）。**后果有三**：①换肤/布局递归里的 `is` 判断全部走空分支（本案按钮会被容器表误染）；②字段声明改了类型后，code-behind 里 `as TextBox` 拿回 null（回归当场红两条）；③`UITextBox` 没有 `ScrollBars/WordWrap`（用 `ShowScrollBar/WordWarp`，注意 Sunny 把 Wrap 拼错了），`UseSystemPasswordChar` 没有（用 `PasswordChar='*'`），`ComboBoxStyle` 不能用（用 `UIDropDownStyle`）。**探针**：反射列 `BaseType` + 读关键属性/方法名，API 差异编译期一次收敛（本案 `Add-Type` 读 DLL，10 分钟收齐）。
 42. **UIForm 标题禁区的两种正确姿势**（AgingTestSystem 独有，V1.71 harness 实测）：自绘蓝标题占约 35px 客户区，`Controls.Add` 时 Y&lt;35 的控件会被静默搬到 Y=35（含 Dock=Fill，照搬不误）。绝对布局：内容整体下移 35px + 窗体加高 + `MinimumSize` 锁缩小；Dock 布局：窗体加 `Padding(2,38,2,2)`（搬家后的 Dock 内容恰好从 38 开始，无双重偏移，harness 读 `Bounds` 验证）；Dock 窗若内容贴底（如 ID 绑定的保存按钮），窗体仍要加高 35（Panel 缩了，绝对子控件会溢出）。**判据**：改完 harness 构造一次 + PrintWindow 截一帧，按钮/列表无裁剪、无压标题。
+43. **自绘画布开 DoubleBuffered = 所有 TextRenderer 走离屏慢路径 + PrintWindow 取证失效**（AgingTestSystem 独有，V1.81.2 两轮实锤）：①性能：`DoubleBuffered=true` 逼整窗文字走离屏缓冲（GDI 每处 ~2.2ms，见§九 V1.57.3），可见区 25 行×2 处 ≈ 110ms/帧，滚快了"字出不来"还拖影（看着像错位）。修法：关双缓冲直画屏幕 DC（近 0ms）+ `OnPaintBackground` 留空并在 OnPaint 里按裁剪区自填底（不闪）+ 可见区裁剪照做；长文本布局态预截断（ Paint 里不再量字）。②取证：关掉之后 PrintWindow 在**滚动过的画布**上会丢 GDI 文字（框在字无，真屏 CopyFromScreen 文字完好——已用深色像素计数双面裁定）。以后这类窗体：像素计数用离屏 `OnPaint` 重放（DC 可控），视觉证据一律 TOPMOST 置顶 + CopyFromScreen（见§十一），别信滚动后的 PrintWindow。
 
 ## 六、窗口全屏 / 禁缩放 / 边框行为专项（V1.11.0 CommandCenter 沉淀）
 
@@ -351,6 +352,7 @@ exe.config 模板：
 
 - **禁止"离屏 Bitmap 整幅预渲染 + OnPaint DrawImage 拷贝"**：实测离屏大图（2040×2025）上 `TextRenderer.DrawText` 每处约 **2.2ms**（屏幕 DC 上近 0ms），全量渲染 72 面板一次高达 **2247ms**；若再配"每秒全量刷新"，整个软件每 1 秒卡死一次。且 `g.Clear(白色)` 会把面板间隙刷白，导致"面板连成一片"的视觉 bug。
 - **正确做法**：OnPaint 只重绘**可见区**面板——用 `e.ClipRectangle` 反推行列范围，循环里跳过 `!rect.IntersectsWith(e.ClipRectangle)` 的面板；数据/选中变化只 `Invalidate()`（让系统按需合并重绘）；滚动卡顿用 **16ms 定时器节流 AutoScrollPosition + 画刷/画笔缓存字段**，不要每次 OnPaint 现造 Brush/Pen。
+- **连线类图元判交用控制点包围盒，不用两端点**（V1.81.4 跨项目通用教训）：贝塞尔中段穿屏、两端屏外的长线，"两端点相交才画"会整条裁掉——滚屏后新露出的条带只有底没有线（平时有线、一滚就断）。曲线必落在控制点包围盒内，用包围盒判交保守但无漏网；箭头仍只在端点可见时画。修裁剪类 bug 配"两端出屏+中段穿屏"场景，正反两面断言（旧条件必须精准 FAIL）。
 - **性能判断必须用真实屏幕 DC**：用 `CreateGraphics()` 拿屏幕 DC 测帧速/耗时。**离屏 Graphics 上的 TextRenderer 慢是 GDI+ 固有行为，不代表真实帧速**——在离屏 Bitmap 上测得慢不等于真实渲染慢，反之亦然。
 - **改自绘坐标前先查配置模型**：自绘控件的坐标/颜色/字号常量一律**外部化**到配置模型（AgingTestSystem 做法：`Models/PanelLayoutConfig.cs`，可被 `PanelLayout.json` 覆盖；其他项目见附录 A），**禁止写死像素常量**。改布局先在配置文件里找对应项。
 

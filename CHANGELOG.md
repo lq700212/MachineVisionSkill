@@ -3,6 +3,43 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-14（本次·培训文档生成首次入库＋winforms补43条）
+
+### 改动范围
+
+本次改动 **2 个 skill＋仓库白名单**：`培训文档生成`首次入库（SKILL.md）、
+`winforms-ui-debug` 追补（SKILL.md＋内 CHANGELOG 同步），`.gitignore`
+白名单放行新目录＋根 `AGENTS.md` 放行清单同步，根 CHANGELOG.md 顶部追加本条。
+
+### 培训文档生成（首次入库）
+
+- 三份制全流程：操作员版/客户技术工艺版/内部版定位差异矩阵＋五步工作流
+  （盘点→实拍→分段写→核验→同步周边）。
+- 截图核心：R1 生产路径定值源＋R2 按窗体二选一（PrintWindow/真屏）＋R3 非空
+  校验探针＋防卡住三层（Dispose 不 Close/看门狗/续拍）＋tools/DocShot 固定路径。
+- 弱模型照抄执行：§七脚本化总览 9 步＋§八探针/§九看门狗/§十定值源/
+  §十一 check_docs.py/§十三 md_to_pdf.py 模板＋分段写作≤4KB 红线＋新项目适配清单。
+
+### winforms-ui-debug（Unreleased 追补，未升版）
+
+- SKILL.md 新增血泪第 43 条（AgingTestSystem V1.81.2 两轮实锤）：自绘画布开
+  DoubleBuffered 逼文字走离屏慢路径（25 行×2 处≈110ms/帧、滚快拖影）＋
+  PrintWindow 滚动后丢 GDI 文字；修法关双缓冲＋裁剪区自填底＋取证改真屏。
+- SKILL.md §十新增连线判交一条（V1.81.4 跨项目通用）：贝塞尔用控制点包围盒
+  判交不用两端点，防滚屏断线，配"两端出屏＋中段穿屏"正反断言。
+
+### 验证结论
+
+- 新目录 `.gitignore` 放行后 `git status` 可见；`precommit_check.py` 以 RESULT: OK 为准；
+  纯文档改动，不跑回归。
+- SKILL.md 与内/根两处 CHANGELOG 已同步，无代码改动。
+
+### 建议 commit message
+
+feat(培训文档生成): 三份制培训文档skill首次入库；fix(winforms-ui-debug): 补43条双缓冲取证+连线包围盒判交
+
+---
+
 ## 2026-09-12（本次·新增viewturbo-checkin入库）
 
 ### 改动范围
