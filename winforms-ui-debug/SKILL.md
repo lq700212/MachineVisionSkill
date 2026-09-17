@@ -9,7 +9,7 @@ description: 跨项目 WinForms/.NET Framework + SunnyUI 界面像素级调试�
 定位最快的方式：**不改主程序流程、不进登录页，直接 new 出目标窗体来观察**。适用于所有
 WinForms/SunnyUI 渲染问题（分割线、颜色、裁剪、DPI、滚动条、对齐、遮挡错位）。
 
-适用项目见附录 A（AgingTestSystem / CommandCenter / HuaJiVision / Kaleidoscope，
+适用项目见附录 A（AgingTestSystem / IrisVision / HuaJiVision / Kaleidoscope，
 构建命令与 bin 目录各不相同，**开工先查附录 A 拿本项目三件套**）。
 
 > 开工前先读本项目的 `AGENTS.md`（文件编码 UTF-8、改后必构建、文档同步等红线全部适用）。
@@ -207,9 +207,9 @@ Console.WriteLine("lastCol cell0=" + cr);                            // Right=13
 10. **善用"批量纵向扫描多行"一次性确认规则**：改完"按行分支画线"后，harness 里循环前 N 行（`for r in 0..13`）对固定 X 取色，对照行号集合打印 `行号 [GROUP|data] 色值`，能一眼确认"分组行=浅蓝、数据行=线色"全部命中，比单看两行更稳。
 11. **纯代码窗体的 AutoScale 不生效 = 99% 缺 `SuspendLayout()`**（V1.58.4 血泪）：只设 `AutoScaleMode.Font` + `AutoScaleDimensions` 不够，未挂起布局时逐次 `Controls.Add` 会把 AutoScaleDimensions 固化当前 DPI 值（144 DPI 下 6×12→9×18），缩放因子恒 1。验证时先看 `form.AutoScaleDimensions` 构造后是不是还是 6×12，被改成 9×18 就是缺 SuspendLayout。
 12. **测 AutoScale 缩放必须用 PerMonitorV2 harness**：只 `SetProcessDPIAware()` 是 System-aware，AutoScaleDimensions 自动按当前 DPI 初始化，永远测不出缩放（假结论）。csc 编译带 `/win32manifest:pmv2.manifest` + bin 里放同名 `.exe.config`（`DpiAwareness=PerMonitorV2` 开关）才走真路径；对照 Designer 窗体能缩放即证明环境正确（对照窗体见附录 A）。
-13. **禁窗口缩放：`Maximized` 是最大的坑，改用手动铺满 `WorkingArea`**（AgingTestSystem/CommandCenter 共有，V1.11.0 CommandCenter 沉淀，详见§六）。
-14. **WinForms 点击/双击生效，先问"真实命中谁 + 冒不冒泡"**（AgingTestSystem/CommandCenter 共有，V1.12.15 CommandCenter 三轮血泪，详见§七；CommandCenter 案例：`Controls/CameraDisplayControl.cs` 的 `HandleDoubleClick`）。
-15. **DataGridView ComboBox 列选中行高亮**（CommandCenter 独有，V2.15.22 血泪，详见§八；案例控件 `dgvPrograms`）。
+13. **禁窗口缩放：`Maximized` 是最大的坑，改用手动铺满 `WorkingArea`**（AgingTestSystem/IrisVision 共有，V1.11.0 IrisVision 沉淀，详见§六）。
+14. **WinForms 点击/双击生效，先问"真实命中谁 + 冒不冒泡"**（AgingTestSystem/IrisVision 共有，V1.12.15 IrisVision 三轮血泪，详见§七；IrisVision 案例：`Controls/CameraDisplayControl.cs` 的 `HandleDoubleClick`）。
+15. **DataGridView ComboBox 列选中行高亮**（IrisVision 独有，V2.15.22 血泪，详见§八；案例控件 `dgvPrograms`）。
 16. **`AutoSize=true` 的 CheckBox 在高 DPI 下会膨胀，压住旁边按钮**（HuaJiVision 独有，V4.3.2 血泪）：checkbox 会按当前 DPI 字体**重新测量文本**（1.125 倍缩放下"调试模式"从 83px 膨胀到 116px），而固定尺寸按钮随窗体 AutoScale **线性**缩放，两者膨胀率不一致 → 高 DPI 下 checkbox 右边缘盖住相邻按钮（实测重叠 21px，用户反馈"调试模式被挡住"）。**修法：`AutoSize=false` + 固定 `Size`**（固定宽度后 checkbox 与按钮同样按 AutoScale 因子线性缩放，间距等比保持）。验证用 PrintWindow 扫顶栏 y 中线的颜色段，checkbox 深色背景应止于按钮深色背景之前，再反射打印 `chk.Right` 与 `bt_Continue.Left` 确认 `overlap<0`。
 17. **WinForms+WPF ElementHost 混合窗体 harness 要点**（HuaJiVision 独有；案例窗体 `mFormScriptEdit`）：WPF 程序集（WindowsBase/PresentationCore/PresentationFramework/System.Windows.Presentation/WindowsFormsIntegration）在 GAC `$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\WPF\` 下，csc 引用要写全路径；WindowsFormsIntegration.dll 不在 bin 而在这同目录。PrintWindow 截混合窗体必须 `f=2`（PW_RENDERFULLCONTENT），否则 WPF 内容空白。DPI 缩放后控件 Bounds 是逻辑值，像素扫描要加 `offX/offY = PointToScreen(Point.Empty) - GetWindowRect.Left/Top` 偏移。
 18. **ElementHost 混合窗体：给编辑器绑 Ctrl+F 等快捷键必须绑在 WPF 层，别只靠 WinForms `KeyPreview`**（HuaJiVision 独有，V4.3.4 血泪）：用户点进代码区后焦点在 WPF 内部窗口（`GetFocus()` 类名是 `HwndWrapper[xxx.exe;;...]`），WinForms 键消息链**根本不触发 KeyPreview**，Ctrl+F 被吃掉。正解双保险：①焦点在编辑器时用 `editor.InputBindings.Add(new KeyBinding(RoutedCommand, new KeyGesture(Key.F, ModifierKeys.Control)))` + `editor.CommandBindings.Add(new CommandBinding(cmd, (s,e)=>ShowSearchBar()))`（WPF 层，用独立 `RoutedCommand` 不冲突）；②焦点在右侧 WinForms 控件时保留窗体 `KeyPreview`+`KeyDown`。两者都需。**另外**：AvalonEdit 自带 `SearchPanel`（WPF Adorner）在 ElementHost 下 `Reactivate()` 显示不可靠（实测呼不出），自研 WinForms Dock=Top 的 `panel_Search` + `Visible` 切换最可控。
@@ -246,7 +246,7 @@ Console.WriteLine("lastCol cell0=" + cr);                            // Right=13
 45. **像素扫描量文字宽度，先把边框/分隔线排除，否则把边框当墨迹**（AgingTestSystem 独有，V1.88.17 harness 实锤）：症状是离屏截图上量出"标签墨迹 52px、槽位才 47px"，看着像文字溢出被裁。根因是扫描带扫进了值框的 1px 黑边框（左右边框各贡献 1 列深色像素，min/max 直接顶到边框坐标）——墨迹宽度=文字+边框，虚增。修法：量某行文字时把扫描 x 范围收在边框内侧（`右界=框左边缘-1`），或分段确认（文字墨迹应止于边框前 N px）；先拿 `TextRenderer.MeasureText(同字体)` 的理论值对照，差出边框厚度（2px）以上再怀疑溢出。本案复核：标签墨迹止于框边 14px 前，无裁剪，虚惊一场。
 46. **Sunny UIForm 去标题栏标准套路**（AgingTestSystem 独有，V1.89 主窗落地、可跨项目照抄）：基类保持 `UIForm`，只加 `ShowTitle=false`（`Dock=Fill` 内容不再被顶 35px、Y&lt;35 不再搬家，Padding 顶清零，`Resizable=false` 维持不动——Sunny 本来就不做边缘 NCHITTEST，`Resizable=true` 照样全回 CLIENT，别指望它）。三按钮用原生 Button 进顶栏最右，GDI 线条自绘字形（禁 emoji/Unicode，老工控机字体回退显示方块），悬停底自管（ThemeManager 跳过按钮类，换肤后手动 Invalidate）。`WndProc` 先调 base 再改写 `WM_NCHITTEST`（Normal 下边缘 6px 回缩放码、顶栏非按钮区回 `HTCAPTION`，按钮经类型判定放行保可点——Sunny UIButton 不是 Button 子类，按类型名认）；`WM_NCLBUTTONDBLCLK` 必须拦在 base 之前切完直接返回——DefWindowProc 收到 HTCAPTION 双击自己会切一次，两边各切一次正好抵消（本案 harness 两次纹丝不动实锤，改前置后 17/17 全绿）。任务栏标题带版本号走运行时常量（禁 Designer 写死旧版本）。验证五件套：构造不断言 NRE＋配对扫描＋真窗 Show＋PrintWindow（顶栏条带×3 看字形）＋NCHITTEST 探针（边缘/顶栏/按钮各一）＋三按钮点击真实路径（最小化→Minimized、方框→Maximized、关闭→!Visible），缺一不可。另：`CreateControl()` 不跑布局，几何断言（Bounds.Y==0 这类）必须真 Show 后读，否则读到 Designer 旧值假红。
 
-## 六、窗口全屏 / 禁缩放 / 边框行为专项（V1.11.0 CommandCenter 沉淀）
+## 六、窗口全屏 / 禁缩放 / 边框行为专项（V1.11.0 IrisVision 沉淀）
 
 "开机全屏、禁缩放、但保留最小化/关闭按钮"是工控界面的常见需求，也是 WinForms 最容易反复翻车的点。核心原则：**让"固定"成为真实状态，而不是看起来固定**。下表是各方案的实测结果（客户现场逐版验证过）：
 
@@ -283,18 +283,18 @@ Bounds = new Rectangle(work.Location, work.Size);
 - 用户说"关不了软件" → 查是不是 `FormBorderStyle=None`；
 - 想全屏 → **别用 Maximized，用 OnShown 手动铺 Bounds**；否则 `FixedSingle` 白设。
 
-## 七、WinForms 点击/双击生效判定（V1.12.15 CommandCenter 三轮血泪）
+## 七、WinForms 点击/双击生效判定（V1.12.15 IrisVision 三轮血泪）
 
-做"双击放大/还原/整窗响应双击"先读这条（CommandCenter 案例：`Controls/CameraDisplayControl.cs` 的 `HandleDoubleClick`，图像区 PictureBox `Dock=Fill` 占满整窗）：判断某控件上"点击/双击有没有反应"，先想清两件事，否则白改：
+做"双击放大/还原/整窗响应双击"先读这条（IrisVision 案例：`Controls/CameraDisplayControl.cs` 的 `HandleDoubleClick`，图像区 PictureBox `Dock=Fill` 占满整窗）：判断某控件上"点击/双击有没有反应"，先想清两件事，否则白改：
 - **① 真实命中目标是谁**：鼠标双击落在**最内层子控件**上，**不会"自动落到父 UserControl"**。红线：双击 BI 控件时只有被点的那个控件收到消息。
 - **② 事件冒不冒泡**：WinForms 中带 `Mouse` 前缀的（`MouseClick`/`MouseDoubleClick`/`MouseDown`…）会沿父链冒泡；不带前缀的（`Click`/`DoubleClick`）**不冒泡**。
 - **最稳写法，直接背**：直接订阅最内层子控件（PictureBox）的 `MouseDoubleClick`，它在真实命中点、必然触发、不依赖冒泡。**别用**父控件 `OnDoubleClick` 重写（不冒泡→没反应，第一版就这么挂的）；**也别赌**父控件 `MouseDoubleClick` 冒泡（部分环境不稳定，第二版也挂）。
 - **验证不能用合成鼠标**：headless / 无桌面交互会话下，`mouse_event`、`SendMessage WM_LBUTTONDBLCLK` 都**触发不了 WinForms 双击**——WinForms 对双击有内部状态/计时免疫，合成事件被吞，发多少遍都不生效，别拿它当验证依据（在这上面空转了很久）。
 - **可靠的验证手段**：进程序 harness 反射调用**真实命中控件（PictureBox）的 `protected OnMouseDoubleClick`** 注入双击（不依赖消息/计时），再反射读私有字段断言结果（如 `_fullScreenForm` 是否非空、放大的 `_windows[?]` 是否同一、`RestoreFullScreenWindow` 后是否置 null）。这是验证"双击→放大→还原"类行为的可靠手段；状态文本类就反射读 `Label.Text`。
 
-## 八、DataGridView ComboBox 列选中行高亮（V2.15.22 CommandCenter 血泪）
+## 八、DataGridView ComboBox 列选中行高亮（V2.15.22 IrisVision 血泪）
 
-`DataGridViewComboBoxColumn` 的单元格使用 ComboBox 渲染引擎画背景，会**忽略** `DefaultCellStyle.SelectionBackColor`——设置再醒目的蓝色，选中行也只显示系统默认的极淡蓝色，与未选中行几乎无区别。**必须用 `CellPainting` 事件强制覆盖**：在选中行的每个单元格绘制前先铺一层蓝色背景（`e.Graphics.FillRectangle(brush, e.CellBounds)`），再 `e.Paint(ClipBounds, ContentForeground)` 绘制内容，`e.Handled = true` 阻止默认渲染。样式配合：`CellBorderStyle=None`（移除边框让蓝色更连贯）、`GridColor=ControlDark`（恢复系统默认）、`DefaultCellStyle` 用 `SystemColors.Highlight/HighlightText`。**禁止只设 `SelectionBackColor` 不加 `CellPainting`**——那是无效的。改 CommandCenter `dgvPrograms` 等 ComboBox 列表格的选中样式先读这段。
+`DataGridViewComboBoxColumn` 的单元格使用 ComboBox 渲染引擎画背景，会**忽略** `DefaultCellStyle.SelectionBackColor`——设置再醒目的蓝色，选中行也只显示系统默认的极淡蓝色，与未选中行几乎无区别。**必须用 `CellPainting` 事件强制覆盖**：在选中行的每个单元格绘制前先铺一层蓝色背景（`e.Graphics.FillRectangle(brush, e.CellBounds)`），再 `e.Paint(ClipBounds, ContentForeground)` 绘制内容，`e.Handled = true` 阻止默认渲染。样式配合：`CellBorderStyle=None`（移除边框让蓝色更连贯）、`GridColor=ControlDark`（恢复系统默认）、`DefaultCellStyle` 用 `SystemColors.Highlight/HighlightText`。**禁止只设 `SelectionBackColor` 不加 `CellPainting`**——那是无效的。改 IrisVision `dgvPrograms` 等 ComboBox 列表格的选中样式先读这段。
 
 ## 九、高 DPI 适配专项（V1.55 沉淀）
 
@@ -472,12 +472,12 @@ python scripts/Get-WindowShot.py --exe "<bin>\<主exe>" --click <X> <Y> --out sh
 | 项目 | 仓库根 | 构建（MSBuild） | 输出目录 | 主 exe |
 |---|---|---|---|---|
 | AgingTestSystem | `E:\Project\AgingTestSystem` | `AgingTestSystem/AgingTestSystem.csproj` | `AgingTestSystem\bin\Debug\` | `烧屏测试控制中心.exe`（V1.106 起中文名；AssemblyName 中文，命名空间仍 `AgingTestSystem`） |
-| CommandCenter | `E:\Project\CommandCenter` | `CommandCenter/CommandCenter.csproj` | `CommandCenter\bin\Debug\` | `CommandCenter.exe` |
+| IrisVision | `E:\Project\IrisVision` | `IrisVision/IrisVision.csproj` | `IrisVision\bin\Debug\` | `IrisVision.exe` |
 | HuaJiVision | `E:\Project\HJVision` | `GYZVision/HuaJiVision.csproj` | `00_ExeBuild\`（运行目录） | `HuaJiVision.exe`（另有提权帮手 `Tools/NetAdminHelper/NetAdminHelper.csproj` → 同目录 `NetAdminHelper.exe`，改网口 IP/改名用，随主 exe 部署） |
 | Kaleidoscope | `E:\Project\kaleidoscope` | `ConfigEditor/KaleidoscopeConfigEditor.csproj` | `ConfigEditor\bin\Debug\` | `KaleidoscopeConfigEditor.exe` |
 
 - **AgingTestSystem**：harness 依赖 `SunnyUI.dll` / `SunnyUI.Common.dll` / `NModbus.dll` / `NModbus.Serial.dll` / `Newtonsoft.Json.dll` / `DocumentFormat.OpenXml.dll` / `DocumentFormat.OpenXml.Framework.dll`；对照窗体 `SettingsForm(DeviceConfig)` / `RecipeManagerForm()` / `WorkstationGridView`；文档 `docs/通讯接入.md`；坐标配置模型 `Models/PanelLayoutConfig.cs`（可被 `PanelLayout.json` 覆盖）。
-- **CommandCenter**：对照 `Controls/CameraDisplayControl.cs`（双击案例）/ `dgvPrograms`（ComboBox 案例）；文档 `docs/CommandCenter.md`；另有 `commandcenter-test` skill（回归测试，UI 视觉类问题不归它，归本 skill）。
+- **IrisVision**：对照 `Controls/CameraDisplayControl.cs`（双击案例）/ `dgvPrograms`（ComboBox 案例）；文档 `docs/IrisVision.md`；另有 `irisvision-test` skill（回归测试，UI 视觉类问题不归它，归本 skill）。
 - **HuaJiVision**：对照 `mFormScriptEdit`（ElementHost）/ `mFormLaserMark` / `mFormDevPanel`；界面文件头 ASCII 图约定见该项目 AGENTS；注意运行目录现场文件与授权码红线（只读该项目 AGENTS，不在本 skill 展开）。
 - **Kaleidoscope**：本 skill `scripts/` 原型来源项目；对照 `ConfigEditor MainForm`（`UpdateBrandCombo` / `LayoutPresetBar`）；界面布局关键点见该项目 AGENTS。
 

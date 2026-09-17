@@ -3,6 +3,40 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-17（本次·CommandCenter更名IrisVision＋培训文档R2实拍4条）
+
+### 改动范围
+
+本次改动 **2 个 skill**：`winforms-ui-debug`（SKILL.md＋AGENTS.md＋内 CHANGELOG 同步）、
+`培训文档生成`（SKILL.md＋内 CHANGELOG 同步），根 CHANGELOG.md 顶部追加本条。
+
+### winforms-ui-debug（Unreleased 追补，未升版）
+
+- 项目更名 CommandCenter→IrisVision 全量同步：SKILL.md 适用项目行/血泪 13〜15/
+  §六〜§八/附录 A 表格对照行、AGENTS.md 分工红线（irisvision-test）、内 CHANGELOG
+  v1.0.0 来源与合并旧坑两节；案例归属（CameraDisplayControl/dgvPrograms）与
+  文档名（docs/IrisVision.md）同步。
+
+### 培训文档生成（Unreleased 追补，未升版）
+
+- §R2 新增 harness 视觉样式前置：`EnableVisualStyles()＋SetCompatibleTextRenderingDefault(false)`
+  与产品一致，附逐像素 diff 判据（标题栏区 mean>15 即中招）。
+- §R2 新增拍前 `f.Activate()`＋主窗口按真实行为铺满（防灰蓝标题栏/挤掉按钮）。
+- §R2 新增静态对话框优先真进程实拍（最高优先级，harness 直 new 恒为 classic 边框的经验结论）。
+- §R2 新增驱动真进程严禁 `SendMessage(BM_CLICK)`（同步卡死事故），一律
+  `PostMessage(BM_CLICK)＋WaitTitle`＋配套 7 项（坐标排序/看门狗/FAIL 截全屏/单实例/英文日志/验退/密码哈希确认）。
+
+### 验证结论
+
+- `precommit_check.py` 以 RESULT: OK 为准；纯文档改动，不跑回归。
+- SKILL.md 与内/根两处 CHANGELOG 已同步，无代码改动。
+
+### 建议 commit message
+
+fix(winforms-ui-debug): CommandCenter更名IrisVision全量同步；fix(培训文档生成): R2实拍4条视觉样式/真进程/PostMessage
+
+---
+
 ## 2026-09-17（本次·winforms-ui-debug补44〜46条＋布局三坑＋附录A中文exe）
 
 ### 改动范围

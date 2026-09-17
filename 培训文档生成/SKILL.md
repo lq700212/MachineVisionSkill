@@ -75,6 +75,25 @@ C. 功能清单与文档章节双向对账（见§五新增两条），对不上
 - 自绘画布（网格/拓扑图/曲线）：置顶（TopMost）＋ CopyFromScreen 真屏截图，
   PrintWindow 在滚动过的画布上会丢 GDI 文字（框在字无）。
 - 拍前窗口居中，拍后 sleep 300~800ms 等首帧；含标题栏一起存（文档要看到窗口名）。
+- **harness 必须先调视觉样式（WinForms 血泪，2026-09 CommandCenter 实证）**：
+  `Main()` 开头调 `Application.EnableVisualStyles()` ＋
+  `Application.SetCompatibleTextRenderingDefault(false)`（与产品 `Program.Main`
+  一致），否则全部标准控件（ComboBox 边框/滚动条/表格头/按钮）按 Windows
+  Classic 渲染，与真实软件颜色风格不一致。判据：harness 图与真机实拍逐像素
+  diff（`ImageChops.difference` 分区看），标题栏区 mean>15 即中招。
+- 拍前 `f.Activate()`：非激活态标题栏是灰蓝色，与使用态不一致；主窗口按真实
+  行为铺满（有多大拍多大），固定小尺寸会把标题栏按钮挤掉，与真机不符。
+- **静态对话框优先真进程实拍（2026-09 CommandCenter 血泪，最高优先级）**：
+  harness 里直 `new` 的对话框恒为 classic 边框（外框比真机小一圈），根因未完全查明
+  （manifest/视觉样式 API/子系统/config/模态与否逐项对照排除），经验结论是
+  "不要深究，直接用真进程拍"。分工固化：静态窗一律真进程驱动实拍
+  （Win32 消息开窗截图取消，见下条），harness 只拍无硬件演不出的动态态。
+- **驱动真进程严禁 `SendMessage(BM_CLICK)`（2026-09 现场事故）**：
+  SendMessage 是同步的，按钮一弹模态框发送线程就卡死，每个弹窗都得用户手工关。
+  开窗点击一律 `PostMessage(BM_CLICK)` ＋ WaitTitle，发送线程永不阻塞；配套：
+  输入框按屏幕坐标排序定位（一次填对，不靠"顺序反了报错再换"）、看门狗只关
+  非目标小弹窗、FAIL 当场截全屏、单实例预检、全英文日志、finally 验退。
+  登录密码先读配置哈希比对确认默认值，不瞎试（试错弹窗即事故）。
 
 ### R3 非空校验（每张拍完当场验，FAIL 重拍一次，再 FAIL 存盘转人工）
 

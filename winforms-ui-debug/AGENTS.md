@@ -27,7 +27,7 @@
 ## 分工红线（防职责漂移）
 
 - 本 skill 只管"界面渲染/布局问题定位"；回归测试归各项目自己的测试 skill
-  （AgingTestSystem 的 agingtest-regression、CommandCenter 的 commandcenter-test），
+  （AgingTestSystem 的 agingtest-regression、IrisVision 的 irisvision-test），
   两边互相引用不抢活。
 - `scripts/` 只放"取证工具"（矩形枚举/截图），不放断言式回归探针——后者跟项目版本走，
   放各项目自己的测试目录。

@@ -9,6 +9,7 @@
 - 新增 SKILL.md 血泪第 46 条（AgingTestSystem V1.89 主窗落地、可跨项目照抄）：Sunny UIForm 去标题栏标准套路（基类保持 UIForm＋ShowTitle=false＋Resizable=false 维持；原生 Button 进顶栏＋GDI 线条自绘字形；WndProc 先 base 再改 WM_NCHITTEST＋WM_NCLBUTTONDBLCLK 拦 base 前返回；任务栏标题走运行时常量；CreateControl 不跑布局几何断言须真 Show 后读）。
 - 新增 SKILL.md §十一布局排查三条（AgingTestSystem V1.88.25）：无边框小弹窗宽度被钳 136（min-track＋MinimumSize(1,1) 接管＋纯代码弹窗 AutoScaleMode=None）；小字糊先证伪再动手（DoubleBuffered 灰度 AA 证伪＋加粗黑像素+34% 落改）；Sunny UILabel 缺省 AutoSize=false（Fill 项目名报 0 首选宽，填充子须显式开）。
 - 同步 SKILL.md 附录 A：AgingTestSystem 主 exe 自 V1.106 起改中文名（烧屏测试控制中心.exe，命名空间仍 AgingTestSystem）。
+- 同步项目更名 CommandCenter→IrisVision：SKILL.md 适用项目行/血泪 13〜15/§六〜§八/附录 A 表格对照行、AGENTS.md 分工红线（irisvision-test）、本文件 v1.0.0 来源与合并旧坑两节中的旧名统一更名；案例归属（CameraDisplayControl/dgvPrograms）与文档名（docs/IrisVision.md）同步。
 
 - 新增 SKILL.md 血泪第 43 条（AgingTestSystem V1.81.2 两轮实锤）：自绘画布开 DoubleBuffered 逼文字走离屏慢路径（25行×2处≈110ms/帧、滚快拖影）＋ PrintWindow 在滚动后丢 GDI 文字；修法关双缓冲直画屏幕 DC＋OnPaint 按裁剪区自填底＋长文本预截断；取证改离屏 OnPaint 重放计数＋置顶真屏 CopyFromScreen。
 - 新增 SKILL.md §十连线判交一条（V1.81.4 跨项目通用）：连线类图元判交用控制点包围盒不用两端点（贝塞尔中段穿屏、两端屏外时两端点判交会整条裁掉），箭头仍只在端点可见时画，配"两端出屏＋中段穿屏"正反断言。
@@ -30,7 +31,7 @@
 - **来源**：
   ① `AgingTestSystem/.opencode/skills/winforms-ui-debug`（§一〜§四、血泪 1〜12、
   高 DPI 专项、验证收尾方法论底稿）；
-  ② `CommandCenter/.opencode/skills/winforms-ui-debug`（Maximized 禁缩放专项、
+  ② `IrisVision/.opencode/skills/winforms-ui-debug`（Maximized 禁缩放专项、
   点击双击判定、ComboBox 选中高亮）；
   ③ `HJVision/.opencode/skills/winforms-ui-debug`（CheckBox 膨胀、ElementHost、
   无边框标准做法、V4.7.3 系列 12 条）；
@@ -38,7 +39,7 @@
   `scripts/` 四脚本原型）。
 - **合并时修掉的旧坑**：
   三份 winforms-ui-debug 的构建命令/bin/窗体引用全写 AgingTestSystem
-  （CommandCenter/HJVision 两份从未适配，frontmatter 还写着"AgingTestSystem 专属"），
+  （IrisVision/HJVision 两份从未适配，frontmatter 还写着"AgingTestSystem 专属"），
   已正名为通用模板 + 附录 A 项目档案；
   HJVision 两条"验证模态 ShowDialog"（keybd 物理按键法 + Timer 线程池法）合并为一条；
   Kaleidoscope 脚本业务默认值（进程名/exe 路径/示例坐标）全部参数化；
