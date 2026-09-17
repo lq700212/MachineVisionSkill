@@ -241,7 +241,10 @@ Console.WriteLine("lastCol cell0=" + cr);                            // Right=13
 40. **AI 改 Designer 必须做"声明/实例化配对"扫描**（AgingTestSystem 独有，V1.71 血泪）：Edit 工具的多行块替换会模糊匹配、静默吞掉被跳过的间隔行（本案 27 行块吞掉 3 个 `new`，编译照过、构造即 NRE）。**修法**：每次改完 Designer 跑配对扫描——每个 `private Xxx field;` 必须有 `this.field = new ...`（PowerShell 正则 10 行）；再 harness 里把改过的窗体 new 一次（NRE 当场现形）；再截图目检。**教训：多行 oldString 只许覆盖已用 Read 逐行核对过的连续行**，跨段批量改名用单行 replaceAll。
 41. **SunnyUI 自绘控件的类型判定三兄弟**（AgingTestSystem 独有，V1.71 实测，反射列继承链确认）：`UILabel : Label`（`is Label` 照用无碍）；`UIButton : UIControl`、`UITextBox : UIPanel`、`UIComboBox : UIDropControl`（全不是原生子类，`is Button/TextBox/ComboBox` 永远 false）。**后果有三**：①换肤/布局递归里的 `is` 判断全部走空分支（本案按钮会被容器表误染）；②字段声明改了类型后，code-behind 里 `as TextBox` 拿回 null（回归当场红两条）；③`UITextBox` 没有 `ScrollBars/WordWrap`（用 `ShowScrollBar/WordWarp`，注意 Sunny 把 Wrap 拼错了），`UseSystemPasswordChar` 没有（用 `PasswordChar='*'`），`ComboBoxStyle` 不能用（用 `UIDropDownStyle`）。**探针**：反射列 `BaseType` + 读关键属性/方法名，API 差异编译期一次收敛（本案 `Add-Type` 读 DLL，10 分钟收齐）。
 42. **UIForm 标题禁区的两种正确姿势**（AgingTestSystem 独有，V1.71 harness 实测）：自绘蓝标题占约 35px 客户区，`Controls.Add` 时 Y&lt;35 的控件会被静默搬到 Y=35（含 Dock=Fill，照搬不误）。绝对布局：内容整体下移 35px + 窗体加高 + `MinimumSize` 锁缩小；Dock 布局：窗体加 `Padding(2,38,2,2)`（搬家后的 Dock 内容恰好从 38 开始，无双重偏移，harness 读 `Bounds` 验证）；Dock 窗若内容贴底（如 ID 绑定的保存按钮），窗体仍要加高 35（Panel 缩了，绝对子控件会溢出）。**判据**：改完 harness 构造一次 + PrintWindow 截一帧，按钮/列表无裁剪、无压标题。
-43. **自绘画布开 DoubleBuffered = 所有 TextRenderer 走离屏慢路径 + PrintWindow 取证失效**（AgingTestSystem 独有，V1.81.2 两轮实锤）：①性能：`DoubleBuffered=true` 逼整窗文字走离屏缓冲（GDI 每处 ~2.2ms，见§九 V1.57.3），可见区 25 行×2 处 ≈ 110ms/帧，滚快了"字出不来"还拖影（看着像错位）。修法：关双缓冲直画屏幕 DC（近 0ms）+ `OnPaintBackground` 留空并在 OnPaint 里按裁剪区自填底（不闪）+ 可见区裁剪照做；长文本布局态预截断（ Paint 里不再量字）。②取证：关掉之后 PrintWindow 在**滚动过的画布**上会丢 GDI 文字（框在字无，真屏 CopyFromScreen 文字完好——已用深色像素计数双面裁定）。以后这类窗体：像素计数用离屏 `OnPaint` 重放（DC 可控），视觉证据一律 TOPMOST 置顶 + CopyFromScreen（见§十一），别信滚动后的 PrintWindow。
+ 43. **自绘画布开 DoubleBuffered = 所有 TextRenderer 走离屏慢路径 + PrintWindow 取证失效**（AgingTestSystem 独有，V1.81.2 两轮实锤）：①性能：`DoubleBuffered=true` 逼整窗文字走离屏缓冲（GDI 每处 ~2.2ms，见§九 V1.57.3），可见区 25 行×2 处 ≈ 110ms/帧，滚快了"字出不来"还拖影（看着像错位）。修法：关双缓冲直画屏幕 DC（近 0ms）+ `OnPaintBackground` 留空并在 OnPaint 里按裁剪区自填底（不闪）+ 可见区裁剪照做；长文本布局态预截断（ Paint 里不再量字）。②取证：关掉之后 PrintWindow 在**滚动过的画布**上会丢 GDI 文字（框在字无，真屏 CopyFromScreen 文字完好——已用深色像素计数双面裁定）。以后这类窗体：像素计数用离屏 `OnPaint` 重放（DC 可控），视觉证据一律 TOPMOST 置顶 + CopyFromScreen（见§十一），别信滚动后的 PrintWindow。
+44. **AutoScroll 内容剧变后滚动范围卡旧，滑块拉不到底**（AgingTestSystem 独有，V1.88.15 harness 五轮实锤）：症状是拖 Splitter 改宽后纵向滑块卡 80% 拉不到底（或底部大片空白）。根因是布局时序三连——①内容 `Size` 跳变后父容器 `DisplayRectangle`/滚动 `Maximum` 不更新（`vMax` 纹丝不动，2 秒不收敛，是稳定脏态不是时序慢）；②`Resize` 事件里调 `PerformLayout()` 正撞上布局挂起、被静默忽略（手动调一次立刻全好，反证自动布局没跑）；③`Layout` 事件里压 `HorizontalScroll.Visible=false` 注定失败（布局引擎在事件之后还会覆盖，-nohook 对照实验证明去留无差）。修法三件套（只动自家容器）：①设完 `Size` 同步设 `AutoScrollMinSize=Size`（值语义驱动 `DisplayRectangle`，不赌子控件布局时序，横向 `MinSize.Width=客户宽-1` 顺带让布局永不判需横向条）；②同步布局后按旧滚动比例恢复位置并钳制；③`BeginInvoke` 在布局彻底完成后跑校正（再 `PerformLayout` + 压横向条 + 钳位置，释放检查防重建串扰）。验证法：harness"滚到底→加宽→减窄→再到底"，断言 `posY==内容高-客户高` + `hVis==False` + `vMax==内容高-1` + 2 秒稳定判据（未滚动行的 `posY=0 vs expectMax>0` 是 harness 判定逻辑问题，忽略，只看"再到底"行）。另：面板间缝隙点选误翻选同案修——行列整除把缝隙算进上一格，`TryHitPanel` 加内容 bounds 检查，缝隙一律不命中（行/列缝不命中+底边内仍命中三条回归锁）。
+45. **像素扫描量文字宽度，先把边框/分隔线排除，否则把边框当墨迹**（AgingTestSystem 独有，V1.88.17 harness 实锤）：症状是离屏截图上量出"标签墨迹 52px、槽位才 47px"，看着像文字溢出被裁。根因是扫描带扫进了值框的 1px 黑边框（左右边框各贡献 1 列深色像素，min/max 直接顶到边框坐标）——墨迹宽度=文字+边框，虚增。修法：量某行文字时把扫描 x 范围收在边框内侧（`右界=框左边缘-1`），或分段确认（文字墨迹应止于边框前 N px）；先拿 `TextRenderer.MeasureText(同字体)` 的理论值对照，差出边框厚度（2px）以上再怀疑溢出。本案复核：标签墨迹止于框边 14px 前，无裁剪，虚惊一场。
+46. **Sunny UIForm 去标题栏标准套路**（AgingTestSystem 独有，V1.89 主窗落地、可跨项目照抄）：基类保持 `UIForm`，只加 `ShowTitle=false`（`Dock=Fill` 内容不再被顶 35px、Y&lt;35 不再搬家，Padding 顶清零，`Resizable=false` 维持不动——Sunny 本来就不做边缘 NCHITTEST，`Resizable=true` 照样全回 CLIENT，别指望它）。三按钮用原生 Button 进顶栏最右，GDI 线条自绘字形（禁 emoji/Unicode，老工控机字体回退显示方块），悬停底自管（ThemeManager 跳过按钮类，换肤后手动 Invalidate）。`WndProc` 先调 base 再改写 `WM_NCHITTEST`（Normal 下边缘 6px 回缩放码、顶栏非按钮区回 `HTCAPTION`，按钮经类型判定放行保可点——Sunny UIButton 不是 Button 子类，按类型名认）；`WM_NCLBUTTONDBLCLK` 必须拦在 base 之前切完直接返回——DefWindowProc 收到 HTCAPTION 双击自己会切一次，两边各切一次正好抵消（本案 harness 两次纹丝不动实锤，改前置后 17/17 全绿）。任务栏标题带版本号走运行时常量（禁 Designer 写死旧版本）。验证五件套：构造不断言 NRE＋配对扫描＋真窗 Show＋PrintWindow（顶栏条带×3 看字形）＋NCHITTEST 探针（边缘/顶栏/按钮各一）＋三按钮点击真实路径（最小化→Minimized、方框→Maximized、关闭→!Visible），缺一不可。另：`CreateControl()` 不跑布局，几何断言（Bounds.Y==0 这类）必须真 Show 后读，否则读到 Designer 旧值假红。
 
 ## 六、窗口全屏 / 禁缩放 / 边框行为专项（V1.11.0 CommandCenter 沉淀）
 
@@ -433,6 +436,18 @@ python scripts/Get-WindowShot.py --exe "<bin>\<主exe>" --click <X> <Y> --out sh
 - **条件显示容器（Visible 切换）的布局时序**：Visible=false 期间不参与 Dock 布局，早期对其子控件的定位是错的且 Resize 补偿不保证触发——**每次 Visible=true 后必须显式重排一次**。
 - **脚本本身的坑**：tasklist 会把长映像名截断到 25 字符——启动模式用 Popen/Start-Process 返回的 PID，attach 用前缀匹配；主窗体句柄可能延迟就绪（MainWindowHandle=0）——必须轮询等待，不能取一次就用。
 
+### 无边框小弹窗宽度被钳到 136（AgingTestSystem V1.88.25）
+- 现象：`FormBorderStyle=None` + `ClientSize=(114,66)` 显示出来 136x66，且与内容无关（裸窗二分实锤）。
+- 根因：Windows 最小跟踪宽度 min-track 136px；从未设过 `MinimumSize` 时 WinForms 不碰 MINMAXINFO，系统钳制生效。
+- 修法：`MinimumSize = new Size(1, 1)` 让 WinForms 接管（`(0,0)` 不接管照样被钳）。附带：运行时物理像素定尺寸的纯代码弹窗一律 `AutoScaleMode=None`，否则再跟缩一次。
+- 教训：尺寸对不上先二分到空窗，别在业务代码里打转。
+### 小字"糊"先证伪再动手（同上，工作站 4.8pt）
+- 怀疑 `DoubleBuffered` 逼文字走离屏灰度 AA：A/B 开关截图＋像素指标（黑像素占比 coreFrac＋平均边缘梯度 meanEdge）逐字相同→证伪，不碰。
+- 加粗 A/B：黑像素 +34% 且同屏对比明显更清楚→落改（省略号/截断兜底不盖框）。
+- 教训：渲染质量猜想必须配"同坐标双截图＋像素指标"，目测像≠真因；证伪结论本身也要记（防后人重踩）。
+### Sunny UILabel 缺省 AutoSize=false（同上，顶栏 9 列案）
+- 原生 Label 缺省 true，Sunny 反直觉缺省 false：Fill 的项目名只报 0 首选宽，AutoSize 列被压成固定前缀宽、内容看不见。
+- 排查先 dump 各控件 `AutoSize` 属性值；AutoSize 列的填充子必须显式开。
 ### 标准排查流程（布局错位类）
 1. 跑 `Get-ControlTree`（必要时 `--click` 让条件显示容器先出现），拿全部矩形；
 2. 对照判据找异常：Fill 底边==父底边？控件矩形超出父容器？与兄弟控件矩形重叠？
@@ -456,7 +471,7 @@ python scripts/Get-WindowShot.py --exe "<bin>\<主exe>" --click <X> <Y> --out sh
 
 | 项目 | 仓库根 | 构建（MSBuild） | 输出目录 | 主 exe |
 |---|---|---|---|---|
-| AgingTestSystem | `E:\Project\AgingTestSystem` | `AgingTestSystem/AgingTestSystem.csproj` | `AgingTestSystem\bin\Debug\` | `AgingTestSystem.exe` |
+| AgingTestSystem | `E:\Project\AgingTestSystem` | `AgingTestSystem/AgingTestSystem.csproj` | `AgingTestSystem\bin\Debug\` | `烧屏测试控制中心.exe`（V1.106 起中文名；AssemblyName 中文，命名空间仍 `AgingTestSystem`） |
 | CommandCenter | `E:\Project\CommandCenter` | `CommandCenter/CommandCenter.csproj` | `CommandCenter\bin\Debug\` | `CommandCenter.exe` |
 | HuaJiVision | `E:\Project\HJVision` | `GYZVision/HuaJiVision.csproj` | `00_ExeBuild\`（运行目录） | `HuaJiVision.exe`（另有提权帮手 `Tools/NetAdminHelper/NetAdminHelper.csproj` → 同目录 `NetAdminHelper.exe`，改网口 IP/改名用，随主 exe 部署） |
 | Kaleidoscope | `E:\Project\kaleidoscope` | `ConfigEditor/KaleidoscopeConfigEditor.csproj` | `ConfigEditor\bin\Debug\` | `KaleidoscopeConfigEditor.exe` |

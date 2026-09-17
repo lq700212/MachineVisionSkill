@@ -3,6 +3,31 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-17（本次·winforms-ui-debug补44〜46条＋布局三坑＋附录A中文exe）
+
+### 改动范围
+
+本次改动 **1 个 skill**：`winforms-ui-debug`（SKILL.md＋内 CHANGELOG 同步），根 CHANGELOG.md 顶部追加本条。
+
+### winforms-ui-debug（Unreleased 追补，未升版）
+
+- 新增血泪第 44 条（AgingTestSystem V1.88.15）：AutoScroll 内容剧变后滚动范围卡旧，修法三件套（AutoScrollMinSize 同步＋旧比例恢复钳制＋BeginInvoke 校正）；缝隙点选误翻选同案修。
+- 新增血泪第 45 条（V1.88.17）：像素扫描量文字宽度须排除边框（边框虚增墨迹宽），扫描范围收边框内侧＋MeasureText 对照。
+- 新增血泪第 46 条（V1.89）：Sunny UIForm 去标题栏标准套路（ShowTitle=false＋原生 Button＋GDI 自绘＋NCHITTEST/NCLBUTTONDBLCLK＋运行时标题常量）。
+- §十一新增布局三坑（V1.88.25）：无边框小弹窗 136 钳制（MinimumSize(1,1)＋AutoScaleMode=None）；小字糊先证伪（加粗+34% 落改）；UILabel 缺省 AutoSize=false。
+- 附录 A 同步：AgingTestSystem 主 exe 自 V1.106 起中文名（烧屏测试控制中心.exe）。
+
+### 验证结论
+
+- `precommit_check.py` 以 RESULT: OK 为准；纯文档改动，不跑回归。
+- SKILL.md 与内/根两处 CHANGELOG 已同步，无代码改动。
+
+### 建议 commit message
+
+fix(winforms-ui-debug): 补44-46条滚动/像素量宽/去标题栏+布局三坑+附录A中文exe
+
+---
+
 ## 2026-09-14（本次·培训文档生成MES自助闭环＋禁词误杀修复）
 
 ### 改动范围

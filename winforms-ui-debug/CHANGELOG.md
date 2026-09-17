@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+- 新增 SKILL.md 血泪第 44 条（AgingTestSystem V1.88.15 harness 五轮实锤）：AutoScroll 内容剧变后滚动范围卡旧（Splitter 改宽后纵向滑块卡 80% 拉不到底）；根因布局时序三连（DisplayRectangle/Maximum 不更新＋Resize 里 PerformLayout 被挂起忽略＋Layout 里压横向条被覆盖）；修法三件套只动自家容器（Size 同步设 AutoScrollMinSize＋旧滚动比例恢复钳制＋BeginInvoke 布局完成后校正）；面板缝隙点选误翻选同案修（TryHitPanel 加内容 bounds 检查）。
+- 新增 SKILL.md 血泪第 45 条（AgingTestSystem V1.88.17 harness 实锤）：像素扫描量文字宽度须排除边框/分隔线（1px 黑边框虚增墨迹宽，52px vs 槽位 47px 虚惊）；修法扫描 x 范围收在边框内侧＋先拿 TextRenderer.MeasureText 理论值对照。
+- 新增 SKILL.md 血泪第 46 条（AgingTestSystem V1.89 主窗落地、可跨项目照抄）：Sunny UIForm 去标题栏标准套路（基类保持 UIForm＋ShowTitle=false＋Resizable=false 维持；原生 Button 进顶栏＋GDI 线条自绘字形；WndProc 先 base 再改 WM_NCHITTEST＋WM_NCLBUTTONDBLCLK 拦 base 前返回；任务栏标题走运行时常量；CreateControl 不跑布局几何断言须真 Show 后读）。
+- 新增 SKILL.md §十一布局排查三条（AgingTestSystem V1.88.25）：无边框小弹窗宽度被钳 136（min-track＋MinimumSize(1,1) 接管＋纯代码弹窗 AutoScaleMode=None）；小字糊先证伪再动手（DoubleBuffered 灰度 AA 证伪＋加粗黑像素+34% 落改）；Sunny UILabel 缺省 AutoSize=false（Fill 项目名报 0 首选宽，填充子须显式开）。
+- 同步 SKILL.md 附录 A：AgingTestSystem 主 exe 自 V1.106 起改中文名（烧屏测试控制中心.exe，命名空间仍 AgingTestSystem）。
+
 - 新增 SKILL.md 血泪第 43 条（AgingTestSystem V1.81.2 两轮实锤）：自绘画布开 DoubleBuffered 逼文字走离屏慢路径（25行×2处≈110ms/帧、滚快拖影）＋ PrintWindow 在滚动后丢 GDI 文字；修法关双缓冲直画屏幕 DC＋OnPaint 按裁剪区自填底＋长文本预截断；取证改离屏 OnPaint 重放计数＋置顶真屏 CopyFromScreen。
 - 新增 SKILL.md §十连线判交一条（V1.81.4 跨项目通用）：连线类图元判交用控制点包围盒不用两端点（贝塞尔中段穿屏、两端屏外时两端点判交会整条裁掉），箭头仍只在端点可见时画，配"两端出屏＋中段穿屏"正反断言。
 - 新增 SKILL.md 血泪第 39〜42 条（AgingTestSystem V1.63.2/V1.71 实测）：UITabControl 必须走 AddPage（手写 TabPage 包裹漏 Show 致空白页）/ Designer 声明/实例化配对扫描（多行替换吞 new 致 NRE）/ Sunny 自绘控件类型判定三兄弟（UIButton/UITextBox/UIComboBox 非原生子类）/ UIForm 标题禁区两种姿势（绝对布局下移 35px、Dock 布局加 Padding）。
