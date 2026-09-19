@@ -1,6 +1,6 @@
 # ============================================================
 # 仓库白名单：只跟踪指定 skill 目录，其余全部忽略
-# （视觉硬件选型 / 视觉选型测试 / git自动提交推送 / 盖章专员 / winforms-ui-debug / 上位机通讯封装 / opencode-cache-cleaner / viewturbo-checkin / 培训文档生成）
+# （视觉硬件选型 / 视觉选型测试 / git自动提交推送 / 盖章专员 / winforms-ui-debug / 上位机通讯封装 / opencode-cache-cleaner / viewturbo-checkin / 培训文档生成 / 软件卸载清理）
 # ============================================================
 /*
 
@@ -35,6 +35,7 @@ preview_check/
 !盖章专员*/
 !viewturbo-checkin/
 !培训文档生成/
+!软件卸载清理/
 
 # ── viewturbo-checkin：真实账号文件永不入库（只提交 accounts.json.example 模板）──
 viewturbo-checkin/accounts.json

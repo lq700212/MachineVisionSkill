@@ -3,6 +3,34 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-19（本次·新增软件卸载清理skill）
+
+### 改动范围
+
+本次新增 **1 个 skill**：`软件卸载清理`（新建目录 + SKILL.md + 通用卸载脚本 + CHANGELOG），
+根 `.gitignore` 白名单追加、根 `CHANGELOG.md` 顶部追加本条。
+
+### 软件卸载清理（v1.1.0 新增，未发布即审计重构）
+
+- 新建 skill：通用软件彻底卸载与残留清理工具
+- 脚本 `scripts/uninstall.ps1`：八阶段（查杀进程→注册表卸载→独立卸载程序→清服务→清计划任务→清理文件→清理注册表→清理快捷方式）
+- 审计修 3 致命 bug：PS5.1 三元语法错误 / 去重属性名写错致重复运行 / MSI 分支死代码；另修 -Force 悬空、setup.exe 误装风险、窗口标题误杀、硬编码用户路径等 10 余项
+- 支持 `-DryRun` 预览 / `-Force` 跳过确认（AI 必加） / `-KeepConfig` / `-InstallPath` `-ExtraPaths` / 120s 超时熔断 / 短关键词拦截
+- 来源场景：ViewTurboLite 断电后白屏，手动卸载残留导致重装无效
+
+### 验证结论
+
+- PS 5.1 真机验证：PSParser 0 错误；卸载命令解析函数 4/4 用例通过
+- DryRun 冒烟：不存在关键词全 SKIP（exit 0）；已安装 Git 全阶段发现正确（QuietUninstallString/MSI 双分支、服务/任务/文件/注册表/快捷方式）
+- 补 BOM（PS5.1 无 BOM 的 UTF-8 中文乱码），路径去重与先子后父排序已验证
+- SKILL.md 与脚本一致；根 `.gitignore` 白名单已追加 `!软件卸载清理/`
+
+### 建议 commit message
+
+feat(软件卸载清理): 新增通用软件彻底卸载skill v1.1.0（8阶段+审计修3致命bug+真机验证）
+
+---
+
 ## 2026-09-17（本次·CommandCenter更名IrisVision＋培训文档R2实拍4条）
 
 ### 改动范围
