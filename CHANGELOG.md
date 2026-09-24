@@ -3,6 +3,34 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-09-24（本次·盖章专员v1.3.0一键编排+方法固化）
+
+### 改动范围
+
+本次改动 **1 个 skill**：`盖章专员`（v1.2.1→v1.3.0：新增 2 脚本 1 测试＋SKILL/AGENTS/内CHANGELOG 同步；`pdf_seal_stamper.py` 定位逻辑零改动仅 help 版号），根 CHANGELOG.md 顶部追加本条。
+
+### 盖章专员（v1.3.0 一键编排 + 方法固化：弱模型照抄即得强模型同款结果）
+
+- 新增 `seal_workflow.py`（标准入口）：Word→PDF→首轮全自动→双方无章默认乙方重试→锚点校验→累计偏移重试（上限共 3 轮）→预览+【结论】话术
+- 新增 `doc2pdf.py`（Word→PDF 前置）：本机 Word COM 另存为 PDF，撞名自动 `_转PDF` 后缀永不覆盖
+- 固化三条用户明令：双方无章默认盖乙方/卖方、锚点校验（目标=行中心x,行中心y+20，阈值 40/70pts）、预览强制目检
+- 修编排层实测 2 bug：锚点落页眉抬头（改全别名收集+加权+偏下偏右择优）、章骑甲乙中缝（改行内分侧）
+- 新增 `tests/run_test5_workflow.py`（W1~W6 smoke）；SKILL 标准流程改以编排层为入口；AGENTS 架构地图/语义表/事故档案同步
+- `tests/fixtures/` 两固件系 `make_fixture.py` 重建（时间戳差异，内容同基线）
+
+### 验证结论
+
+- `tests/run_test4_scan.py` 24/24 PASS（主脚本零改动，回归未动）
+- `tests/run_test5_workflow.py` 6/6 PASS
+- `precommit_check.py` 以 RESULT: OK 为准
+- 真实 Word 合同全流程实测：首轮默认位→第 2 轮默认乙方→锚点偏离→第 3 轮累计偏移→章落卖方公司名行✅目检确认
+
+### 建议 commit message
+
+feat(盖章专员): v1.3.0一键编排seal_workflow+Word转PDF+锚点校验
+
+---
+
 ## 2026-09-21（本次·上位机通讯封装补重连活锁铁律）
 
 ### 改动范围

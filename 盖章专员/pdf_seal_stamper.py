@@ -1923,7 +1923,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='公章添加工具 v1.2.1 — 支持文本版PDF/扫描件PDF/图片/Excel，智能定位 + 防编辑压平',
+        description='公章添加工具 v1.3.0 — 支持文本版PDF/扫描件PDF/图片/Excel，智能定位 + 防编辑压平',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
