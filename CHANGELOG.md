@@ -3,6 +3,34 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-10-10（本次·培训文档生成权限/品牌/打码门禁+winforms-ui-debug ListView深色）
+
+### 改动范围
+
+本次改动 **2 个 skill**：`培训文档生成`（SKILL.md＋内 CHANGELOG 同步，Unreleased 追补，未升版）、`winforms-ui-debug`（SKILL.md 血泪第 11 条＋内 CHANGELOG 同步，Unreleased 追补，未升版），根 CHANGELOG.md 顶部追加本条。
+
+### 培训文档生成（Unreleased 追补，未升版）
+
+- §一权限可达铁律升级为三档分流：目标读者可达展开写 / 客户内更高角色可达一句话认档 / 仅最高权限账号可达的 dev 专属页在客户两版零出现（不点名不讲用途不给步骤不给图）；§二①B 盘点分流、§二⓪边界豁免分级、§四红线5 grep 自查、§五权限对账、§六大纲、§十一禁词组、§十四 DEV_ONLY_PAGES 名单同步
+- §二⓪新增"硬件实配"规则：全貌章节只写真机实配品牌；check_config.py BRANDS_ALL/BRANDS_PRESENT＋PLC_BRAND_MAP，禁词＝全集−实配自动算出
+- §二⓪章节级门禁＋全局化：OFF 则客户版整节删；check_config.py 新增 CHAPTER_GATES 标题级章节门禁，图片门禁＋章节门禁双交叉
+- §三R4 截图涉密打码规范（三份一律打码＋涉密清单＋定位框体手法＋4倍放大验证＋PDF重转）；§R2 截图方式三选一（PrintWindow 黑条判据切真屏抓）；§二①A2 菜单逐项盘点（子窗自有菜单＋下拉内嵌控件绑定＋弹窗必截图）
+
+### winforms-ui-debug（Unreleased 追补，未升版）
+
+- 新增 SKILL.md 血泪第 11 条（HuaJiVision V4.4.124 实测）：ListView（Details）深色适配三连坑与彻底方案（HeaderStyle=None＋自制 Label 列头行＋OwnerDraw=true 自绘行；DrawListViewItemEventArgs 无 Selected 属性、选中变化补 Invalidate）
+
+### 验证结论
+
+- `precommit_check.py` 以 RESULT: OK 为准；纯文档改动，不跑回归（未改脚本）
+- SKILL.md 与内/根三处 CHANGELOG 已同步，提交前回检做过：培训文档生成 CHANGELOG 遗漏 3 条（R4 打码/R2 三选一/A2 盘点）已追补
+
+### 建议 commit message
+
+docs(培训文档生成,winforms-ui-debug): 权限三档分流+品牌实配+打码规范+ListView深色自绘
+
+---
+
 ## 2026-09-24（本次·盖章专员v1.3.0一键编排+方法固化）
 
 ### 改动范围

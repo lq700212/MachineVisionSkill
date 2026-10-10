@@ -4,6 +4,7 @@
 
 ## [Unreleased]
 
+- 新增 SKILL.md 血泪第 11 条（HuaJiVision V4.4.124 实测）：ListView（Details）深色适配三连坑与彻底方案——原生列头深色恒银白（SetWindowTheme 列头时灵时不灵不可靠勿用）、列宽合计<列表宽时列头右端留原生银白缺口、失焦选中行浅白条扎眼＋项级显式色被系统选中渲染覆盖；彻底方案 `HeaderStyle=None`＋自制 Label 列头行（Tag="NoTheme" 手动刷深浅底）＋`OwnerDraw=true` 自绘行（DrawItem 画行底选中=主题 SelectBg、DrawSubItem 画字 TextRenderer+EndEllipsis）；坑中坑：`DrawListViewItemEventArgs` 无 `Selected` 属性（用 `e.Item.Selected`）、选中变化须 `SelectedIndexChanged` 里补 `Invalidate()`。
 - 新增 SKILL.md 血泪第 44 条（AgingTestSystem V1.88.15 harness 五轮实锤）：AutoScroll 内容剧变后滚动范围卡旧（Splitter 改宽后纵向滑块卡 80% 拉不到底）；根因布局时序三连（DisplayRectangle/Maximum 不更新＋Resize 里 PerformLayout 被挂起忽略＋Layout 里压横向条被覆盖）；修法三件套只动自家容器（Size 同步设 AutoScrollMinSize＋旧滚动比例恢复钳制＋BeginInvoke 布局完成后校正）；面板缝隙点选误翻选同案修（TryHitPanel 加内容 bounds 检查）。
 - 新增 SKILL.md 血泪第 45 条（AgingTestSystem V1.88.17 harness 实锤）：像素扫描量文字宽度须排除边框/分隔线（1px 黑边框虚增墨迹宽，52px vs 槽位 47px 虚惊）；修法扫描 x 范围收在边框内侧＋先拿 TextRenderer.MeasureText 理论值对照。
 - 新增 SKILL.md 血泪第 46 条（AgingTestSystem V1.89 主窗落地、可跨项目照抄）：Sunny UIForm 去标题栏标准套路（基类保持 UIForm＋ShowTitle=false＋Resizable=false 维持；原生 Button 进顶栏＋GDI 线条自绘字形；WndProc 先 base 再改 WM_NCHITTEST＋WM_NCLBUTTONDBLCLK 拦 base 前返回；任务栏标题走运行时常量；CreateControl 不跑布局几何断言须真 Show 后读）。

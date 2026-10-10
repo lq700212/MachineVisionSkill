@@ -380,6 +380,7 @@ V4.4.13→V4.4.16 四轮返工的全部教训已收拢，逐条对照就不用�
 7. **快照/换肤/恢复三处同步加行**（坑 32）：改换肤动了哪个属性，快照遍与恢复遍各加一行；浅色必须像素级还原设计稿，不设"近似浅色"。
 8. **Sunny 控件认自绘属性**（坑 37）：组框体 `FillColor`/`RectColor`，输入框 `FillColor`/`ForeColor`/`RectColor`；蓝色按钮组深浅通吃，保持不动。
 9. **探针=功能断言+反向验证**（坑 38）：每条修复配一条能触达链路的像素/反射断言，落地后改坏源码重跑必须 FAIL；静态文本探针先剥注释再匹配。
+11. **ListView（Details）深色适配三连坑与彻底方案（V4.4.124 HuaJiVision 实测）**：原生列头深色恒银白——`SetWindowTheme(header, "DarkMode_Explorer")` 时灵时不灵（同代码两轮一次生效一次不生效，不可靠勿用）；列宽合计<列表宽时列头右端留原生银白缺口（有滚动条/无滚动条宽度还不同）；失焦选中行系统渲染浅白条在深表体上极扎眼，且 **ListView 项级显式 BackColor/ForeColor 会被系统选中渲染覆盖**（与 DataGridView 不同，选中色不能用项级色控制）。彻底方案一次清三坑：`HeaderStyle=None` + 自制 Label 列头行（Panel+Label 挂 Tag="NoTheme" 手动刷深浅底）+ `OwnerDraw=true` 自绘行（`DrawItem` 画行底：选中=主题 SelectBg 焦点/失焦一致；`DrawSubItem` 画字：选中 SelectFore/当前行强调色/普通主题字色，TextRenderer+EndEllipsis）。坑：`DrawListViewItemEventArgs` **没有** `Selected` 属性（要用 `e.Item.Selected`，编译期才暴露）；选中变化系统不自动重绘自绘行，`SelectedIndexChanged` 里补 `Invalidate()`。
 10. **双版截图目检**：深/浅各截一帧（PrintWindow 能渲染全的直接用；WPF 混合窗用 `f=2`，Sunny 自绘渲染不全的上真实截图，见§四.1 与§十一末尾对照表）。
 
 ### HuaJiVision 落点对照（在本项目做深色改造时直接取用）
