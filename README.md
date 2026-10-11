@@ -11,6 +11,7 @@
 | [git自动提交推送](git自动提交推送/) | 本地工程一键 commit + push：自动读 CHANGELOG 生成 message（含要点提炼），提交前安全检查（可联动仓库卫生体检），现场目录用显式暂存 | [SKILL.md](git自动提交推送/SKILL.md) |
 | [winforms-ui-debug](winforms-ui-debug/) | 跨项目 WinForms 界面像素级调试：harness 指哪打哪直启目标窗体，反射探查 + 截图 + 像素扫描，附矩形枚举/置顶截图脚本 | [SKILL.md](winforms-ui-debug/SKILL.md) |
 | [上位机通讯封装](上位机通讯封装/) | 上位机设备通讯范式：PLC/相机/仪表/Modbus 连接管理、心跳重连、UI 解耦 | [SKILL.md](上位机通讯封装/SKILL.md) |
+| [上位机报价](上位机报价/) | 上位机项目报价全流程：IO表摸底→参考程序体检→市场调研→两本账人力→报价阶梯→核验 | [SKILL.md](上位机报价/SKILL.md) |
 | [opencode-cache-cleaner](opencode-cache-cleaner/) | 清理 opencode 残留项目记录与孤儿快照：列出→选择→备份→删除→验证 | [SKILL.md](opencode-cache-cleaner/SKILL.md) |
 | [盖章专员](盖章专员/) | PDF 合同自动盖章：自动匹配现有印章的大小与位置 | [SKILL.md](盖章专员/SKILL.md) |
 
