@@ -1,5 +1,13 @@
 # 软件卸载清理 - 变更记录
 
+## Unreleased
+
+### 元数据：frontmatter `name` 改 ASCII slug（DSH 接入，2026-10-22）
+
+- 仅改 SKILL.md frontmatter 的 `name`：`软件卸载清理` → `software-uninstall-cleaner`（1 行）；目录名/正文/脚本零改动，未升版
+- 原因：DSH 加载器硬校验 `SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/`，中文名被静默丢弃（不可调用）
+- 影响：DSH 内本 skill 调用名改为 `software-uninstall-cleaner`；目录名不变，脚本内路径引用不受影响
+
 ## v1.1.0（2026-09-19）
 
 ### 修复（代码审计，未发布即修）

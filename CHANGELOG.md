@@ -3,6 +3,108 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-10-26（本次·盖章专员 v1.3.1 策略3重写 + DSH 元数据整改收尾）
+
+### 改动范围
+
+本次提交含两块，一并入库：
+
+1. **盖章专员 v1.3.0→v1.3.1**（功能改动）：`pdf_seal_stamper.py` 新增
+   `_find_role_line_blocks()` 行级候选搜索（+113 行），策略3 改为结构性判断；
+   `SKILL.md` 策略3 决策表文案、`AGENTS.md` 策略说明与踩坑表、`CHANGELOG.md`
+   版本条目同步；`tests/fixtures/` 两份 PDF 重新保存（仅 `/ID` 变化，内容零改动）。
+2. **DSH 元数据整改收尾**（元数据，未升版）：10 个 SKILL.md frontmatter `name`
+   改 kebab-case ASCII；根 `README.md` 增 DSH 调用名列与接入说明、`AGENTS.md`
+   增铁律与白名单同步；各 skill `CHANGELOG.md` 补 Unreleased 条目；
+   `视觉选型测试/CHANGELOG.md` 新建（此前缺失）。详细对照见下一条 2026-10-22 记录。
+
+### 盖章专员 v1.3.1：策略3"抬头不盖章"（用户口述规则固化）
+
+真实报价单实测用户指出章盖到抬头/合同编号上，根因三条：probe 只搜公司名、
+搜不到"卖方开户行："这类不含公司名的字段行；抬头与表格首行 dy<100pts 被聚成
+一块，骑压中心落抬头；纯 y 阈值分不开两者（10% 放过多行抬头 12.8%，12% 误杀
+表格首行 11.4%）。
+
+结构性重写：行级聚合（不用 100pts 聚类）＋按"行是否含角色字样"分流——字段行
+（行首角色字样或行内"角色+名称"）无论 y 高低合法，同行含对侧角色按行内分侧；
+光秃公司名行中心在页高 15%（`_HEADER_LINE_RATIO`）之上判抬头丢弃，落款区保留；
+候选取最靠下；字段行/宽行骑压取行尾段（宽≤一章宽），避开行首标签与下一行
+"日期："。策略名文案不变（seal_workflow.py 正则硬绑定）。
+
+### 验证
+
+- 盖章专员 `run_test4` 24/24 全绿、`run_test5` 6/6 全绿；真实报价单零 offset
+  自动命中"卖方开户行"行尾段（压平版渲染目检）
+- DSH 会话目录热更新：17 个全局 skill 全部可见，`hmi-quotation` 等 ASCII 名可调用
+- `git diff --stat`：22 个文件（含 2 个二进制 fixture），无运行时/机密文件
+
+### 建议 commit message
+
+```
+feat(盖章专员): v1.3.1 策略3结构性重写"抬头不盖章"+字段行尾段骑压；DSH 元数据整改收尾
+
+策略3 弃用绝对 y 阈值，改行级聚合+按"是否含角色字样"分流：字段行不论 y 高低合法
+（同行含对侧角色按行内分侧），光秃公司名行顶部 15% 判抬头丢弃，候选取最靠下，
+骑压取行尾段；真实报价单零 offset 自动盖准"卖方开户行"行尾。同步 SKILL/AGENTS/
+CHANGELOG 与 fixture；一并提交 DSH name 改 ASCII slug、README/AGENTS 接入说明、
+各 skill Unreleased 条目与视觉选型测试 CHANGELOG 新建。
+```
+
+## 2026-10-22（本次·DSH 接入整改：frontmatter name 改 kebab-case ASCII + 唯一副本归一）
+
+### 改动范围
+
+本次改动 **10 个 skill 的 SKILL.md frontmatter `name` 字段**（各 1 行，正文/脚本/资产零改动），
+外加根 `README.md`、`AGENTS.md`、`.gitignore` 口径同步。**未升版**（纯元数据整改，不影响 skill 行为）。
+
+### 为什么改
+
+DSH（DeepSeek Harness）的 skill 加载器硬校验 `SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/`
+（`@deepseek-ai/dsh-skill` 包内）。中文 `name` 的 skill **被静默丢弃**——不进会话目录、
+不可调用，报 `Error: invalid skill name "上位机报价"`。也就是说此前本仓库 10 个中文名 skill
+在 DSH 里等于不存在。
+
+### 改名对照（目录名不变，只改 frontmatter `name`）
+
+| 目录 | 旧 name | 新 name |
+|---|---|---|
+| 上位机报价 | `上位机报价` | `hmi-quotation` |
+| 上位机通讯封装 | `上位机通讯封装` | `hmi-comm-wrapper` |
+| 培训文档生成 | `培训文档生成` | `training-doc-generator` |
+| 盖章专员 | `盖章专员` | `seal-stamp-agent` |
+| 视觉硬件选型 | `视觉硬件选型` | `vision-hardware-selection` |
+| 视觉选型测试 | `视觉选型测试` | `vision-selection-test` |
+| 软件卸载清理 | `软件卸载清理` | `software-uninstall-cleaner` |
+| git自动提交推送 | `git自动提交推送` | `git-auto-commit-push` |
+| PPT智能合并 | `PPT智能合并` | `ppt-merge` |
+| docx中文转英文 | `docx中文转英文` | `docx-cn-to-en` |
+
+### 唯一副本归一（磁盘层）
+
+- 真身定为 `C:\Users\Administrator\.config\opencode\skills\`（本仓库）
+- `~/.agents/skills` 是指向本仓库的 **junction**（`mklink /J`），DSH 扫描 user-agents 根即引用到此，零拷贝
+- `dashi-ppt` / `git自动提交推送` / `PPT智能合并` 原为指向 `.cc-switch\skills` 的符号链接，
+  已把实体迁回本仓库，`.cc-switch` 侧改指回本仓库
+- `image-to-editable-ppt` / `solidworks-automation` / `上位机通讯封装` / `盖章专员v2.1.1` 在
+  `.cc-switch\skills` 的重复副本已收编为链接指回本仓库（内容经比对确认本仓库为新版）
+- `.claude\skills` 按约定不动
+
+### 验证
+
+- DSH 会话目录**热更新**（未重启）：改完 frontmatter 当轮即出现全部 17 个全局 skill
+- `skill` 工具调用 `上位机报价` → 改名前报 `invalid skill name`；改名后按 `hmi-quotation` 可调用
+- git 追踪范围内 8 个 SKILL.md 各 1 行改动，`git diff --stat` = 8 files changed, 8 insertions(+), 8 deletions(-)
+
+### 建议 commit message
+
+```
+fix(skills): frontmatter name 改 kebab-case ASCII，DSH 接入可用 + 唯一副本归一
+
+DSH 加载器硬校验 SKILL_NAME=/^[a-z0-9]+(-[a-z0-9]+)*$/，中文名 skill 被静默丢弃，
+10 个中文名 skill 改 ASCII slug（目录名不变）；唯一副本归一到本仓库，
+~/.agents/skills 以 junction 零拷贝引用；根 README/AGENTS 同步 name 规则。
+```
+
 ## 2026-10-11（本次·上位机报价v1.2.0→v1.3.0多报价点＋一机多线＋图片目检）
 
 ### 改动范围

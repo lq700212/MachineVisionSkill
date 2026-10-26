@@ -1,5 +1,13 @@
 # 上位机报价 技能 CHANGELOG
 
+## [Unreleased]
+
+### 元数据：frontmatter `name` 改 ASCII slug（DSH 接入，2026-10-22）
+
+- 仅改 SKILL.md frontmatter 的 `name`：`上位机报价` → `hmi-quotation`（1 行）；目录名/正文/脚本/模板零改动，未升版
+- 原因：DSH 加载器硬校验 `SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/`，中文名被静默丢弃（不可调用）
+- 影响：DSH 内本 skill 调用名改为 `hmi-quotation`；目录名不变，脚本内路径引用不受影响
+
 ## [v1.3.0] - 2026-10-11（多报价点＋一机多线＋图片目检）
 
 - SKILL：第 2b 步改"布局参考目检"（PDF/图片都收）：新增 D 分支图片直给

@@ -18,6 +18,16 @@
 - 脚本输出`[镜头无匹配·根因]`时，必须按根因走（窗口上限低→换更大靶面相机；窗口下限高→走扩库流程）
 - 禁止因为"觉得其他方式更快"而跳过SOP——脚本为主，AI为辅
 
+**⛔ 铁律：SKILL.md frontmatter 的 `name` 必须是 kebab-case ASCII**
+- DSH（DeepSeek Harness）的 skill 加载器硬校验 `SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/`；
+  不满足的 skill **被静默丢弃**——不进会话目录、不可调用，报 `Error: invalid skill name "<中文名>"`
+- 目录名可以是中文（`上位机报价/`），但 frontmatter `name` 必须是 ASCII slug（`hmi-quotation`）；
+  两者对应关系登记在根 `README.md` 的"Skill 一览"表，改名必须同步该表
+- 新建 skill 先定 ASCII slug → 写进 frontmatter → 再同步 README 表；**目录名改中文不影响**
+  DSH（DSH 只认 frontmatter 的 `name`，不认目录名）
+- 改完 frontmatter **无需重启 DSH**：filesystem provider 监听 skill 根目录，
+  frontmatter 一改即热更新进会话目录（2026-10-22 实测：改完当轮即出现在可用 skill 列表）
+
 **改完 skill 后，必须在根目录 `CHANGELOG.md` 顶部追加本次记录**，内容固定为
 "给 git commit 用"的总览：
 
@@ -40,7 +50,8 @@
   `.gitignore` 加 `!路径` 放行**，否则 `git status` 完全不显示、提交时静默漏掉
   （CHANGELOG.md 就踩过：创建后曾因未放行而不可见）。
 - 当前已放行的根文件：`README.md`、`CHANGELOG.md`；已放行的 skill 目录：
-  视觉硬件选型 / 视觉选型测试 / git自动提交推送 / winforms-ui-debug / 上位机通讯封装 / opencode-cache-cleaner / 盖章专员 / viewturbo-checkin / 培训文档生成。
+  视觉硬件选型 / 视觉选型测试 / git自动提交推送 / winforms-ui-debug / 上位机通讯封装 /
+  上位机报价 / opencode-cache-cleaner / 盖章专员 / viewturbo-checkin / 培训文档生成 / 软件卸载清理。
 - `盖章专员/**/*.png|jpg|jpeg|gif|bmp` 被忽略（防误传公司公章），新增同类图片注意。
 
 ## 历史教训（每次提交前扫一眼）

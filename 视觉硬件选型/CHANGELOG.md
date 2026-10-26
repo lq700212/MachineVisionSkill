@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 元数据：frontmatter `name` 改 ASCII slug（DSH 接入，2026-10-22）
+
+- 仅改 SKILL.md frontmatter 的 `name`：`视觉硬件选型` → `vision-hardware-selection`（1 行）；目录名/正文/脚本/资产零改动，未升版
+- 原因：DSH 加载器硬校验 `SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/`，中文名被静默丢弃（不可调用）
+- 影响：DSH 内本 skill 调用名改为 `vision-hardware-selection`；目录名不变，脚本内路径引用不受影响
+
 ### 修复：fetch 通道3（浏览器接管自动执行）4处链路断裂（v1.11.2）
 
 - **背景**：用户反馈"代理浏览器不完美"，评估 Selenium 接入时实查代码发现

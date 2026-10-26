@@ -850,6 +850,119 @@ def match_seal_to_party(company, parties):
 # 裸签章栏关键词（"签章： 签章："订购单式/盖章/公章，全半角冒号），多策略共用
 _SEALMARK_KWS = ("签章：", "签章:", "盖章：", "盖章:", "公章：", "公章:")
 
+# 策略3 光秃公司名行的抬头判定线（页高占比）：行中心在此之上且不含角色字样
+# → 判为抬头不盖章。只作用于"无角色字样"的行——表格首行"卖方名称：…"含角色
+# 字样走字段行分支，不受此线影响（历史教训：纯 y 阈值会误杀 center_y=96=11.4%
+# 的表格首行；结构性分类后两者已按"是否含角色字样"分流，阈值只需覆盖抬头：
+# 页眉 logo center≈5%、多行抬头（公司名+英文+地址电话）center≈13%，15% 全覆盖）
+_HEADER_LINE_RATIO = 0.15
+
+
+def _find_role_line_blocks(pdf_path, role, company):
+    """策略3 行级候选搜索："抬头不盖章"结构性判断（v1.3.1，用户口述规则固化）。
+
+    背景（2026-10-26 报价单实测，用户指出）：抬头大字公司名被当锚点，章盖到
+    抬头/合同编号上。根因有三：
+      a) probe 只搜公司名，搜不到"卖方开户行："这类**不含公司名**的字段行；
+      b) 抬头与表格首行 y 相近（dy<100pts 聚类距离）被 find_keyword_blocks
+         聚成同一块（y0=77 y1=138），骑压中心落抬头；
+      c) 纯 y 阈值分不开两者：10% 放过多行抬头（12.8%），12% 误杀表格首行
+         （11.4%）——历史两次校准已证明此路不通。
+
+    结构性判断（按"行是否含角色字样"分流，替代绝对 y 阈值）：
+      1) 含角色字样的行（"卖方名称：苏州华际…"/"卖方开户行：农业银行…"）=
+         签署相关字段行，无论 y 高低都合法（表格首行 center_y=96=11.4% 不误杀）；
+         同行含对侧角色时按行内分侧只框本侧（防章骑甲乙中缝，历史事故同源）；
+      2) 光秃公司名行（不含任何角色字样）：行中心在页高 15% 之上 → 抬头，
+         丢弃（抬头不盖章）；其余（正文/落款区光秃公司名）保留；
+      3) 候选行取最靠下（越靠下越接近签署区："卖方名称"行 < "卖方开户行"行）。
+
+    坐标系：pdfplumber top/bottom = 顶部原点 y 向下，与下游一致，无需换算。
+    返回: list[block dict]（结构同 find_keyword_blocks），额外带 '_has_role'。
+    """
+    probe = company[:10] if company else None  # 公司名前10字探针（整名可能断行）
+    other_roles = [r for r in _CONTRACT_ROLES if r != role]
+    blocks_out = []
+    with pdfplumber.open(pdf_path) as pdf:
+        for page_idx, page in enumerate(pdf.pages):
+            words = page.extract_words()
+            if not words:
+                continue
+            # 行级聚合：按 y 重叠聚行（词按 top,x0 排序逐个归入重叠>半行高的行；
+            # 不用 find_keyword_blocks 的 100pts 聚类——它会把抬头和表格首行
+            # 合并成一块，正是本次事故根因 b）
+            rows = []
+            for w in sorted(words, key=lambda w: (w['top'], w['x0'])):
+                best_row, best_overlap = None, 0
+                for row in rows:
+                    overlap = (min(row['bottom'], w['bottom'])
+                               - max(row['top'], w['top']))
+                    if overlap > best_overlap:
+                        best_row, best_overlap = row, overlap
+                if best_row and best_overlap > 0.5 * min(
+                        best_row['bottom'] - best_row['top'],
+                        w['bottom'] - w['top']):
+                    best_row['words'].append(w)
+                    best_row['top'] = min(best_row['top'], w['top'])
+                    best_row['bottom'] = max(best_row['bottom'], w['bottom'])
+                else:
+                    rows.append({'top': w['top'], 'bottom': w['bottom'],
+                                 'words': [w]})
+            for row in rows:
+                row['words'].sort(key=lambda w: w['x0'])
+                text = "".join(w['text'] for w in row['words'])
+                # 字段行判定（收紧，防正文提及角色的行混入，如"货物所有权属
+                # 卖方所有"）：行首即角色字样（"卖方开户行：…"），或行内含
+                # "角色+名称"字段词（表格首行"买方名称：…卖方名称：…"中段命中）
+                field_row = text.startswith(role) or (role + "名称") in text
+                has_probe = bool(probe) and probe in text
+                if not (field_row or has_probe):
+                    continue
+                sel = row['words']
+                if field_row:
+                    # 行内分侧：同行含对侧角色只框本侧（对侧在左→本侧词及之后，
+                    # 反之及之前）；"卖方开户行"行无对侧 → 整行保留
+                    for i, w in enumerate(sel):
+                        if role in w['text']:
+                            others = [ow for ow in sel
+                                      if any(r in ow['text'] for r in other_roles)]
+                            if others:
+                                if max(ow['x1'] for ow in others) <= w['x0']:
+                                    sel = sel[i:]
+                                elif min(ow['x0'] for ow in others) >= w['x1']:
+                                    sel = sel[:i + 1]
+                            break
+                elif ((row['top'] + row['bottom']) / 2
+                        < page.height * _HEADER_LINE_RATIO):
+                    continue  # 光秃公司名 + 页面顶部 → 抬头，不盖章
+                x0 = min(w['x0'] for w in sel)
+                x1 = max(w['x1'] for w in sel)
+                y0 = min(w['top'] for w in sel)
+                y1 = max(w['bottom'] for w in sel)
+                # 字段行/宽行骑压取"行尾段"（右缘=行尾，宽≤一章宽）：章骑行尾
+                # 是真实盖章习惯，且避开行首字段标签、下一行"日期："等签署文字
+                # （本单实测：骑整行中心会压住"账号"数字段+"日期："，用户认可
+                # 的是行尾段位置）
+                x0 = max(x0, x1 - SEAL_DEFAULT_SIZE)
+                center_x = (x0 + x1) / 2
+                blocks_out.append({
+                    'page': page_idx + 1,
+                    'x0': x0, 'y0': y0, 'x1': x1, 'y1': y1,
+                    'center_x': center_x,
+                    'center_y': (y0 + y1) / 2,
+                    'width': x1 - x0,
+                    'height': y1 - y0,
+                    'side': 'left' if center_x < page.width / 2 else 'right',
+                    'page_width': page.width,
+                    'page_height': page.height,
+                    'keywords_found': [text],
+                    # kw_words 清空：骑压分支的全局关键词（签章/公章/盖章）精对齐
+                    # 在本类块上无命中，本就退回块中心；显式清空行为稳定可读
+                    'kw_words': [],
+                    '_has_role': field_row,
+                })
+    return blocks_out
+
 
 def find_role_stamp_block(pdf_path, role, company=None):
     """定位合同中"该角色的盖章处"，三级策略逐级降级（返回 block 或 None）。
@@ -946,19 +1059,21 @@ def find_role_stamp_block(pdf_path, role, company=None):
             })
             return synthetic, "对侧对称(与他角色盖章栏同高,本角色列)"
 
-    # ---- 策略3：公司名同行（该角色无盖章栏时，盖在其公司名文字右侧）----
-    if company:
-        probe = company[:10]  # 公司名前10字做探针（整名可能因换行/空格断开）
-        # 词宽放宽到400：表格栏"卖方名称：XX公司"整词常超默认200被滤（曾犯→策略失效）
-        blocks = find_keyword_blocks(pdf_path, [probe], max_word_width=400)
-        # 排除页眉抬头区（顶部10%，页眉公司名 center_y≈46/842）：页眉不是签署区。
-        # 曾用12%误杀表格首行（报价单"卖方名称"行 center_y=96 与页眉高度重叠，曾犯）
-        blocks = [b for b in blocks if b["center_y"] > b["page_height"] * 0.10]
-        if blocks:
-            max_page = max(b["page"] for b in blocks)
-            # 取最靠下（内容尾部方向）的候选：越靠下越接近签署区
-            same_page = [b for b in blocks if b["page"] == max_page]
-            best = max(same_page, key=lambda b: b["center_y"])
+    # ---- 策略3：公司名同行（该角色无盖章栏时）----
+    # v1.3.1 结构性重写："抬头不盖章"（用户口述规则固化，抬头不是签署区）+
+    # 本角色字段行优先。行级候选见 _find_role_line_blocks（抬头/表格首行聚类
+    # 合并、probe 搜不到"卖方开户行"两个根因都在该层解决）。
+    line_blocks = _find_role_line_blocks(pdf_path, role, company)
+    if line_blocks:
+        # 含角色字样的字段行（"卖方名称：…"/"卖方开户行：…"）优先于光秃公司名行
+        role_lines = [b for b in line_blocks if b['_has_role']]
+        bare_lines = [b for b in line_blocks if not b['_has_role']]
+        cands = role_lines or bare_lines
+        if cands:
+            max_page = max(b['page'] for b in cands)
+            same_page = [b for b in cands if b['page'] == max_page]
+            # 取最靠下（越靠下越接近签署区："卖方名称"行 < "卖方开户行"行）
+            best = max(same_page, key=lambda b: b['center_y'])
             return best, "公司名同行(无该角色盖章栏,建议人工确认)"
 
     return None, None

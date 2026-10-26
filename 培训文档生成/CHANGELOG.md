@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 元数据：frontmatter `name` 改 ASCII slug（DSH 接入，2026-10-22）
+
+- 仅改 SKILL.md frontmatter 的 `name`：`培训文档生成` → `training-doc-generator`（1 行）；目录名/正文/脚本零改动，未升版
+- 原因：DSH 加载器硬校验 `SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/`，中文名被静默丢弃（不可调用）
+- 影响：DSH 内本 skill 调用名改为 `training-doc-generator`；目录名不变，脚本内路径引用不受影响
+
 - 新增 SKILL.md §三R4 截图涉密打码规范（三份一律，内部版也不留明文）：涉密清单（设备ID/序列号/激活码/商业授权/机器码/HslLicense.dat 内容/外网IP/域名/客户真实数据如SN批号人名电话工单号；内网 192.168/10 段不算）；定位框体手法（按边框色扫整行定上下界、框内行找左右边框、内外框各缩 2px，小图<500px 允许手估比例事后放大验证）；行带底色取众数、切分点落字间隙中点、超宽/杂色伪段自动过滤、拒绝保留时改 --keep 0 整区糊（框体保留只杀中间可读性）；验证打码区裁出放大 4 倍人眼确认无字符残留＋PDF 已重转内嵌图与 png 一致；打码坐标记 harness 说明或任务记录备复用。
 - 新增 SKILL.md §R2 截图方式按窗体类型三选一：PrintWindow 抓出全黑条（WinForms 血泪 66×34 实证）改真屏抓（按窗口矩形 CopyFromScreen，要求窗口最前不被挡）；判据先 PrintWindow 看指标（total=0 且人眼黑条即中招切真屏重拍）。
 - 补 SKILL.md §二①A2 菜单逐项盘点（WinForms 血泪：子窗"设置"MenuStrip 11 项漏盘点——委托回主窗 8 项在矩阵里，子窗自有项不可见）：A2 逐项枚举全部菜单/工具栏下拉（含下拉内嵌 ComboBox/TextBox单列，每项跟 Click/SelectedIndexChanged/TextChanged 绑定到哪个处理函数）；每个弹窗都要有截图（空表弹窗必 mock 出演示行：点"新增"加内存行、拍完 Dispose、绝不点保存，ini 零写入；新增行若撞作业未就绪类门控，等 mock 排到 VPP 加载完成后）。

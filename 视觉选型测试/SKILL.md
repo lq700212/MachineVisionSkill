@@ -1,5 +1,5 @@
 ---
-name: 视觉选型测试
+name: vision-selection-test
 description: "视觉硬件选型 skill 的专用测试套件：回归测试+注入测试一键全量验证。当用户要求测试/验证视觉硬件选型skill、或刚完成该skill的开发迭代（改过选型/生成PPT/数据库/图片获取等任何脚本）后必须调用本skill跑验证，全绿才算迭代完成。"
 ---
 
