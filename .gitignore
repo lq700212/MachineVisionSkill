@@ -37,6 +37,7 @@ preview_check/
 !viewturbo-checkin/
 !培训文档生成/
 !软件卸载清理/
+!readme/
 
 # ── viewturbo-checkin：真实账号文件永不入库（只提交 accounts.json.example 模板）──
 viewturbo-checkin/accounts.json
