@@ -59,14 +59,18 @@ description: >
 ## 2. 图片资产盘点（第 2 步与收尾各跑一次，脚本）
 
 ```powershell
-python "<skill目录>\scripts\img_inventory.py" <repo根>
+python "<skill目录>\scripts\img_inventory.py" <repo根> [--skip-dir 目录名 ...]
 ```
 
 - 输出三段：`[DEAD-REF]`（文档引用了但磁盘无 → 必修）/ `[ORPHAN]`（磁盘有但
   无任何文档引用 → 与用户确认删或补引用）/ `[OK]` 计数。退出码 0 无死引用，
   1 有死引用，2 环境错误。
 - 相对路径按**该 md 所在目录**解析（README 引 `docs/images/x.png`、docs 手册引
-  `images/x.png` 两种口径都好使）；外链 http(s) 跳过。
+  `images/x.png` 两种口径都好使）；外链 http(s) 跳过；**代码块/行内代码里的
+  图片语法不算真引用**（只收渲染真身，模板占位与语法说明不误报）。
+- `--skip-dir 目录名`（可重复给多个）：任何层级命中即整枝跳过——用于
+  **本地安装不入库的第三方 skill**（其文档死链不属本仓库体检范围，
+  如 pixel2motion）；跳过名单会打 `[INFO]` 行留痕。
 - **开工跑一次**（摸清家底：有哪些图、哪些链接本来就死）+ **收尾再跑一次**
   （写作过程中的新引用/新删除是否两头对齐）。
 - 只看最后一行 `RESULT: OK / NG`；有 DEAD-REF 先修完再进下一步。

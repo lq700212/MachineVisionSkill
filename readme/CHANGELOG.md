@@ -2,6 +2,23 @@
 
 > 版本规则：流程/脚本/红线变化即记一笔。
 
+## V1.2.0（2026-10-31，盘点脚本只认渲染真身 + --skip-dir 排除目录）
+
+- **img_inventory.py 收集口径升级：跳过代码块与行内代码**。本仓库实战首用
+  （重写 MachineVisionSkill 根 README）暴露 3 处误报 DEAD-REF——
+  `readme/CHANGELOG.md` 第 54 行介绍脚本功能写的 `` `![](…)` `` 行内代码、
+  `readme/SKILL.md` 骨架模板 fence 里的 `docs/images/<a>.png` 占位图：
+  全是"文档里谈论图片语法"，不是渲染真身。修法：scan_md 逐行加 fence
+  状态机（``` 行切换开关，整块跳过）＋ strip_inline_code（按反引号分段只收
+  偶数段）；本仓库复跑 DEAD-REF 18→3→0，RESULT: OK。
+- **img_inventory.py 新增 `--skip-dir 目录名`（可重复）**：任何层级命中即整枝
+  跳过，用于**本地安装不入库的第三方 skill**（如 pixel2motion——其 README
+  自带 15 处上游 docs 死链，图无来源可补、删引用又篡改第三方文档，属外部
+  仓库病灶，不该卡死本仓体检）。跳过名单打印 `[INFO]` 行留痕。
+- **写作实战**：本仓库根 README 按 V1.1.x 流程重写（摸底→目录表补 readme
+  行＋pixel2motion 行→mermaid 架构→目录树→徽章 4 枚），check_readme
+  NG=0 WARN=0、img_inventory（--skip-dir pixel2motion）RESULT: OK。
+
 ## V1.1.1（2026-10-31，注册修复：主文件名 AGENTS.md → SKILL.md + 盘点目录扩充）
 
 - **为何"readme skill 从未出现在可用列表"（首用现场才发现）**：主指引一直叫

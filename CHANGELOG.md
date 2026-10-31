@@ -3,6 +3,42 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-10-31（本次·根 README 重写 + readme skill v1.2.0 盘点脚本升级）
+
+### 改动范围
+
+1. **根 `README.md` 重写**（走 readme skill 全流程，图文并茂形态）：
+   一句话定位从"机器视觉方向"扩为"工业上位机 + 办公自动化全带"；hero 居中
+   ＋ 4 枚徽章（skills-12 ／ platform-Windows ／ Python|PowerShell ／
+   OpenCode/DSH 兼容，值全部抄自 git ls-files 与本机实测）；一览表补
+   **readme 行**（12 个入库 skill 齐整）；"本地安装、不入库"独立成节并补
+   **pixel2motion**（7 个）；仓库范围节同步白名单 12 项；新增 mermaid
+   架构图（loader→路径根→本仓库 junction 归一）与目录树；快速开始保留
+   clone / mklink /J 单挂 / DSH 整仓零拷贝 + rank 表 + 接入要点四条。
+2. **readme skill v1.1.1→v1.2.0**（`scripts/img_inventory.py` 两处升级）：
+   ① 收集口径只认**渲染真身**——fence 状态机整块跳过代码块 +
+   `strip_inline_code` 剔行内反引号片段（修：本仓 `readme/CHANGELOG.md`
+   介绍脚本功能的 `` `![](…)` ``、`readme/SKILL.md` 模板占位图两处被误判
+   DEAD-REF）；② 新增 `--skip-dir 目录名`（可重复，任意层级命中整枝跳过，
+   打 `[INFO]` 留痕）——用于本地安装不入库的第三方 skill（pixel2motion
+   自带 15 处上游死链，不属本仓体检范围）；SKILL.md 第 2 步同步用法，
+   目录内 CHANGELOG 记 V1.2.0。
+
+### 验证
+
+- `py_compile` img_inventory.py 通过。
+- `check_readme.py` 对新 README：**NG=0 WARN=0**（H1/徽章/图片/相对链接/
+  mermaid 头/围栏配对全过）。
+- `img_inventory.py --skip-dir pixel2motion`：**RESULT: OK**，DEAD-REF
+  18→3→0；剩余 55 张 ORPHAN 均为代码/运行时资产（dashi-ppt 工程资源、
+  Tauri 图标、公章夹具、选型零件图），非文档配图，不动。
+
+### 建议 commit message
+
+```
+docs(README): 根README按readme skill重写（补readme/pixel2motion行+徽章+mermaid架构+目录树）；fix(readme): img_inventory v1.2.0只认渲染真身+--skip-dir
+```
+
 ## 2026-10-31（本次·收尾提交：git推送 v1.3.0 + 签到联网容错 + 界面血泪47~56 + 截图防抢屏）
 
 ### 改动范围

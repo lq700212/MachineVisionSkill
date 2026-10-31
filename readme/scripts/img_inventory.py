@@ -9,9 +9,14 @@ img_inventory.py — 文档图片资产盘点（readme skill · 第 2 步脚本�
     [OK]        两头对齐计数
   相对路径一律按**该 md 所在目录**解析（README 引 docs/images/x.png 与
   docs 手册引 images/x.png 两种口径天然都支持）；外链 http(s) 不盘点。
+  只收集**渲染真身**：``` 代码块内的行、行内反引号 `…` 里的片段一律跳过
+  （语法说明文档里写 `![](…)`、骨架模板里的占位图不算真引用——2026-10-31 实测）。
 
 用法：
-    python img_inventory.py [repo根]            # 默认当前目录
+    python img_inventory.py [repo根] [--skip-dir 目录名 ...]
+                                            # 默认当前目录
+    # --skip-dir：按目录名（任意层级）整枝跳过，可重复给多个
+    # （用于本地安装不入库的第三方 skill：其文档死链不属本仓库体检范围）
 
 退出码：0=无死引用；1=有死引用；2=环境错误。
 结论行统一 [RESULT: OK] / [RESULT: NG]，AI 只读这一行定去留。
@@ -58,21 +63,36 @@ def resolve(base_dir, ref):
     return norm(os.path.join(base_dir, ref))
 
 
-def collect_md_files(root):
+def collect_md_files(root, skips):
     found = []
     for dirpath, dirnames, filenames in os.walk(root):
-        # 排除隐藏目录与依赖/构建产物目录（EXCLUDE_DIRS）
-        dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS and not d.startswith(".")]
+        # 排除隐藏目录与依赖/构建产物目录（EXCLUDE_DIRS）+ 用户 --skip-dir
+        dirnames[:] = [d for d in dirnames
+                       if d not in EXCLUDE_DIRS and not d.startswith(".") and d not in skips]
         for fn in filenames:
             if fn.lower().endswith(".md"):
                 found.append(os.path.join(dirpath, fn))
     return found
 
 
+def strip_inline_code(line):
+    """剔除行内反引号 `…` 里的片段（语法说明不算真引用）。"""
+    parts = line.split("`")
+    return "".join(p for i, p in enumerate(parts) if i % 2 == 0)
+
+
 def scan_md(path):
     base = os.path.dirname(path)
     with open(path, "r", encoding="utf-8-sig", errors="strict") as f:
+        in_fence = False
         for ln, line in enumerate(f, 1):
+            # fenced code block 整块跳过（模板占位/语法示例不算真引用）
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            line = strip_inline_code(line)
             for m in IMG_RX.finditer(line):
                 target = resolve(base, m.group(1).strip())
                 if target is None:
@@ -89,26 +109,47 @@ def scan_md(path):
                     dead_refs.append((os.path.relpath(path, REPO), ln, m.group(1).strip()))
 
 
-def collect_img_files(root):
+def collect_img_files(root, skips):
     imgs = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS and not d.startswith(".")]
+        dirnames[:] = [d for d in dirnames
+                       if d not in EXCLUDE_DIRS and not d.startswith(".") and d not in skips]
         for fn in filenames:
             if fn.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")):
                 imgs.append(norm(os.path.join(dirpath, fn)))
     return imgs
 
 
+def parse_argv(argv):
+    """[repo根] + 重复的 --skip-dir <名>。"""
+    repo = "."
+    if argv and not argv[0].startswith("-"):
+        repo, argv = argv[0], argv[1:]
+    skips = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--skip-dir" and i + 1 < len(argv):
+            skips.append(argv[i + 1])
+            i += 2
+        else:  # 未知参数不崩，跳过（脚本温和）
+            i += 1
+    return repo, skips
+
+
 def main():
     global REPO
-    REPO = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else ".")
+    REPO = os.path.abspath(parse_argv(sys.argv[1:])[0])
+    skips = set(parse_argv(sys.argv[1:])[1])
 
     if not os.path.isdir(REPO):
         print(f"[ERR] 仓库不存在: {REPO}")
         print("RESULT: NG")
         return 2
 
-    mds = collect_md_files(REPO)
+    if skips:
+        print(f"[INFO] --skip-dir 跳过: {', '.join(sorted(skips))}")
+
+    mds = collect_md_files(REPO, skips)
     if not mds:
         print(f"[WARN] 未找到任何 markdown: {REPO}")
         print("RESULT: OK")
@@ -121,7 +162,7 @@ def main():
             print("RESULT: NG")
             return 2
 
-    img_files = collect_img_files(REPO)
+    img_files = collect_img_files(REPO, skips)
     orphans = [p for p in img_files if p not in md_refs]
 
     print(f"仓库: {REPO}")
