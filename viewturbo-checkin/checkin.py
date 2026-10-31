@@ -14,10 +14,22 @@
 import argparse
 import hashlib
 import json
+import socket
 import sys
 import time
 import urllib.request
 from pathlib import Path
+
+# 强制 IPv4：本机 IPv6 出口不通（TLS 握手挂起），而域名有 AAAA 记录，
+# 默认双栈会优先 IPv6 导致所有请求超时。仅重定向到 AF_INET 即可。
+_orig_getaddrinfo = socket.getaddrinfo
+
+
+def _ipv4_only(host, port, family=0, type=0, proto=0, flags=0):
+    return _orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+
+
+socket.getaddrinfo = _ipv4_only
 
 BASE = "https://api.viewturbo.info"
 COMMON_QS = "platform=web&cur_version=0.0.0&deviceinfo=&lang=hk&code=Others"
@@ -88,12 +100,16 @@ def checkin_one(email, password):
         if not ok:
             res["msg"] = f"签到请求失败: {r}"
             return res
-        if r.get("code") != 0:
+        if r.get("code") == 7:  # "今天已签到"，视作成功（状态查询可能滞后于服务器时区）
+            res["msg"] = "今日已签到，无需重复领取"
+        elif r.get("code") != 0:
             res["msg"] = f"签到失败: {r.get('msg')}"
             return res
-        data = r.get("data") or {}
-        reward = data.get("reward_bytes") or data.get("reward") or ""
-        res["msg"] = f"签到成功，领取 {fmt_bytes(reward)}" if reward else "签到成功"
+        else:
+            data = r.get("data") or {}
+            reward = data.get("reward_bytes") or data.get("reward") or ""
+            res["msg"] = (f"签到成功，领取 {fmt_bytes(reward)}"
+                          if reward else "签到成功")
 
     ok, r = api("GET", "/appuser/userinfo", token=token)
     if ok and r.get("code") == 0:

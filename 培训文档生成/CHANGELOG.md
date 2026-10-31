@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### SKILL.md 截图两大增量（2026-10-31 随 git 提交入库）
+
+- 新增 SKILL.md §五**防抢屏截图方案**（2026-10 用户点名，AgingTestSystem DocShot 实测落地）：不能按"目标窗必然在前台"截图——旧版 TopMost+CopyFromScreen 抢焦点，且遮挡者同为置顶窗时永远压在目标窗之上（OpenCode 终端下半截被拍进主界面实锤）。现行三层（参照实现 `tools/DocShot/DocShot.cs`）：①遮挡定向最小化 MinimizeBlockers（只最小化与目标矩形相交的外部窗，单张拍完立即还原＋Main finally 兜底）；②后台静默三件（焦点借用即还／PrintWindow 路径挪屏外 (-3000,-3000)／必须真屏的窗 SetWindowPos NOACTIVATE 置顶不抢焦点）；③真屏截图压缩到最少（GDI 直绘画布必须真屏，其余全走 PrintWindow 天然后台）。实测后台静默版全程约 3 分 40 秒，跑批期间正常用电脑不抢焦点。
+- 新增 SKILL.md §R4 **自动找框在组框型窗口失效**血泪（2026-10，13-activation 实测踩中）：--auto 按">=60% 宽的同一色水平线段"配对输入框上下边框，Sunny 组框窗（UIGroupBox 蓝边大矩形包着 UITextBox）会把组框边框当输入框边框配错对——码整整齐齐落在组框标题/状态行文字上、值区明文原封不动，"成功打码 4 处"假象靠 4 倍放大复核才抓到。凡组框/大蓝边框包输入框的窗一律手工坐标；打过码 ≠ 打对码，4 倍人眼复核不可省。
+
 ### 元数据：frontmatter `name` 改 ASCII slug（DSH 接入，2026-10-22）
 
 - 仅改 SKILL.md frontmatter 的 `name`：`培训文档生成` → `training-doc-generator`（1 行）；目录名/正文/脚本零改动，未升版

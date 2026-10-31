@@ -2,6 +2,23 @@
 
 `git自动提交推送` skill 的所有版本变动统一记录在此。格式参考 Keep a Changelog。
 
+## [v1.3.0] - 2026-10-29
+
+### 修复：纯 `-` 清单型 CHANGELOG 正文提炼为空话（CureLine V0.0.25 教训）
+
+- **改动**：`scripts/git_commit_push.py` 的 `extract_latest_sections` ——
+  版本头下无任何 `###` 小节、条目直接挂版本头的"纯 `-` 清单型"CHANGELOG
+  （CureLine 等项目），首个 `-`/`①②③` 条目行自动开**"改动要点"兜底小节**
+  收条目；`extract_latest_sections` docstring 与 SKILL.md 3.2 节同步补
+  形态覆盖说明。
+- **根因**：旧逻辑 `if cur is None: continue` 只在 `###` 小节内收条目，
+  无小节时整版干货被丢弃，正文只剩"对应 CHANGELOG.md 最新版本条目：…"
+  一句空话——违反 3.2 节"正文绝不只剩空话"的自身承诺（本次 CureLine
+  V0.0.25 提交时实测暴露，AI 当时以 `-m` 手工提炼规避）。
+- **验证**：`py_compile` 通过；四形态 CHANGELOG 样本仓库 `--dry-run` 回归
+  （Keep-a-Changelog 小节型 / 版本头带摘要混合型 / 纯 `-` 清单型 /
+  小节前散条目混合型）标题与正文全部按预期产出，原有三形态行为不变。
+
 ## [Unreleased]
 
 ### 元数据：frontmatter `name` 改 ASCII slug（DSH 接入，2026-10-22）

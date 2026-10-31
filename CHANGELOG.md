@@ -3,6 +3,49 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-10-31（本次·收尾提交：git推送 v1.3.0 + 签到联网容错 + 界面血泪47~56 + 截图防抢屏）
+
+### 改动范围
+
+1. **git自动提交推送 v1.3.0**（脚本体修复）：`scripts/git_commit_push.py` 的
+   `extract_latest_sections` 兼容**纯 `-` 清单型 CHANGELOG**（CureLine 等无
+   `###` 小节、条目直接挂版本头）——首个条目行自动开"改动要点"兜底小节收条目，
+   正文不再只剩"对应 CHANGELOG…"空话一句；SKILL.md 3.2 节同步形态覆盖说明，
+   函数 docstring 补根因（2026-10-29 CureLine V0.0.25 教训）。
+2. **viewturbo-checkin**（checkin.py 两处防御）：`socket.getaddrinfo` 重定向
+   AF_INET **强制 IPv4**（本机 IPv6 出口不通、域名有 AAAA 记录，双栈优先 IPv6
+   致全部请求超时）；签到 `code==7`"今日已签到"视作成功（状态查询滞后服务器
+   时区 MR；误报失败不再出现）。首建本 skill `CHANGELOG.md` 记录之。
+3. **winforms-ui-debug**（文档增量）：SKILL.md 血泪表新增 **47~56 共 10 条**——
+   第 47 条（AgingTestSystem V2.0.5：折叠面板"边排边藏"必漏、隐藏行叠 0,0）＋
+   48~51（HuaJiVision V4.4.297：ToolStripButton 渲染口径双路径、GetWindowRgn 探针、
+   dotNetBar Office2007 换色、Sunny protected set 反射赋值）＋52~54（V4.4.298：
+   ContentRectangle 向外膨胀、AddArc 自重叠 FillPath 退化、CapsuleStatusLabel
+   底色分家）＋55（V4.4.305：AutoSize 下 Padding 两相抵消）＋56（V4.4.306：
+   OnShown 两段式卡顿与 PrepareForShow 预热契约）。本目录 CHANGELOG [Unreleased]
+   同步 48~56；SKILL.md 首行意外引入的 UTF-8 BOM 已还原。
+4. **培训文档生成**（文档增量）：SKILL.md 新增**防抢屏截图方案**（DocShot 三层：
+   相交窗定向最小化单张即还＋PrintWindow 挪屏外/焦点借用即还/NOACTIVATE 置顶＋
+   真屏压缩最少）与**自动找框组框窗失效**血泪（UIGroupBox 边框被配成输入框边框，
+   打码落标题上、值区明文不动，保守手工坐标＋4倍放大复核）。本目录 CHANGELOG
+   [Unreleased] 同步。
+
+### 验证
+
+- git自动提交推送：`py_compile` 通过；四形态 CHANGELOG 样本仓库 `--dry-run`
+  回归全过（标题与正文按预期产出，原有三形态行为不变）——详见其 CHANGELOG
+  v1.3.0 条目。
+- 其余三 skill 为防御性小改与文档沉淀：提交前 `precommit_check.py` 全过；
+  viewturbo-checkin 改动以当日实际签到运行为准（IPv4 强制＋code==7 容错）。
+- `git status` 复核：改动后新增/修改文件全部落在已放行白名单内；凭据文件
+  `viewturbo-checkin/accounts.json` 仍被 `.gitignore` 忽略未跟踪。
+
+### 建议 commit message
+
+```
+skill收尾：git推送 v1.3.0 兼容纯-清单型CHANGELOG；签到强制IPv4+code7容错；界面血泪47~56；截图防抢屏+组框找框失效
+```
+
 ## 2026-10-26（本次·盖章专员 v1.3.1 策略3重写 + DSH 元数据整改收尾）
 
 ### 改动范围

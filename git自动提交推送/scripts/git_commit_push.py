@@ -224,6 +224,10 @@ def extract_latest_sections(changelog: Path) -> tuple:
       - `①②③… xxx` 枚举行收一条；
       - 缩进续行拼回上一条（CHANGELOG 把长干货写在续行里，只抓 - 行会丢信息）；
       - 以 ：/: 结尾的纯标题头丢弃。
+      - 无任何 ### 小节的"纯 - 清单型"CHANGELOG（条目直接挂版本头下，
+        CureLine 等）：首个 -/①②③ 行自动开"改动要点"兜底小节收条目——
+        不建节整版干货会被丢弃，正文只剩"对应 CHANGELOG…"空话
+        （2026-10-29 CureLine V0.0.25 教训）。
     解析失败返回 ("", [])。
     """
     try:
@@ -264,13 +268,19 @@ def extract_latest_sections(changelog: Path) -> tuple:
                 sections.append(cur)
             cur = {"title": _clean_bullet(m_sec.group(1)), "raw": []}
             continue
+        m_dash = BULLET_DASH_RE.match(ln)
+        m_enum = BULLET_ENUM_RE.match(s)
+        # 纯 - 清单型兜底（CureLine 等）：版本头下无任何 ### 小节、条目直接挂
+        # 版本头——首个条目行自动开"改动要点"小节收条目，防整版干货被丢。
+        # （旧逻辑此处 continue 丢弃全部条目，正文只剩"对应 CHANGELOG…"空话，
+        # 2026-10-29 CureLine V0.0.25 实测暴露。）
+        if (m_dash or m_enum) and cur is None:
+            cur = {"title": "改动要点", "raw": []}
         if cur is None:
             continue
-        m_dash = BULLET_DASH_RE.match(ln)
         if m_dash:
             cur["raw"].append(m_dash.group(1))
             continue
-        m_enum = BULLET_ENUM_RE.match(ln.strip())
         if m_enum:
             cur["raw"].append(m_enum.group(1))
             continue
