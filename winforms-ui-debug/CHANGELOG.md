@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+- 新增 SKILL.md 血泪第 58 条（HuaJiVision V4.4.339 两轮返工实锤）：自绘圆角控件四角残留 1px `#7C7B80` 深灰直角边＝`ControlStyles.Opaque`（WM_ERASEBKGND 不走 OnPaintBackground、WM_PAINT 脏区不含最外 1px，OnPaint 裁剪补不到边，系统 1px 边框永久残留），与 Region/Pen 全都无关；修法五步（构造不加 Opaque→OnPaintBackground 铺父链第一个不透明底→OnPaint 只画 AA 圆角路径→容器 BackColor=卡面色防伪透明四角戳色块→描边路径内缩 0.5px）；定位三连（隐藏控件/Region 内缩/反射关 Opaque）5 分钟收口，验收含四角像素断言＋NearestNeighbor 放大目检＋PrintWindow/CopyFromScreen 双保险；完整配方见 HuaJiVision 项目 skill `ui-conventions` §二十五。
+- 新增 SKILL.md 血泪第 57 条（HuaJiVision V4.4.331 实锤，坑 56 预热契约窗的圆角连环坑）：Sunny UIForm 显示链/Move 消息会用原生 SetWindowRgn 覆盖窗区，.NET `Region` 缓存与 Win32 实际生效区脱节（判窗区生效别信 .NET 侧，用 `GetWindowRgn+四角 RGN_AND`）；另 UIForm 系构造期就把句柄建好，自愈挂接条件写 `!IsHandleCreated` 会漏；正解＝唯一后手原则，照"天生无此病的 mFormLogin"抄时序——预热模式窗体在 OnShown 链尾（Recenter 等 Move 全部之后）补一脚 `ApplyDialogChrome`；验证铁律：分时探针全绿不够，必须临时注释补脚行反向验证精准回退。
 - 新增 SKILL.md 血泪第 56 条（HuaJiVision V4.4.306 实锤）：模态弹窗"先小窗→顿→跳大再挪正"两段式卡顿＝重活全压 OnShown；正解显示前预热契约 `PrepareForShow()`（幂等守卫加在预热层不加底层 EnsureLoaded）、静态事件订阅提前后退订改挂 `Disposed`（Form 无 OnDisposed 虚方法，预热后 Show 前抛异常 using 直接 Dispose 不走 Closed 链）；PrepareForShow 实测 55ms 总耗时没省多少——优化的是"首帧即终态一次成型无跳动"，不是总毫秒数。
 - 新增 SKILL.md 血泪第 55 条（HuaJiVision V4.4.305 实锤，坑 52 后半场）：AutoSize 布局公式 `Bounds.Width = 文本宽 + Padding.Horizontal`（Margin 只作 item 间隙）导致"胶囊内缩 Padding"公式两相抵消、文字恒贴弧线；正解胶囊铺满 item 宽（垂直内缩另算），文字天然居中，mockup 的 `padding:2px 10px` 直接映射 Designer 一行 Padding。
 - 新增 SKILL.md 血泪第 54 条（HuaJiVision V4.4.298 实锤）：StatusLabel/灯的 BackColor 会被基类绘制链平涂矩形，渲染器画的胶囊盖不住（ToolStripItem 无 OnPaintBackground 虚方法可拦）；正解派生 `CapsuleStatusLabel` 底色分家（`PillColor` 装灯色＋`BackColor=Transparent` 四角透宿主底）； ToolStripItem 不是 Control，压根没有 Region 属性（CS1061）。

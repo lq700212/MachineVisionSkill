@@ -3,6 +3,44 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-06（本次·收尾提交：viewturbo 签到切 HTTP 管理面板 IP + 界面血泪 57~58）
+
+### 改动范围
+
+1. **viewturbo-checkin**（checkin.py 一行换 BASE）：`https://api.viewturbo.info`
+   从本机访问全断——直连 TLS 握手挂起（SNI 阻断特征）＋走系统/内置代理路径均
+   `ERR_TUNNEL_CONNECTION_FAILED`；官方站 SPA 的唯一 API base 就是该域名、无备用
+   （扒 bundle 确认）。解法：ViewTurbo 桌面客户端自身的管理面板走同一套
+   `/appuser/*` 接口，地址取 `%APPDATA%/VIEWTURBO PTE. LTD/ViewTurboLite/
+   shared_preferences.json` 的 `flutter.api`（明文 HTTP 国内 IP，本次为
+   `http://120.233.70.97:8099`）——`BASE` 一行更换，其余逻辑不动。排查 technique
+   与"日后 IP 失效怎么办"（以最新客户端 `flutter.api` 为准，勿回退断域名）记入
+   本 skill `CHANGELOG.md` 2026-11-01 条目。
+2. **winforms-ui-debug**（文档增量）：SKILL.md 血泪表新增 **57、58 两条**——
+   57（HuaJiVision V4.4.331，坑 56 预热契约窗的圆角连环坑）：Sunny UIForm 显示链/
+   Move 消息用原生 SetWindowRgn 覆盖窗区、.NET Region 缓存与 Win32 实际生效区脱节
+   （判生效用 GetWindowRgn+四角 RGN_AND，别信 .NET 侧）；正解唯一后手原则，OnShown
+   链尾补一脚 ApplyDialogChrome，反向验证铁律同坑 38；
+   58（HuaJiVision V4.4.339 两轮返工实锤）：自绘圆角控件四角残留 1px `#7C7B80`
+   直角边＝`ControlStyles.Opaque`（WM_ERASEBKGND 跳背景擦除＋WM_PAINT 脏区不含最外
+   1px，与 Region/Pen 全都无关）；修法五步（不加 Opaque → OnPaintBackground 铺父链
+   首个不透明底 → OnPaint 只画 AA 路径 → 容器 BackColor=卡面色 → 描边内缩 0.5px），
+   定位三连＋四角像素断言验收；完整配方见 HuaJiVision 项目 skill `ui-conventions`
+   §二十五。本目录 CHANGELOG [Unreleased] 同步 57/58。
+
+### 验证
+
+- viewturbo-checkin：改动当天实际运行，**5 个账号签到全部成功**（退流 35.26/7.08/
+  4.40/4.66/1.71 GB）、退出码 0；reglogin/checkin_status/checkin/userinfo 全正常。
+- winforms-ui-debug：纯文档增量，无脚本改动；两处 CHANGELOG（skill 内 + 根）已同步。
+- 提交前 `precommit_check.py` 通过； accounts.json 等凭据仍被 .gitignore 忽略未跟踪。
+
+### 建议 commit message
+
+```
+fix(viewturbo-checkin): 签到BASE迁移HTTP管理面板IP（HTTPS域SNI阻断全断）；docs(winforms-ui-debug): 血泪57~58（Sunny显示链SetWindowRgn覆盖+Opaque四角残留1px直角边）
+```
+
 ## 2026-10-31（本次·根 README 重写 + readme skill v1.2.0 盘点脚本升级）
 
 ### 改动范围

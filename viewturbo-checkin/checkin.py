@@ -31,7 +31,12 @@ def _ipv4_only(host, port, family=0, type=0, proto=0, flags=0):
 
 socket.getaddrinfo = _ipv4_only
 
-BASE = "https://api.viewturbo.info"
+# 2026-11-01 起 https://api.viewturbo.info 从本机访问全断：直连 TLS 握手挂起（SNI 阻断特征），
+# 走系统代理路径亦 ERR_TUNNEL_CONNECTION_FAILED。而 ViewTurbo 桌面客户端自身的管理面板
+# （见 %APPDATA%/VIEWTURBO PTE. LTD/.../shared_preferences.json 的 flutter.api）就是同一套
+# /appuser/* 接口，走明文 HTTP 国内 IP 120.233.70.97:8099，实测登录/签到/查询全部正常。
+# 若该 IP 失效，以最新客户端配置里的 flutter.api 为准更新。
+BASE = "http://120.233.70.97:8099"
 COMMON_QS = "platform=web&cur_version=0.0.0&deviceinfo=&lang=hk&code=Others"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/149.0 Safari/537.36")
