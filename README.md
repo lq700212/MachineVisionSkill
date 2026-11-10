@@ -56,7 +56,7 @@ mklink /J "C:\Users\Administrator\.agents\skills" "C:\Users\Administrator\.confi
 - **改了 frontmatter 即时生效**：DSH 监听 skill 根目录，改完 `name`/`description` 下一轮就进会话目录，**不用重启**；
 - **frontmatter 必须有 `name` + `description`**，缺任一项、或 `name` 不是 kebab-case ASCII（`^[a-z0-9]+(-[a-z0-9]+)*$`）的 skill 会被**静默丢弃**——中文名 skill 一律配一个 ASCII 调用名（见下表）。
 
-## Skill 一览（12 个入库 skill）
+## Skill 一览（14 个入库 skill）
 
 | Skill 目录 | DSH 调用名 | 说明 | 使用文档 |
 |-------|------|------|----------|
@@ -72,6 +72,8 @@ mklink /J "C:\Users\Administrator\.agents\skills" "C:\Users\Administrator\.confi
 | [软件卸载清理](软件卸载清理/) | `software-uninstall-cleaner` | 通用软件彻底卸载与残留清理：进程→卸载→服务→目录/注册表/快捷方式 | [SKILL.md](软件卸载清理/SKILL.md) |
 | [readme](readme/) | `readme` | 项目 README 标准生成流程：事实摸底→图片盘点→截图决策树→骨架落稿→八项卫生核验，图文并茂为默认形态 | [SKILL.md](readme/SKILL.md) |
 | [viewturbo-checkin](viewturbo-checkin/) | `viewturbo-checkin` | ViewTurbo 每日签到领流量（真实账号文件永不入库，只提交 example 模板） | [SKILL.md](viewturbo-checkin/SKILL.md) |
+| [scanner-config](scanner-config/) | `scanner-config` | 扫码枪 Eport-E10 串口联网模块网络配置与排障：改 IP/8899 端口、连接超时/169.254.x.x 诊断、恢复出厂重建，附 ScannerTool.ps1 | [SKILL.md](scanner-config/SKILL.md) |
+| [ui-simplify](ui-simplify/) | `ui-simplify` | 上位机界面简化与目检标准：决策字段上界面/语境进 ToolTip/结果进提示条，界面改动后的截图目检收尾 | [SKILL.md](ui-simplify/SKILL.md) |
 
 > 各 skill 的版本与变化记录见其目录内的 `CHANGELOG.md`。
 

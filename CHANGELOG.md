@@ -3,6 +3,46 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-10（本次·新 skill 入库：scanner-config + ui-simplify；winforms-ui-debug 血泪59）
+
+### 改动范围
+
+1. **scanner-config**（新入库 v1.0.0）：扫码枪 SH-5000-GHD（底座集成 Eport E10 串口联网
+   服务器，TCP-SERVER 8899）网络配置与排障——SKILL.md（设备模型必读：工控机静态
+   192.168.1.230 不动、目标 192.168.1.220:8899、恢复出厂回 10.10.100.10、DHCP 断网回
+   APIPA 169.254.173.207 由 MAC 决定不变；配置 API 速查 + 场景 SOP）、scripts/ScannerTool.ps1
+   （probe/get/backup/set/verify/full 六动作、改 IP 后 ping+TCP+回读三重验证）。入库时
+   frontmatter `name` 由 `Scanner Config` 更正为 `scanner-config`（kebab-case ASCII 硬校验），
+   改完当场热加载生效。admin/admin 为设备出厂默认值非公司凭据。
+2. **ui-simplify**（新入库 v1.0.0）：上位机界面简化与目检标准（同日五个配置/表单窗拍板
+   "太复杂"后沉淀）——界面只放"要用户做的决定"：决策字段上界面/语境进 ToolTip/结果进
+   提示条，口诀"删掉后用户第一次用会不会做错"。入库时修复 frontmatter 位置（原 `---` 块
+   写在正文 H1 之后被加载器静默丢弃、未出现在可用 skill 列表），移到文件顶部后热加载生效。
+3. **winforms-ui-debug**（文档增量）：SKILL.md 血泪表新增 **第 59 条**（HuaJiVision
+   V4.4.383 实锤，坑 49/57 圆角线续篇）：弹窗圆角"时好时坏变直角"根治＝WndProc 消息尾
+   GetWindowRgn 四角校验自愈（第三道防线，不枚举覆盖点白名单，六种高危消息先 base 后
+   透传校验、读 Win32 实际生效区按主题半径重建）；另沉淀弹窗 harness 时序坑三条（Shown
+   在 base 链内部早段触发须 BeginInvoke 延后断言、覆盖后同帧自愈直证、Region.GetBounds
+   要传 Graphics 且 SetWindowRgn 后所有权归系统）。本目录 CHANGELOG [Unreleased]）
+   已同步 59。
+4. **根文件**：.gitignore 白名单放行 `!scanner-config/`、`!ui-simplify/`（注释族谱同步）；
+   README "Skill 一览" 12→14 个，补两行登记。
+
+### 验证
+
+- scanner-config / ui-simplify：frontmatter 修复后均当场热加载进 opencode 可用 skill
+  列表（系统加载器实证），调用名 `scanner-config` / `ui-simplify`。
+- ScannerTool.ps1：`[Parser]::ParseFile` 语法解析零报错（PowerShell 5.1 兼容）。
+- 新目录内容安全扫描：无公司凭据/密钥（仅设备出厂默认 admin/admin 与现场拓扑 IP）。
+- `git status` 确认两个新 skill 目录可见（白名单放行生效），提交不含 accounts.json
+  等凭据（viewturbo 真实账号文件持续被忽略）。
+
+### 建议 commit message
+
+```
+feat(scanner-config): v1.0.0 扫码枪E10网络配置skill入库（SKILL+ScannerTool.ps1+API速查，name修正kebab）；feat(ui-simplify): v1.0.0 界面简化目检标准入库（修frontmatter位置防静默丢弃）；docs(winforms-ui-debug): 血泪59 GetWindowRgn四角自愈（坑49/57续篇）；chore: 白名单放行+README一览12→14
+```
+
 ## 2026-11-06（本次·收尾提交：viewturbo 签到切 HTTP 管理面板 IP + 界面血泪 57~58）
 
 ### 改动范围
