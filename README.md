@@ -2,9 +2,9 @@
 
 # MachineVisionSkill
 
-**AI 代理 skills 集合——覆盖工业上位机（视觉选型 / 报价 / 通讯 / 培训文档 / UI 调试）与办公自动化（盖章 / PPT / docx / PDF / git 提交），兼容 OpenCode / DSH 的 skills 机制。**
+**AI 代理 skills 集合——覆盖工业上位机（视觉选型 / 报价 / 通讯 / 培训文档 / UI 设计稿与调试）与办公自动化（盖章 / PPT / docx / PDF / git 提交），兼容 OpenCode / DSH 的 skills 机制。**
 
-![Skills](https://img.shields.io/badge/skills-12-orange)
+![Skills](https://img.shields.io/badge/skills-14-orange)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue?logo=windows)
 ![Scripts](https://img.shields.io/badge/scripts-Python%20%7C%20PowerShell-informational)
 ![Client](https://img.shields.io/badge/OpenCode%2FDSH-%E5%85%BC%E5%AE%B9-success)
@@ -73,7 +73,7 @@ mklink /J "C:\Users\Administrator\.agents\skills" "C:\Users\Administrator\.confi
 | [readme](readme/) | `readme` | 项目 README 标准生成流程：事实摸底→图片盘点→截图决策树→骨架落稿→八项卫生核验，图文并茂为默认形态 | [SKILL.md](readme/SKILL.md) |
 | [viewturbo-checkin](viewturbo-checkin/) | `viewturbo-checkin` | ViewTurbo 每日签到领流量（真实账号文件永不入库，只提交 example 模板） | [SKILL.md](viewturbo-checkin/SKILL.md) |
 | [scanner-config](scanner-config/) | `scanner-config` | 扫码枪 Eport-E10 串口联网模块网络配置与排障：改 IP/8899 端口、连接超时/169.254.x.x 诊断、恢复出厂重建，附 ScannerTool.ps1 | [SKILL.md](scanner-config/SKILL.md) |
-| [ui-simplify](ui-simplify/) | `ui-simplify` | 上位机界面简化与目检标准：决策字段上界面/语境进 ToolTip/结果进提示条，界面改动后的截图目检收尾 | [SKILL.md](ui-simplify/SKILL.md) |
+| [ui-mockup-studio](ui-mockup-studio/) | `ui-mockup-studio` | UI 设计稿工作台 + 界面简化标准：基于 galaxy 组件库出 4-5 套可点击单文件 HTML 方案（主界面/子页/弹窗/跳转图/动效），内置 WinForms/WPF 双栈映射与信息预算 | [SKILL.md](ui-mockup-studio/SKILL.md) |
 
 > 各 skill 的版本与变化记录见其目录内的 `CHANGELOG.md`。
 
@@ -104,7 +104,7 @@ graph LR
         UR["用户级 ~/.agents/skills —— junction 指向本仓库"]
     end
     subgraph G3["本仓库（唯一真身）"]
-        SK["12 个入库 skill 目录：SKILL.md + 脚本 + CHANGELOG"]
+        SK["14 个入库 skill 目录：SKILL.md + 脚本 + CHANGELOG"]
     end
     OC --> PR
     DSH --> UR
@@ -130,7 +130,9 @@ MachineVisionSkill/
 ├── viewturbo-checkin/       # 签到脚本（模板入库、真账号忽略）
 ├── opencode-cache-cleaner/  # opencode 残留记录清理
 ├── winforms-ui-debug/       # UI 调试 harness 与取证脚本
+├── ui-mockup-studio/        # UI 设计稿工作台 + 界面简化标准（galaxy 组件库 + 双栈映射）
 ├── readme/                  # 本 skill：README 流程 + 两个核验脚本
+├── scanner-config/          # 扫码枪 E10 网络配置与排障（ScannerTool.ps1）
 ├── dashi-ppt/ 等 7 个目录    # 本地安装不入库（见上表），随 opencode 直接加载
 ├── README.md                # 本文件
 ├── CHANGELOG.md             # 全仓库变更总览（时间倒序，每条含 commit message 建议）
@@ -146,6 +148,6 @@ MachineVisionSkill/
 
 ## 仓库范围
 
-本仓库按白名单跟踪 skill 目录（见 `.gitignore`）：当前只跟踪 `视觉硬件选型`、`视觉选型测试`、`git自动提交推送`、`winforms-ui-debug`、`上位机通讯封装`、`上位机报价`、`opencode-cache-cleaner`、`盖章专员*`、`viewturbo-checkin`、`培训文档生成`、`软件卸载清理`、`readme`。新开发的 skill 需要入库时，在 `.gitignore` 加一行 `!目录名/` 并同步更新上表与根 `AGENTS.md` 放行清单。
+本仓库按白名单跟踪 skill 目录（见 `.gitignore`）：当前只跟踪 `视觉硬件选型`、`视觉选型测试`、`git自动提交推送`、`winforms-ui-debug`、`上位机通讯封装`、`上位机报价`、`opencode-cache-cleaner`、`盖章专员*`、`viewturbo-checkin`、`培训文档生成`、`软件卸载清理`、`readme`、`scanner-config`、`ui-mockup-studio`。新开发的 skill 需要入库时，在 `.gitignore` 加一行 `!目录名/` 并同步更新上表与根 `AGENTS.md` 放行清单；本机运行时缓存（如 `viewturbo-checkin/accounts.json`、`ui-mockup-studio/config.json`）单独忽略。
 
 > 上表其余 skill（`dashi-ppt`/`image-to-editable-ppt`/`PPT智能合并`/`docx中文转英文`/`solidworks-automation`/`pdf-analysis`/`pixel2motion`）是**本地安装、不入库**的第三方/自有 skill，保留在目录里供 opencode / DSH 直接引用。

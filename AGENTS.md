@@ -51,8 +51,11 @@
   （CHANGELOG.md 就踩过：创建后曾因未放行而不可见）。
 - 当前已放行的根文件：`README.md`、`CHANGELOG.md`；已放行的 skill 目录：
   视觉硬件选型 / 视觉选型测试 / git自动提交推送 / winforms-ui-debug / 上位机通讯封装 /
-  上位机报价 / opencode-cache-cleaner / 盖章专员 / viewturbo-checkin / 培训文档生成 / 软件卸载清理。
+  上位机报价 / opencode-cache-cleaner / 盖章专员 / viewturbo-checkin / 培训文档生成 /
+  软件卸载清理 / readme / scanner-config / ui-mockup-studio。
 - `盖章专员/**/*.png|jpg|jpeg|gif|bmp` 被忽略（防误传公司公章），新增同类图片注意。
+- 本机运行时缓存单独忽略：`viewturbo-checkin/accounts.json`（真实账号）、
+  `ui-mockup-studio/config.json`（galaxy 路径缓存，resolve_galaxy 自动生成）。
 
 ## 历史教训（每次提交前扫一眼）
 

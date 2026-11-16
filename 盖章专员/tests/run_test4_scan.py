@@ -9,12 +9,15 @@ v1.1.0 扫描件/图片盖章专项测试（一条命令出 PASS/FAIL，弱模�
   T4 图片输入指定 .pdf 输出：输出 PDF 且盖章页压平
   T5 扫描件 --dry-run：只分析不生成文件
   T6 图片输入时章确实落在"乙方（盖章）"行附近（渲染像素级校验，不漂移到默认右下角）
+  T7 字段行+日期落款区（v1.3.2）：策略3 盖"落款日期位"——章在日期行左侧空白、
+     不骑压"卖方开户行/账号"字段行文字（真实案例红框校准）
 
 用法：python run_test4_scan.py
 输出：系统临时目录 %TEMP%\\seal_test_out\\（每次运行前自动清旧输出）
 固件：同目录 fixtures/ 下（由 make_fixture.py 生成，首次运行自动触发）
 """
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -102,6 +105,7 @@ def main():
     make_fixture.make_text_pdf()
     photo_size = make_fixture.render_photo()
     make_fixture.make_scan_pdf()
+    make_fixture.make_fieldrow_pdf()
     print("  fixtures ready, photo=%dx%d" % photo_size)
 
     # ---- T1 ----
@@ -196,6 +200,29 @@ def main():
         check("T6 seal near 乙方 row", ratio_hit > 0.01, "red_ratio=%.4f" % ratio_hit)
         check("T6 not at default position", ratio_default < 0.005,
               "default_pos_red=%.4f" % ratio_default)
+
+    # ---- T7 ----
+    print("\n" + "=" * 60)
+    print("[T7] Field-row + date blank landing (strategy3 v1.3.2)")
+    print("=" * 60)
+    out7 = os.path.join(OUT_DIR, "t7_fieldrow_stamped.pdf")
+    rc, log = run_stamper(make_fixture.FIELDROW_PDF, None, out7, "--company",
+                          "上海示例精密仪器有限公司")
+    check("T7 script OK", rc == 0)
+    check("T7 date_blank strategy", "策略：落款日期位" in log)
+    m = re.search(r"目标中心:\s*\(([\d.]+),\s*([\d.]+)\)", log)
+    if m:
+        cx, cy = float(m.group(1)), float(m.group(2))
+        check("T7 center at date row left", cx < 595 / 3 and 545 < cy < 575,
+              "(%.0f, %.0f)" % (cx, cy))
+        check("T7 not over account text", cx + 62.5 < 300,
+              "right edge=%.0f" % (cx + 62.5))
+    else:
+        check("T7 center parsed", False, "no 目标中心 in log")
+    if os.path.exists(out7):
+        ok, detail = stamped_page_images_ok(out7)
+        check("T7 flatten防编辑", ok, detail)
+        check("T7 text searchable", text_searchable(out7, "卖方"))
 
     # ---- Summary ----
     print("\n" + "=" * 60)

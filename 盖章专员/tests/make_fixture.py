@@ -16,6 +16,8 @@ FIXTURES = os.path.join(HERE, "fixtures")
 TEXT_PDF = os.path.join(FIXTURES, "text_contract.pdf")
 PHOTO_PNG = os.path.join(FIXTURES, "contract_photo.png")
 SCAN_PDF = os.path.join(FIXTURES, "scan_contract.pdf")
+# v1.3.2：无盖章栏 + "卖方开户行/日期"落款区（策略3 落款日期位回归用）
+FIELDROW_PDF = os.path.join(FIXTURES, "fieldrow_contract.pdf")
 
 RENDER_DPI = 200  # 模拟拍照/扫描分辨率
 
@@ -65,8 +67,36 @@ def make_scan_pdf():
     doc.close()
 
 
+def make_fieldrow_pdf():
+    """v1.3.2 固件：无"（盖章）"栏，只有"卖方开户行"字段行 + 紧邻"日期："行，
+    日期行以下是空白落款区——策略3 应盖"落款日期位"（日期行左侧空白），
+    不得骑压"账号/行号"字段行（真实案例：苏州恒楷盛增补合同，用户红框校准）。"""
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=842)
+    lines = [
+        (80, "销 售 合 同", 18),
+        (130, "买方名称：苏州恒楷盛智能自动化科技有限公司", 11),
+        (160, "卖方名称：上海示例精密仪器有限公司", 11),
+        (220, "一、产品名称、规格及数量：光学镜片 100 片。", 11),
+        (250, "二、价格：人民币伍万元整。", 11),
+        (280, "三、交付：合同签订后 30 日内交付。", 11),
+        (310, "四、验收：货到买方现场当场确认数量、尺寸、品质。", 11),
+        (520, "卖方开户行：农业银行昆山市石牌支行  账号：10530501040027498  "
+              "行号：103305255916", 11),
+        (560, "日期：", 11),
+    ]
+    for y, text, size in lines:
+        page.insert_text(fitz.Point(56, y), text, fontsize=size,
+                         fontname="china-s")
+    os.makedirs(FIXTURES, exist_ok=True)
+    doc.save(FIELDROW_PDF)
+    doc.close()
+
+
 if __name__ == "__main__":
     make_text_pdf()
     size = render_photo()
     make_scan_pdf()
-    print(f"固件生成完成：\n  {TEXT_PDF}\n  {PHOTO_PNG} ({size[0]}x{size[1]})\n  {SCAN_PDF}")
+    make_fieldrow_pdf()
+    print(f"固件生成完成：\n  {TEXT_PDF}\n  {PHOTO_PNG} ({size[0]}x{size[1]})\n"
+          f"  {SCAN_PDF}\n  {FIELDROW_PDF}")

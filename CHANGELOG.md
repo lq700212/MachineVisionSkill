@@ -3,6 +3,63 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-16（本次·ui-mockup-studio 入库并删除 ui-simplify；盖章专员 v1.3.2 落款日期位）
+
+### 改动范围
+
+1. **ui-mockup-studio**（新入库 v1.0.0 → v1.1.0，2026-11-16 当天两版）：
+   UI 设计稿工作台 + 界面简化标准（WinForms / WPF 双栈）。核心是"想清楚 → 出几版稿 →
+   落成代码"一条链，模式 A 出稿（4-5 套方案 × 明暗 × 全部页面/弹窗/状态，单文件 HTML
+   可离线打开，按钮可点、弹窗可开、页面可跳转，自动生成跳转关系图与动效）/ 模式 B
+   简化现有界面 / 模式 C 先减法再出稿。
+   - `SKILL.md`：模式 A/B/C 判定表、8 条铁律、步骤 2.5 信息架构减法、步骤 3.5 定目标栈、
+     信息预算硬指标（一屏主操作 1 个、按钮 ≤10 硬限 12、开关 ≤3 硬限 5…）、炫点配额。
+   - `references/`：`design-playbook.md`（干净整洁 8 硬指标）、`galaxy-map.md`（11 分类 +
+     CSS → WPF/WinForms 两套属性对照与可复制 XAML/自绘控件）、`mockup-spec.md`（data-*
+     全表 17 个 + 可直接粘片段）、`simplify-playbook.md`（原 ui-simplify 完整并入 + 信息
+     预算/合并五判定/易上手 3 秒测试/WinForms 坑位 10 条）。
+   - `scripts/`：`resolve_galaxy.py`（定位/克隆 galaxy 并写缓存）、`galaxy_search.py`
+     （分类/检索/看源码）、`new_mockup.py`（生成到项目 Docs/，`--stack` 定栈）、
+     `check_mockup.py`（25 项核验，C17/C18 双栈映射卡、W5~W8 预算类）。
+   - `templates/mockup_base.html`：工作台模板——5 套方案 × 明暗（DOM 只写一次）、
+     4 视图（舞台/总览/跳转图/规范）、3 示例页 + 3 弹窗、URL 直达。
+   - `config.json`（galaxy 本机路径缓存）不入库，`.gitignore` 单独忽略。
+2. **ui-simplify 目录整体删除**（2 文件）：简化标准内容已并入
+   `ui-mockup-studio/references/simplify-playbook.md`，调用统一走 `ui-mockup-studio`
+   （避免"简化"与"出稿"两套口径各自漂移）；`.gitignore` 中原 `!ui-simplify/`
+   放行改为 `!ui-mockup-studio/`。
+3. **盖章专员**（v1.3.2）：策略3 新增"落款日期位"——字段行（"卖方开户行：…账号…
+   行号…"）下方 5% 页高内紧邻"日期："行、且日期行以下本页无其他文本行时，章中心 =
+   (字段行左缘 + 0.6 章宽, 日期行中心)，即盖在落款日期行左侧空白，不再骑压账号/行号
+   字段文字（苏州恒楷盛增补合同用户红框实测校准，连指三次）；日期行以下仍有正文则
+   诚实降级回"字段行尾段骑压"。同步 SKILL.md 决策表（新策略名 + 原策略说明收紧）、
+   AGENTS.md 架构图/策略3 语义表/事故档案；新增 T7 固件 `tests/fixtures/
+   fieldrow_contract.pdf`（make_fixture 可重建）与 6 项断言，run_test4 基线 24→30。
+4. **根文件**：`.gitignore` 白名单族谱与放行行同步（`!ui-mockup-studio/`，移除
+   `!ui-simplify/`；新增 `ui-mockup-studio/config.json` 忽略）；README 徽章 skills-12→14、
+   "Skill 一览"ui-simplify 行换 ui-mockup-studio、mermaid 与仓库范围节同步 14 个、
+   目录树补 `ui-mockup-studio/` 与 `scanner-config/`；AGENTS.md 白名单清单补
+   readme / scanner-config / ui-mockup-studio 与运行时缓存忽略说明。
+
+### 验证
+
+- **盖章专员**：`tests/run_test4_scan.py` 本机重跑 **30/30 PASS**（T7 六项全绿：
+  策略命中、目标中心 (131, 557) 在日期行左侧、右缘 194 不越账号段、压平单张整页位图、
+  文字仍可搜）。
+- **ui-mockup-studio**：`new_mockup.py` 生成到临时目录 → `check_mockup.py`
+  **PASS 25 / FAIL 0 / WARN 0**（v1.1.0 的 C17/C18 双栈映射卡与 W5~W8 预算项均通过）；
+  直接对模板文件跑 check 会因模板占位符 `{{DATE}}` 等报 C15 FAIL，属预期（模板须经
+  new_mockup.py 替换后再核验）。
+- **白名单**：`git status` 已能看到 `ui-mockup-studio/` 全部内容，`config.json`
+  仍未出现在待提交清单（忽略生效）。
+- 提交前 `precommit_check.py` 全项通过（无凭据/无禁入文件/UTF-8 正常）。
+
+### 建议 commit message
+
+```
+feat(ui-mockup-studio): v1.1.0 UI设计稿工作台入库（galaxy出稿+WinForms/WPF双栈映射+信息预算；并入ui-simplify并删其目录）；feat(盖章专员): v1.3.2 策略3落款日期位（字段行下日期空白盖章，T7夹具锁死30项回归）；chore: 白名单/README/AGENTS同步14个入库skill
+```
+
 ## 2026-11-10（本次·新 skill 入库：scanner-config + ui-simplify；winforms-ui-debug 血泪59）
 
 ### 改动范围

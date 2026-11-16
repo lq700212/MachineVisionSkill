@@ -1,6 +1,6 @@
 # ============================================================
 # 仓库白名单：只跟踪指定 skill 目录，其余全部忽略
-# （视觉硬件选型 / 视觉选型测试 / git自动提交推送 / 盖章专员 / winforms-ui-debug / 上位机通讯封装 / 上位机报价 / opencode-cache-cleaner / viewturbo-checkin / 培训文档生成 / 软件卸载清理 / readme / scanner-config / ui-simplify）
+# （视觉硬件选型 / 视觉选型测试 / git自动提交推送 / 盖章专员 / winforms-ui-debug / 上位机通讯封装 / 上位机报价 / opencode-cache-cleaner / viewturbo-checkin / 培训文档生成 / 软件卸载清理 / readme / scanner-config / ui-mockup-studio）
 # ============================================================
 /*
 
@@ -39,10 +39,13 @@ preview_check/
 !软件卸载清理/
 !readme/
 !scanner-config/
-!ui-simplify/
+!ui-mockup-studio/
 
 # ── viewturbo-checkin：真实账号文件永不入库（只提交 accounts.json.example 模板）──
 viewturbo-checkin/accounts.json
+
+# ── ui-mockup-studio：本机 galaxy 组件库路径缓存（resolve_galaxy 自动生成，不入库）──
+ui-mockup-studio/config.json
 
 # ── 盖章专员目录：忽略所有图片（防止误上传公司公章）──
 盖章专员/**/*.png

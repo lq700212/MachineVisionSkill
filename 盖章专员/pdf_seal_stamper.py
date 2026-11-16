@@ -908,6 +908,13 @@ def _find_role_line_blocks(pdf_path, role, company):
                 else:
                     rows.append({'top': w['top'], 'bottom': w['bottom'],
                                  'words': [w]})
+            # 本页"日期"行（落款要素）：供字段行落款空白位判断
+            date_rows = []
+            for r0 in rows:
+                t0 = "".join(w['text'] for w in
+                             sorted(r0['words'], key=lambda w: w['x0']))
+                if '日期' in t0:
+                    date_rows.append((r0, t0))
             for row in rows:
                 row['words'].sort(key=lambda w: w['x0'])
                 text = "".join(w['text'] for w in row['words'])
@@ -939,6 +946,41 @@ def _find_role_line_blocks(pdf_path, role, company):
                 x1 = max(w['x1'] for w in sel)
                 y0 = min(w['top'] for w in sel)
                 y1 = max(w['bottom'] for w in sel)
+                # v1.3.2 落款空白位（用户红框实测校准 2026-11-12）：字段行下方
+                # 紧邻"日期"行、且日期行以下是空白落款区时，章盖在**落款处左侧
+                # 空白**（章压"日期"行），不骑压字段行文字——字段行常含
+                # "账号/行号"等关键信息，骑压会把账号遮住；用户明确要求章盖在
+                # "日期"那一带空白（红框示意），不是字段行右端。
+                # 位置：center_x = 字段行左缘 + 0.6 章宽（章左缘缩进约 0.1 章宽，
+                # 与用户红框中心实测一致）；center_y = 日期行中心。
+                # 日期行下方仍有正文 → 不判定为落款空白，退回行尾骑压（诚实降级）。
+                if field_row:
+                    date_row = next(
+                        (r0 for r0, _t0 in date_rows
+                         if row['bottom'] - 2 <= r0['top']
+                         <= row['bottom'] + page.height * 0.05), None)
+                    if date_row is not None and not any(
+                            r0['top'] > date_row['bottom'] + 2 for r0 in rows):
+                        half = SEAL_DEFAULT_SIZE / 2
+                        cx = x0 + SEAL_DEFAULT_SIZE * 0.6
+                        cx = min(max(cx, half + 8), page.width - half - 8)
+                        cy = (date_row['top'] + date_row['bottom']) / 2
+                        blocks_out.append({
+                            'page': page_idx + 1,
+                            'x0': cx - half, 'y0': cy - half,
+                            'x1': cx + half, 'y1': cy + half,
+                            'center_x': cx, 'center_y': cy,
+                            'width': SEAL_DEFAULT_SIZE,
+                            'height': SEAL_DEFAULT_SIZE,
+                            'side': 'left' if cx < page.width / 2 else 'right',
+                            'page_width': page.width,
+                            'page_height': page.height,
+                            'keywords_found': [text],
+                            'kw_words': [],
+                            '_has_role': True,
+                            '_landing': 'date_blank',
+                        })
+                        continue
                 # 字段行/宽行骑压取"行尾段"（右缘=行尾，宽≤一章宽）：章骑行尾
                 # 是真实盖章习惯，且避开行首字段标签、下一行"日期："等签署文字
                 # （本单实测：骑整行中心会压住"账号"数字段+"日期："，用户认可
@@ -1074,6 +1116,8 @@ def find_role_stamp_block(pdf_path, role, company=None):
             same_page = [b for b in cands if b['page'] == max_page]
             # 取最靠下（越靠下越接近签署区："卖方名称"行 < "卖方开户行"行）
             best = max(same_page, key=lambda b: b['center_y'])
+            if best.get('_landing') == 'date_blank':
+                return best, "落款日期位(无该角色盖章栏,章盖日期行,建议人工确认)"
             return best, "公司名同行(无该角色盖章栏,建议人工确认)"
 
     return None, None
@@ -2038,7 +2082,7 @@ def process_seal(pdf_path, seal_image_path, output_path=None,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='公章添加工具 v1.3.0 — 支持文本版PDF/扫描件PDF/图片/Excel，智能定位 + 防编辑压平',
+        description='公章添加工具 v1.3.2 — 支持文本版PDF/扫描件PDF/图片/Excel，智能定位 + 防编辑压平',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:

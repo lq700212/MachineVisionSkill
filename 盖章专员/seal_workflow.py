@@ -592,7 +592,7 @@ def main(argv=None):
     if out_ext != ".pdf":
         print("  图片输出：章已融入图片像素，任何编辑软件都无法单独移除")
     if sig.get("need_human"):
-        print("  ⚠️  本单含「建议人工确认」（无该角色盖章栏，章盖公司名旁）"
+        print("  ⚠️  本单含「建议人工确认」（无该角色盖章栏，章盖落款签署区）"
               "：交付必须附带确认提醒")
     if os.path.abspath(seal) == os.path.abspath(DEFAULT_SEAL):
         print("  ⚠️  本次用默认样章：正式版请提供贵公司真实公章图片重出")
