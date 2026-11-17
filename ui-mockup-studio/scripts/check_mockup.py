@@ -29,6 +29,10 @@ check_mockup.py —— UI 设计稿 HTML 的交付前核验（结构 + 完整性
   C16 弹窗 data-parent 指向存在的页面
   C17 data-stack 为 winforms / wpf（目标技术栈）
   C18 WinForms 与 WPF 两套落地映射卡都存在
+  C19 卡片三段结构（.card-h / 卡身 / .card-f）在卡片式页面里真实使用
+  C20 规范视图有「卡片规范」整章（解剖 + 参数表 + 状态矩阵 + 语言库）
+  C21 卡片职责变体数 >= --min-card-variants（默认 6 种）
+  C22 内容区（.page / .sp-grid）显式声明 color:var(--fg)（防浅色方案白字白底）
   W1  页面缺 data-desc（右栏说明会空）
   W2  页面缺 data-galaxy（无法追溯 galaxy 参考来源）
   W3  页面声明了多状态但找不到对应 .state-block
@@ -42,6 +46,7 @@ check_mockup.py —— UI 设计稿 HTML 的交付前核验（结构 + 完整性
 ----
     python check_mockup.py Docs/ui_design_mockups.html
     python check_mockup.py Docs/ui_design_mockups.html --min-pages 8 --min-dialogs 5
+    python check_mockup.py templates/mockup_base.html --allow-placeholders   # 核验模板自身
     python check_mockup.py Docs/ui_design_mockups.html --json
 
 退出码：0 = 全 PASS（WARN 不影响）；1 = 有 FAIL 或文件读不了。
@@ -82,6 +87,10 @@ def main():
     ap.add_argument("--min-pages", type=int, default=1, help="最少页面数（默认 1）")
     ap.add_argument("--min-dialogs", type=int, default=0, help="最少弹窗数（默认 0）")
     ap.add_argument("--min-variants", type=int, default=4, help="最少设计方案数（默认 4）")
+    ap.add_argument("--min-card-variants", type=int, default=6,
+                    help="卡片式页面最少职责变体数（默认 6；非卡片页不检查）")
+    ap.add_argument("--allow-placeholders", action="store_true",
+                    help="允许 {{XXX}} 占位符（核验模板 mockup_base.html 时用）")
     ap.add_argument("--json", action="store_true", help="输出 JSON")
     args = ap.parse_args()
 
@@ -233,8 +242,13 @@ def main():
         ok("C14", "无外链资源，单文件离线可打开")
 
     # ---------- C15 占位符 ----------
+    # 模板 mockup_base.html 故意留 {{PROJECT}} 等占位符给生成脚本替换，
+    # 核验模板时用 --allow-placeholders 豁免；成品稿绝不允许残留。
     left = re.findall(r"\{\{[A-Z_]+\}\}", text)
-    if left:
+    if left and args.allow_placeholders:
+        ok("C15", "占位符 %d 类（模板模式，生成时会替换）：%s"
+                  % (len(set(left)), "、".join(sorted(set(left)))))
+    elif left:
         fail("C15", "占位符未替换：%s" % "、".join(sorted(set(left))))
     else:
         ok("C15", "无未替换占位符")
@@ -263,6 +277,94 @@ def main():
         fail("C18", "缺少落地映射卡：" + "、".join(miss_map) + "（WinForms 与 WPF 两套必须同时内置）")
     else:
         ok("C18", "WinForms / WPF 两套落地映射卡都存在")
+
+    # ---------- C19 / C20 / C21 卡片体系（卡片式页面的硬要求） ----------
+    # 判定"是卡片式页面"：真实 DOM 里 class 含独立 card 的元素 >= 6 个。
+    # 正则用前后负向断言排除 card-h / card-f / card-body / cs-card 这类复合词。
+    card_re = re.compile(r'class="[^"]*(?<![\w-])card(?![\w-])[^"]*"')
+    n_card = len(card_re.findall(dom))
+    card_page = n_card >= 6
+
+    if not card_page:
+        ok("C19", "卡片少于 6 张（%d），按组件页处理，不检查卡片体系" % n_card)
+        ok("C20", "非卡片式页面，不要求卡片规范章节")
+        ok("C21", "非卡片式页面，不要求职责变体")
+    else:
+        # C19 三段结构：CSS 定义 + 真实使用
+        css_h = re.search(r"\.card-h\s*\{", text) is not None
+        css_f = re.search(r"\.card-f\s*\{", text) is not None
+        n_h = len(re.findall(r'class="[^"]*\bcard-h\b', dom))
+        n_f = len(re.findall(r'class="[^"]*\bcard-f\b', dom))
+        if css_h and css_f and n_h >= 2 and n_f >= 1:
+            ok("C19", "卡片三段结构齐全（.card-h 用了 %d 处 / .card-f %d 处）" % (n_h, n_f))
+        else:
+            lack = []
+            if not css_h:
+                lack.append("缺 .card-h 样式")
+            if not css_f:
+                lack.append("缺 .card-f 样式")
+            if n_h < 2:
+                lack.append("卡头只用了 %d 处" % n_h)
+            if n_f < 1:
+                lack.append("没有任何卡脚")
+            fail("C19", "卡片只有一层壳，缺三段结构（%s）。"
+                        "卡头/卡身/卡脚是卡片体系的地基，先补齐再写页面。" % "；".join(lack))
+
+        # C20 规范视图必须有整章卡片规范
+        spec_need = {
+            "章节标题「卡片规范」": "卡片规范" in text,
+            "参数表 #cardParamList": 'id="cardParamList"' in text,
+            "状态矩阵 .cs-state-grid": "cs-state-grid" in text,
+            "语言库 .cs-sample-grid": "cs-sample-grid" in text,
+        }
+        miss_spec = [k for k, v in spec_need.items() if not v]
+        if miss_spec:
+            fail("C20", "规范视图缺卡片规范章节：%s。"
+                        "卡片必须单独成一章（解剖 + 参数 + 状态 + 按职责的变体库），"
+                        "不能只在 CSS 里写一句 .card。" % "、".join(miss_spec))
+        else:
+            ok("C20", "规范视图含卡片规范整章（解剖 + 参数 + 状态矩阵 + 语言库）")
+
+        # C21 职责变体数（按职责而不是按喜好）
+        duty = {
+            "容器 .card": r'class="[^"]*(?<![\w-])card(?![\w-])[^"]*"',
+            "指标 .card.hero / .kpi": r'class="[^"]*(?:\bhero\b|\bkpi\b)[^"]*"',
+            "列表 .rows": r'class="[^"]*\brows\b[^"]*"',
+            "告警 .card.rail.ng / .card.alert": r'class="[^"]*(?:\brail\b|\balert\b)[^"]*"',
+            "顶线 .card.top": r'class="[^"]*\btop\b[^"]*"',
+            "内嵌 .card.inset": r'class="[^"]*\binset\b[^"]*"',
+            "瓦片 .tile / .wcell": r'class="[^"]*\b(?:tile|wcell)\b[^"]*"',
+            "折叠 .card.fold": r'class="[^"]*\bfold\b[^"]*"',
+            "玻璃 .card.glass": r'class="[^"]*\bglass\b[^"]*"',
+        }
+        found = [k for k, pat in duty.items() if re.search(pat, dom)]
+        if len(found) >= args.min_card_variants:
+            ok("C21", "卡片职责变体 %d 种（要求 >= %d）：%s"
+                      % (len(found), args.min_card_variants, "、".join(found)))
+        else:
+            fail("C21", "卡片职责变体只有 %d 种（%s），要求 >= %d 种。"
+                        "卡片要按职责选变体（容器/指标/列表/告警/顶线/内嵌/瓦片/折叠/玻璃），"
+                        "不能全站一张样式到处套。" % (len(found), "、".join(found), args.min_card_variants))
+
+    # ---------- C22 内容区必须自己声明文字色 ----------
+    # 工作台外壳（body）是固定中性深色，文字色往往写死浅色给外壳用。
+    # 页面/规范内容若只靠继承，切到浅色方案就是"白底浅字"，几乎看不见
+    # （AgingTestSystem 实锤：语言库标题/大数字全成了 #dbe4f0）。
+    def _rule_bodies(sel):
+        return [m.group(1) for m in re.finditer(re.escape(sel) + r"\s*\{([^}]*)\}", text)]
+
+    def _has_fg(sel):
+        return any("color:var(--fg)" in re.sub(r"\s+", "", b) for b in _rule_bodies(sel))
+
+    body_fixed = re.search(r"body\s*\{[^}]*color:\s*(?:#[0-9a-fA-F]{3,8}|rgb)", text) is not None
+    miss_fg = [s for s in (".page", ".sp-grid") if not _has_fg(s)]
+    if not body_fixed:
+        ok("C22", "body 未写死文字色，内容继承安全")
+    elif miss_fg:
+        fail("C22", "内容区没声明文字色：%s。body 写死了外壳文字色，页面只靠继承的话，"
+                    "切到浅色方案会变成白底浅字。给这些规则体加 color:var(--fg)。" % "、".join(miss_fg))
+    else:
+        ok("C22", "页面与规范区都显式声明 color:var(--fg)，浅色方案不会白字白底")
 
     # ---------- W1 / W2 / W3 ----------
     no_desc = [p.get("data-page", "?") for p in pages if not p.get("data-desc")]

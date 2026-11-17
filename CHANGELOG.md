@@ -3,6 +3,40 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-17（本次·ui-mockup-studio v1.2.0 卡片体系）
+
+### 改动范围
+
+1. **ui-mockup-studio**（v1.1.0 → v1.2.0）：卡片体系重构（AgingTestSystem 真实设计稿回刷）。
+   - `templates/mockup_base.html`：`.card` 升级三段结构（`.card-h` / 卡身 / `.card-f`，
+     卡头卡脚 `flex:0 0 auto` 不被压缩）+ `.card-h.band` 通栏卡头（避开项目 `.bar`
+     进度条同名塌陷）+ 卡片 Token 族（`--card-r/-pad/-gap/-line/-hi/-lift/-hover-border/-well`，
+     五方案只覆盖质感 Token）+ 9 种职责变体（容器/指标/列表/告警/顶线/内嵌/瓦片/折叠/玻璃，
+     `.card.focus`/`.card.alert` 旧名兼容）+ 规范视图新增「卡片规范」整章（解剖 + 参数表 +
+     六态矩阵 + 语言库）+ `.rows .r` 行高 30px、水平内边距 = `--card-pad` 对齐卡头卡脚 +
+     `.page`/`.sp-grid`/`.dlg` 显式 `color:var(--fg)` 修浅色白字白底。
+   - `scripts/check_mockup.py`：25 → **29 项**（C19 三段结构 / C20 卡片规范章节 /
+     C21 职责变体数默认 6，仅卡片 ≥6 张触发 / C22 内容区文字色），新增
+     `--min-card-variants` 与 `--allow-placeholders`（模板自身核验用）。
+   - `references/design-playbook.md`：新增第三节「卡片设计原则」（三段结构、按职责选变体、
+     一卡一个语义色、层次靠底色差与 1px 描边、状态六态、规范独立成章），后续章节顺延。
+   - `SKILL.md`：新增铁律 4「卡片式页面必须交付卡片规范整章」（原 4~13 顺延）、
+     步骤 7.5「真实渲染五坑」、步骤 7.6「卡片体系」，版本 V1.2.0。
+
+### 验证
+
+- `new_mockup.py` 生成到临时目录 → `check_mockup.py` **PASS 29 / FAIL 0**；
+  模板自身 `--allow-placeholders` 核验通过。
+- AgingTestSystem 真实交付稿按新规则回刷（卡片三段、浅色文字色、跳转图弹窗紧跟父页）
+  并截图目检通过。
+- 提交前 `precommit_check.py` 全项通过（无凭据/无禁入文件/UTF-8 正常）。
+
+### 建议 commit message
+
+```
+feat(ui-mockup-studio): v1.2.0 卡片体系（三段结构+卡片Token+9职责变体+规范整章；check扩至29项含C19~C22；design-playbook新增卡片设计原则；SKILL补真实渲染五坑）
+```
+
 ## 2026-11-16（本次·ui-mockup-studio 入库并删除 ui-simplify；盖章专员 v1.3.2 落款日期位）
 
 ### 改动范围

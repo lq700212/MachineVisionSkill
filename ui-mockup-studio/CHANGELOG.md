@@ -2,6 +2,50 @@
 
 `ui-mockup-studio` skill 的所有版本变动统一记录在此。格式参考 Keep a Changelog。
 
+## [1.2.0] - 2026-11-17
+
+### 新增
+
+- **卡片体系（模板内置，卡片式页面唯一写法）**：`.card` 升级为**三段结构**——
+  `.card-h` 卡头（图标 + 标题 + 状态）、卡身（直接写内容，不再多包一层）、
+  `.card-f` 卡脚（负 margin 通栏贴底，只放动作与汇总）；卡头/卡脚 `flex:0 0 auto`，
+  内容再多也不被压扁。新增 `.card-h.band` 通栏卡头（分区卡用，**不叫 `.bar`**，
+  避免与项目里 `height:6px` 的进度条同名塌成一条缝）。
+- **卡片 Token 族**：`--card-r / --card-pad / --card-gap / --card-line / --card-hi /
+  --card-lift / --card-hover-border / --card-well`，五套方案的气质差异只覆盖这几个，
+  卡片结构与间距规则一条不动；浅色方案 `--card-line` 单独加深（白卡漂白底上要能看见边）。
+- **按职责的 9 种卡片变体**：容器 `.card`、指标 `.card.hero` / `.kpi`、列表
+  `.card.pad0 + .card-h.band + .rows`、告警 `.card.rail.ng`、顶线 `.card.top`、
+  内嵌 `.card.inset`、瓦片 `.tiles/.tile`、折叠 `.card.fold`、玻璃 `.card.glass`；
+  `.card.focus` / `.card.alert` 保留为旧名兼容。同页最多同时出现 3 种卡片语言。
+- **规范视图新增「卡片规范」整章**：解剖（真实 DOM）+ 参数表（实时读 Token）+
+  六态状态矩阵（默认/悬停/选中/告警/焦点/禁用）+ 按职责的变体语言库。
+- **`check_mockup.py` 扩到 29 项**：C19 卡片三段结构、C20 卡片规范章节、C21 职责变体数
+  （`--min-card-variants`，默认 6，仅卡片 ≥6 张的稿件触发）、C22 内容区
+  `.page`/`.sp-grid` 必须显式 `color:var(--fg)`（防浅色方案白字白底）；
+  新增 `--allow-placeholders` 用于核验模板自身。
+- **`references/design-playbook.md` 新增第三节「卡片设计原则」**：三段结构、按职责选变体、
+  一卡一个语义色、层次靠底色差与 1px 描边、状态六态、卡片规范独立成章；
+  后续章节编号顺延（页面骨架→四、方案原理→五、动效→六、破相清单→七、落地→八）。
+- **SKILL.md 新增**：铁律 4「卡片式页面必须交付卡片规范整章」（原 4~13 顺延为 5~14）、
+  步骤 7.5「真实渲染五坑」（flex 容器 `.tin{flex:1}` 拉空白、`grid-auto-rows` 铺不满、
+  跳转图弹窗必须紧跟父页 + 直角总线、文案按真实业务模型、内容区继承 body 文字色致
+  浅色白字白底）、步骤 7.6「卡片体系」（三段结构 + 8 种职责变体 + 六态）。
+
+### 修复
+
+- **列表卡行对齐**：`.rows .r` 行高统一 30px、水平内边距 = `--card-pad`，
+  与卡头/卡脚同一左缘（原 `padding:8px 2px` 会让整列文字内收一截）。
+- **浅色方案白字白底**：模板 `.page` / `.sp-grid` / `.dlg` 显式声明 `color:var(--fg)`，
+  不再继承工作台外壳写死的 `#dbe4f0`（AgingTestSystem 实锤，深色下肉眼看不出来）。
+
+### 验证
+
+- `new_mockup.py` 生成到临时目录 → `check_mockup.py` 29 项全 PASS；
+  模板自身用 `--allow-placeholders` 核验通过（C15 占位符豁免）。
+- AgingTestSystem 真实交付稿回刷：卡片三段结构、浅色方案文字色、跳转图弹窗位置均已按
+  本节规则修正后截图目检通过。
+
 ## [1.1.0] - 2026-11-16
 
 ### 新增

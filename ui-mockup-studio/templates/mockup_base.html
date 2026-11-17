@@ -63,6 +63,11 @@ html[data-scheme="dark"]{
   --okglow:0 0 14px rgba(16,185,129,.5);--warnglow:0 0 12px rgba(245,158,11,.45);
   --ngglow:0 0 12px rgba(239,68,68,.4);
   --oncolor:#fff;--tippanel:#1a2331;
+  /* 卡片：深色下靠"顶缘 1px 高光 + 极淡浮起阴影"建立层次，不用重投影 */
+  --card-hi:rgba(255,255,255,.055);--card-lift:0 10px 26px rgba(0,0,0,.42);
+  --card-hover-border:#31456b;--card-well:#0c1524;
+  --glass-bg:rgba(16,26,46,.78);--glass-line:rgba(34,49,79,.7);
+  --card-line:#26364f;
 }
 html[data-scheme="light"]{
   --bg:#f6f7fb;--panel:#ffffff;--panel2:#fafbff;--bar:#ffffff;
@@ -74,6 +79,17 @@ html[data-scheme="light"]{
   --okdim:#e6f7ef;--warndim:#fdf3e2;--ngdim:#fdeeee;
   --okglow:none;--warnglow:none;--ngglow:none;
   --oncolor:#fff;--tippanel:#ffffff;
+  --card-hi:rgba(255,255,255,.95);--card-lift:0 10px 24px rgba(60,72,110,.13);
+  --card-hover-border:#c9d3e6;--card-well:#f7f9fd;
+  --glass-bg:rgba(255,255,255,.82);--glass-line:rgba(227,230,239,.8);
+  /* 浅色下 1px 边框必须比 --border 深半档才看得出"卡片有边"，否则白卡漂在白底上 */
+  --card-line:#dbe0ea;
+}
+/* 卡片派生尺寸：只依赖 --radius/--pad/--gap，换方案自动跟。
+   卡内嵌套一律用 --card-r-sm（小 4px），避免"同心圆角曲率不合"的脏边观感。 */
+html{
+  --card-r:var(--radius);--card-pad:var(--pad);--card-gap:var(--gap);
+  --card-r-sm:calc(var(--radius) - 4px);
 }
 
 /* —— A 深夜中控：工业蓝 + 紧凑 + 小圆角 —— */
@@ -130,6 +146,20 @@ html[data-variant="d"][data-scheme="dark"]{--bg:#0c121a;--panel:#121a24;--panel2
 html[data-variant="d"][data-scheme="light"]{--bg:#f4f6f9;--panel:#ffffff;--border:#dfe4ec}
 html[data-variant="e"][data-scheme="dark"]{--bg:#05080d;--panel:#0a1119;--panel2:#0f1822;--bar:#070c12;--border:#16303a}
 html[data-variant="e"][data-scheme="light"]{--bg:#f5fbfc;--panel:#ffffff;--border:#d9e9ee}
+
+/* —— 五套方案的卡片质感微差（同一套卡片规则，换方案换气质）——
+   A 描边 + 顶缘高光（默认，工业仪表）；B 无高光 + 极淡投影（纸面极简）；
+   C 柔和投影更大（圆润）；D 无高光无投影（密度优先、接近表格）；
+   E 青色高光 + 发光（霓虹）。只覆盖 Token，卡片的结构/间距/语义规则不变 ——
+   换方案时页面"长得更不一样"，但评审看到的仍是同一套工程约定。 */
+html[data-variant="b"][data-scheme="dark"]{--card-hi:transparent;--card-lift:none;--card-hover-border:#2c3646}
+html[data-variant="b"][data-scheme="light"]{--card-hi:transparent;--card-lift:0 1px 2px rgba(60,72,110,.05);--card-hover-border:#d8dce6}
+html[data-variant="c"][data-scheme="dark"]{--card-hi:rgba(255,255,255,.07);--card-lift:0 16px 36px rgba(0,0,0,.5)}
+html[data-variant="c"][data-scheme="light"]{--card-hi:rgba(255,255,255,.95);--card-lift:0 16px 34px rgba(80,80,150,.16)}
+html[data-variant="d"][data-scheme="dark"]{--card-hi:transparent;--card-lift:none;--card-hover-border:#26374a}
+html[data-variant="d"][data-scheme="light"]{--card-hi:transparent;--card-lift:none;--card-hover-border:#cfd6e2}
+html[data-variant="e"][data-scheme="dark"]{--card-hi:rgba(34,211,238,.14);--card-lift:0 0 24px rgba(34,211,238,.12)}
+html[data-variant="e"][data-scheme="light"]{--card-hi:rgba(255,255,255,.95);--card-lift:0 10px 24px rgba(34,150,166,.14)}
 
 /* ==========================================================================
    2. 外壳布局：顶栏 / 左栏导航 / 舞台 / 右栏说明
@@ -340,11 +370,134 @@ html[data-motion="off"] .page.active{animation:none}
 .st.info{background:var(--primarydim);color:var(--primary)}
 .st.plain{background:var(--rowalt);color:var(--muted)}
 
-/* —— 卡片 / 磁贴 —— */
-.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--pad)}
-.card-h{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.card-h b{font-size:12.5px;font-weight:700}
+/* —— 卡片 / 磁贴 ——
+   卡片是容器不是装饰：层次 = 底色差 + 1px 描边 + 顶缘 1px 高光；重阴影只留给浮层弹窗。
+   三段结构：.card-h 头部 / 卡身（直接写内容）/ .card-f 卡脚（负 margin 通栏贴底）。
+   一张卡只允许出现一个语义色（左缘告警条、关键数字、徽标三者只选一），否则页面必花。
+   卡套卡一律降级为 .card.inset（浅底分区、去掉描边），禁止双描边 + 双圆角叠在一起。 */
+.card{
+  position:relative;background:var(--panel);border:1px solid var(--card-line);
+  border-radius:var(--card-r);padding:var(--card-pad);
+  box-shadow:inset 0 1px 0 var(--card-hi);
+}
+.card.col{display:flex;flex-direction:column;min-height:0;min-width:0}
+.card.pad0{padding:0;overflow:hidden}
+.card.hoverable{transition:border-color .16s,box-shadow .16s,transform .16s}
+.card.hoverable:hover{
+  border-color:var(--card-hover-border);transform:translateY(-1px);
+  box-shadow:inset 0 1px 0 var(--card-hi),var(--card-lift);
+}
+.card.sel{border-color:var(--primary);box-shadow:inset 0 1px 0 var(--card-hi),0 0 0 3px var(--primarydim)}
+.card.top::before{
+  content:"";position:absolute;left:0;right:0;top:0;height:3px;
+  border-radius:var(--card-r) var(--card-r) 0 0;background:var(--badgegrad);
+}
+/* .card.focus 是 .card.top 的旧名，保留兼容；新稿统一用 .card.top */
+.card.focus::before{
+  content:"";position:absolute;left:0;right:0;top:0;height:2px;
+  border-radius:var(--card-r) var(--card-r) 0 0;background:var(--badgegrad);
+}
+.card.top.ok::before{background:var(--ok)}
+.card.top.warn::before{background:var(--warn)}
+.card.top.ng::before{background:var(--ng)}
+/* .card.alert 是 .card.rail.ng 的旧名，保留兼容；新稿统一用 .card.rail.ng */
+.card.alert{border-left:3px solid var(--ng);padding-left:calc(var(--card-pad) - 2px)}
+.card.alert .card-h b{color:var(--ng)}
+.card.inset{
+  background:var(--card-well);border-color:transparent;box-shadow:none;
+  border-radius:var(--card-r-sm);padding:12px;
+}
+.card-h{display:flex;align-items:center;gap:8px;margin-bottom:12px;min-width:0;flex:0 0 auto}
+.card-h .ci{
+  width:20px;height:20px;border-radius:calc(var(--card-r-sm) - 1px);flex:0 0 auto;
+  display:grid;place-items:center;font-size:11px;
+  background:var(--primarydim);color:var(--primary);
+}
+.card-h b{font-size:12.5px;font-weight:700;letter-spacing:.2px;white-space:nowrap}
+.card-h .sub{font-size:10.5px;font-weight:400;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card-h .sp{flex:1}
+.card-h.line{padding-bottom:9px;border-bottom:1px solid var(--sepline)}
+/* 通栏卡头（band）：整宽带底 + 分隔线，配 .card.pad0 的分区卡（列表/表格/网格）。
+   命名避开 .bar —— 项目里 .bar 通常是进度条，两者同名会被 height 互相打架。 */
+.card-h.band{
+  padding:9px var(--card-pad);margin:0;
+  border-bottom:1px solid var(--sepline);background:var(--panel2);
+  border-radius:var(--card-r) var(--card-r) 0 0;
+}
+.card-b{flex:1;min-height:0;display:flex;flex-direction:column;gap:9px}
+.card-f{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  margin:12px calc(var(--card-pad) * -1) calc(var(--card-pad) * -1);
+  padding:9px var(--card-pad);border-top:1px solid var(--sepline);
+  background:var(--panel2);border-radius:0 0 var(--card-r) var(--card-r);
+  font-size:11px;color:var(--muted);
+}
+.card.pad0 .card-f{margin:0;border-radius:0}
+.card-f .sp{flex:1}
+/* 卡内行列表：比表格轻，用于"最近 5 条 / 设备清单"这类 3~8 行短列表。
+   行高固定 30px、左右内边距 = --card-pad，与卡头/卡脚同一左缘（少 2px 就会看出错位）。 */
+.rows{display:flex;flex-direction:column;min-height:0}
+.rows .r{display:flex;align-items:center;gap:9px;height:30px;padding:0 var(--card-pad);border-bottom:1px solid var(--sepline);font-size:11.5px;min-width:0}
+.rows .r:last-child{border-bottom:none}
+.rows .r:hover{background:var(--rowhover)}
+.rows .r .ri{width:18px;height:18px;border-radius:5px;flex:0 0 auto;display:grid;place-items:center;font-size:10px;background:var(--rowalt);color:var(--muted)}
+.rows .r .rm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rows .r .rv{font-family:Consolas,monospace;font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+
+/* —— 卡片语言变体库（按职责选，不按喜好选）——
+   同一页面最多同时出现 3 种卡片语言：容器/指标同族算一种，告警算一种，内嵌分区不算独立语言。
+   每个变体只动一个维度（边/顶线/密度/材质/大数字），颜色全部走 Token，换方案不会串味。 */
+.card.tight{padding:calc(var(--card-pad) - 4px)}
+.card.tight .card-h{margin-bottom:9px}
+.card.rail{border-left:3px solid var(--primary);padding-left:calc(var(--card-pad) - 2px)}
+.card.rail.ok{border-left-color:var(--ok)}
+.card.rail.warn{border-left-color:var(--warn)}
+.card.rail.ng{border-left-color:var(--ng)}
+.card.rail.ng .card-h b{color:var(--ng)}
+/* 玻璃浮层卡：只给"压在内容之上"的浮层/抽屉用，普通页面区不用（模糊会拖慢老工控机） */
+.card.glass{
+  background:var(--glass-bg);backdrop-filter:blur(12px) saturate(1.15);
+  border-color:var(--glass-line);
+}
+/* 主指标卡：一张页面只允许 1 张，用来回答"现在最要紧的那个数是多少" */
+.card.hero{
+  padding:calc(var(--card-pad) + 2px) calc(var(--card-pad) + 4px);
+  background:linear-gradient(160deg,var(--primarydim),transparent 62%),var(--panel);
+}
+.card.hero .h-l{font-size:10.5px;letter-spacing:.5px;color:var(--muted);font-weight:600;margin-bottom:8px}
+.card.hero .h-v{font-size:30px;font-weight:700;font-family:Consolas,monospace;line-height:1.12;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.card.hero .h-u{font-size:12px;font-weight:500;color:var(--muted);margin-left:4px;font-family:inherit;letter-spacing:0}
+/* 折叠组卡：设置类页面的分组容器，组头常驻、组身可折叠 */
+.card.fold{padding:0;overflow:hidden}
+.card.fold .f-h{display:flex;align-items:center;gap:8px;padding:11px var(--card-pad);background:var(--panel2);border-bottom:1px solid var(--sepline);font-size:11.5px;font-weight:700}
+.card.fold .f-h .sp{flex:1}
+.card.fold .f-b{padding:12px var(--card-pad)}
+/* 卡片头部的第二种排法：小标签在上、大标题在下（看板/指标卡用，别和普通头混用） */
+.card-h.stack{display:block;margin-bottom:10px}
+.card-h.stack .eyebrow{font-size:9.5px;letter-spacing:.6px;color:var(--muted);font-weight:600;text-transform:uppercase}
+.card-h.stack b{display:block;font-size:14px;margin-top:3px;letter-spacing:0}
+/* 工位/设备瓦片：比卡片更小的一级，8~12px 内边距，一格只放"编号 + 一个主值 + 状态点" */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px;min-height:0}
+.tile{
+  position:relative;display:flex;flex-direction:column;gap:4px;min-width:0;
+  background:var(--panel);border:1px solid var(--card-line);border-radius:var(--card-r-sm);
+  padding:7px 8px;box-shadow:inset 0 1px 0 var(--card-hi);
+  transition:border-color .14s,transform .14s,box-shadow .14s;
+}
+.tile:hover{border-color:var(--card-hover-border);transform:translateY(-1px)}
+.tile .t-h{display:flex;align-items:center;gap:5px;min-width:0;font-size:9.5px;color:var(--muted);letter-spacing:.3px}
+.tile .t-h b{color:var(--fg);font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
+.tile .t-dot{width:5px;height:5px;border-radius:50%;flex:0 0 auto;background:var(--muted)}
+.tile .t-v{font-family:Consolas,monospace;font-size:13px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+.tile .t-s{font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile.run .t-dot{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.tile.ng{border-color:var(--ng);background:linear-gradient(180deg,var(--ngdim),transparent 70%),var(--panel)}
+.tile.ng .t-h{color:var(--ng)}
+.tile.ng .t-dot{background:var(--ng);animation:sDotPulse 1.6s ease-in-out infinite}
+.tile.done .t-v{color:var(--ok)}
+.tile.sel{border-color:var(--primary);box-shadow:inset 0 1px 0 var(--card-hi),0 0 0 2px var(--primarydim)}
+.tile.off{opacity:.55}
+@keyframes sDotPulse{0%,100%{opacity:1;box-shadow:0 0 0 0 transparent}50%{opacity:.5;box-shadow:0 0 0 4px var(--ngdim)}}
 .tile-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);flex:1;min-height:0}
 .cam-tile{
   background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
@@ -409,13 +562,28 @@ html[data-scheme="light"] .cam-img{background:#e9eef8}
 .switch.on{background:var(--primary)}
 .switch.on::after{left:17px}
 
-/* —— KPI / 分段 / 进度 —— */
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--gap)}
-.kpi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px}
-.kpi .k-l{font-size:10.5px;color:var(--muted);margin-bottom:4px}
-.kpi .k-v{font-size:20px;font-weight:700;font-family:Consolas,monospace;line-height:1.15}
+/* —— KPI / 分段 / 进度 ——
+   指标卡三行：标签（10.5 + 字距 .4）/ 大数字（22 等宽 tabular-nums + 单位）/ 附注（口径或环比）。
+   数字永远比标签重两档：标签 muted、数字 700、单位 500 muted —— 别让标签和数字一样大，那样必糊。 */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--card-gap)}
+.kpi{
+  position:relative;background:var(--panel);border:1px solid var(--card-line);
+  border-radius:var(--card-r);padding:12px 14px;overflow:hidden;
+  box-shadow:inset 0 1px 0 var(--card-hi);
+}
+.kpi .k-l{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.4px;margin-bottom:6px}
+.kpi .k-v{font-size:22px;font-weight:700;font-family:Consolas,monospace;line-height:1.1;letter-spacing:-.3px}
+.kpi .k-u{font-size:11px;font-weight:500;color:var(--muted);font-family:inherit;letter-spacing:0;margin-left:3px}
+.kpi .k-d{font-size:10.5px;color:var(--muted);margin-top:5px}
+.kpi .k-d.up{color:var(--ok)}
+.kpi .k-d.down{color:var(--ng)}
 .kpi.ok .k-v{color:var(--ok)}
 .kpi.ng .k-v{color:var(--ng)}
+.kpi.warn .k-v{color:var(--warn)}
+.kpi.accent{padding-left:16px}
+.kpi.accent::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--badgegrad)}
+.kpi.ng.accent::before{background:var(--ng)}
+.kpi.warn.accent::before{background:var(--warn)}
 .bar{height:6px;border-radius:99px;background:var(--rowalt);overflow:hidden}
 .bar > i{display:block;height:100%;border-radius:99px;background:var(--badgegrad)}
 
@@ -558,7 +726,7 @@ html[data-motion="off"] *::after{animation:none!important;transition:none!import
 /* ==========================================================================
    8. 规范视图：Token 表 + 组件样本 + 动效样本
    ========================================================================== */
-.sp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;align-items:start}
+.sp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;align-items:start;color:var(--fg)}
 .sp-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;color:var(--fg)}
 .sp-card h4{font-size:12px;color:var(--fg);margin-bottom:11px;letter-spacing:.4px}
 .tok{display:grid;grid-template-columns:auto 1fr auto;gap:7px 10px;align-items:center;font-size:11px}
@@ -581,6 +749,37 @@ html[data-motion="off"] *::after{animation:none!important;transition:none!import
 .map-i .v{font-family:Consolas,monospace;color:var(--fg);word-break:break-word}
 .map-i .v em{color:var(--primary);font-style:normal;font-weight:700}
 .sp-card:not(.is-target) .map-i .v{opacity:.78}
+
+/* —— 卡片规范区（占满规范视图整行） —— */
+.sp-card.sp-wide{grid-column:1/-1}
+.sb-tag{
+  display:inline-block;margin-left:8px;padding:1px 7px;border-radius:99px;
+  background:var(--primarydim);color:var(--primary);font-size:9.5px;font-weight:700;
+  letter-spacing:.3px;vertical-align:1px;
+}
+.cs-grid{display:grid;grid-template-columns:minmax(320px,1.1fr) minmax(240px,.9fr);gap:16px;align-items:start}
+.cs-sub{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:8px}
+.anat{background:var(--bg);border:1px dashed var(--border);border-radius:calc(var(--card-r) + 8px);padding:calc(var(--card-pad) + 6px)}
+.anat .card{margin:0}
+.cs-notes{margin-top:4px}
+.cs-note{display:flex;gap:7px;font-size:10.5px;line-height:1.62;color:var(--muted);margin-top:7px}
+.cs-note b{
+  width:15px;height:15px;border-radius:50%;flex:0 0 auto;margin-top:1px;
+  background:var(--primarydim);color:var(--primary);display:grid;place-items:center;font-size:9px;
+}
+.cs-note i{font-style:normal;color:var(--fg);font-family:Consolas,monospace}
+.cs-state-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.cs-state{display:flex;flex-direction:column;gap:5px;min-width:0}
+.cs-state > span{font-size:9.5px;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cs-state .card{transition:none}
+/* 语言库按行等高：卡脚用 .card-b{flex:1} 撑到剩余空间，一排卡底边才齐 */
+.cs-sample-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:var(--card-gap);align-items:stretch}
+.cs-sample-grid .card{min-height:0;min-width:0}
+.cs-sample-grid > .col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.cs-state .card{transition:none;padding:0 12px;min-width:0;height:44px;display:flex;align-items:center}
+.cs-kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;font-size:10.5px;align-items:start}
+.cs-kv .k{color:var(--muted);font-family:Consolas,monospace;white-space:nowrap}
+.cs-kv .v{font-family:Consolas,monospace;color:var(--fg);word-break:break-word}
 
 /* ==========================================================================
    9. 打印：一键导出 PDF（隐藏外壳，逐页展开）
@@ -890,6 +1089,143 @@ html[data-motion="off"] *::after{animation:none!important;transition:none!import
     <!-- ==================== 规范视图 ==================== -->
     <div class="view" id="view-spec">
       <div class="sp-grid">
+        <!-- 卡片规范：卡片式页面（工位/看板/仪表盘）的评审首屏。
+             左边是真实 DOM 的解剖图，中间参数表实时读 computed Token，右边是状态矩阵，
+             下方五类样本可直接对比"同一个 .card 在五种职责下的不同长相"。 -->
+        <div class="sp-card sp-wide">
+          <h4>卡片规范 Card System<span class="sb-tag">卡片式页面必看</span></h4>
+          <div class="cs-grid">
+            <div>
+              <div class="cs-sub">结构解剖（尺寸即当前方案真值）</div>
+              <div class="anat">
+                <div class="card" id="anatCard">
+                  <div class="card-h line">
+                    <span class="ci">◈</span><b>卡片标题</b><span class="sub">副标题一句话</span>
+                    <span class="sp"></span><span class="st info">状态</span>
+                  </div>
+                  <div class="card-b">
+                    <div class="row"><span class="muted tiny">卡身：块间距 14 / 行间 9 / 行内 6</span><span class="sp"></span><span class="mono tiny">1,280</span></div>
+                    <div class="row"><span class="muted tiny">数字右对齐 + tabular-nums</span><span class="sp"></span><span class="mono tiny">98.6 %</span></div>
+                  </div>
+                  <div class="card-f"><span>卡脚：放汇总与动作</span><span class="sp"></span><span class="st ok">正常</span></div>
+                </div>
+              </div>
+              <div class="cs-notes">
+                <div class="cs-note"><b>1</b><span>描边 1px + 圆角 <i data-cs="r"></i>：层次靠底色差与顶缘高光，不靠重投影。</span></div>
+                <div class="cs-note"><b>2</b><span>头部：图标块 20×20 + 标题 <i data-cs="hd"></i> + 副标题 10.5 次要色，右侧留给状态/动作。</span></div>
+                <div class="cs-note"><b>3</b><span>分区卡（列表/表格/网格）用 <i>.card.pad0</i> + 通栏卡头 <i>.card-h.band</i>（整宽带底）；只要一条分隔线用 <i>.card-h.line</i>；普通卡不加线。</span></div>
+                <div class="cs-note"><b>4</b><span>卡脚通栏贴底：负 margin 吃掉内边距，底色换 panel2，承载汇总/按钮。</span></div>
+              </div>
+            </div>
+            <div>
+              <div class="cs-sub">参数表</div>
+              <div class="map" id="cardParamList"></div>
+              <div class="cs-sub" style="margin-top:14px">状态矩阵</div>
+              <div class="cs-state-grid">
+                <div class="cs-state"><div class="card"><b class="tiny">默认</b></div><span>描边 + 顶缘高光</span></div>
+                <div class="cs-state"><div class="card hoverable" style="border-color:var(--card-hover-border)"><b class="tiny">悬停</b></div><span>上移 1px + 边框提亮</span></div>
+                <div class="cs-state"><div class="card sel"><b class="tiny">选中</b></div><span>主色边 + 3px 光晕</span></div>
+                <div class="cs-state"><div class="card rail ng"><b class="tiny">告警</b></div><span>左缘 3px 红条</span></div>
+                <div class="cs-state"><div class="card top"><b class="tiny">焦点</b></div><span>顶线 3px 渐变</span></div>
+                <div class="cs-state"><div class="card" style="opacity:.55"><b class="tiny">禁用</b></div><span>整体 55%（慎用）</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="cs-sub" style="margin-top:16px">卡片语言库 · 8 种职责（同一套 Token，按职责选，不按喜好选）</div>
+          <div class="cs-sample-grid">
+            <div class="card col">
+              <div class="card-h"><span class="ci">▤</span><b>容器卡</b><span class="sp"></span><span class="mono tiny">.card</span></div>
+              <div class="card-b">
+                <div class="tiny">页面主分区，同页 2~4 张，多了就拆页。</div>
+                <div class="tiny muted">头 / 身 / 脚三段，脚放汇总与动作。</div>
+              </div>
+              <div class="card-f"><span>适用：分块混排</span><span class="sp"></span><span class="tiny">共 12 项</span></div>
+            </div>
+            <div class="card hero col">
+              <div class="row" style="margin-bottom:6px"><span class="h-l" style="margin:0">在测工位</span><span class="sp"></span><span class="st ok" style="height:18px"><i class="dot"></i>运行</span></div>
+              <div class="h-v">12<span class="h-u">台</span></div>
+              <div class="row" style="gap:5px;margin-top:7px;font-size:10.5px;color:var(--muted)">
+                <span>抽真空 8</span><span>·</span><span>完成 7</span><span>·</span><span style="color:var(--ng)">报警 1</span>
+              </div>
+              <div class="row" style="margin-top:8px"><span class="tiny muted">在线</span><span class="sp"></span><span class="mono tiny" style="color:var(--fg)">71 / 72</span></div>
+              <div class="row" style="margin-top:5px"><span class="tiny muted">一次通过率</span><span class="sp"></span><span class="mono tiny" style="color:var(--ok)">98.6%</span></div>
+              <div class="card-f" style="margin-top:auto"><span>一屏只许一张</span><span class="sp"></span><span class="mono tiny">.card.hero</span></div>
+            </div>
+            <div class="card col pad0">
+              <div class="card-h band"><span class="ci">☰</span><b>列表卡</b><span class="sp"></span><span class="mono tiny">.pad0 + .rows</span></div>
+              <div class="rows">
+                <div class="r"><span class="ri">1</span><span class="rm">吸盘真空建立超时</span><span class="rv">14:02</span></div>
+                <div class="r"><span class="ri">2</span><span class="rm">批号 B2406 已录入</span><span class="rv">13:51</span></div>
+                <div class="r"><span class="ri">3</span><span class="rm">工位 12 已复位</span><span class="rv">13:40</span></div>
+              </div>
+              <div class="card-f"><span>行高 30 · 悬停提亮</span><span class="sp"></span><span class="tiny">查看全部</span></div>
+            </div>
+            <div class="card col rail ng">
+              <div class="card-h"><span class="ci" style="background:var(--ngdim);color:var(--ng)">!</span><b>告警卡</b><span class="sp"></span><span class="mono tiny">.rail.ng</span></div>
+              <div class="card-b">
+                <div class="tiny">NO.23 真空建立超时（12s）</div>
+                <div class="tiny muted">只染左缘 3px 与标题，不整卡铺红底。</div>
+              </div>
+              <div class="card-f"><span>处置动作固定放卡脚</span><span class="sp"></span><span class="btn ghost sm">查看</span></div>
+            </div>
+            <div class="card col top">
+              <div class="card-h"><span class="ci">◎</span><b>顶线焦点卡</b><span class="sp"></span><span class="mono tiny">.card.top</span></div>
+              <div class="card-b">
+                <div class="tiny">3px 渐变顶线 = “当前正在看的那张”。</div>
+                <div class="row" style="margin-top:9px"><span class="tiny muted">当前工位</span><span class="sp"></span><span class="mono tiny" style="color:var(--fg)">NO.25</span></div>
+                <div class="bar" style="margin-top:7px"><i style="width:72%"></i></div>
+                <div class="tiny muted" style="margin-top:6px">老化 05:44:12 / 08:00:00</div>
+              </div>
+              <div class="card-f"><span>一屏只允许一张，多张等于没有焦点</span></div>
+            </div>
+            <div class="card col">
+              <div class="card-h"><span class="ci">◫</span><b>内嵌分区</b><span class="sp"></span><span class="mono tiny">.card.inset</span></div>
+              <div class="card-b">
+                <div class="card inset">
+                  <div class="tiny" style="font-weight:700;margin-bottom:4px">浅底分区，圆角小 4px</div>
+                  <div class="tiny muted">卡内再分区只用它，禁双描边双圆角。</div>
+                </div>
+                <div class="card inset">
+                  <div class="row"><span class="tiny muted">只读区</span><span class="sp"></span><span class="mono tiny">SN / 设备码</span></div>
+                </div>
+              </div>
+              <div class="card-f"><span>适用：卡内分组 / 只读区</span></div>
+            </div>
+            <div class="card col">
+              <div class="card-h"><span class="ci">▦</span><b>工位瓦片</b><span class="sp"></span><span class="mono tiny">.tiles / .tile</span></div>
+              <div class="card-b">
+                <div class="tiles" style="grid-template-columns:repeat(2,1fr)">
+                  <div class="tile run"><div class="t-h"><i class="t-dot"></i><b>01</b><span class="sp"></span>运行</div><div class="t-v">62%</div><div class="t-s">A2406</div></div>
+                  <div class="tile ng"><div class="t-h"><i class="t-dot"></i><b>23</b><span class="sp"></span>故障</div><div class="t-v">12s</div><div class="t-s">真空超时</div></div>
+                  <div class="tile done"><div class="t-h"><i class="t-dot"></i><b>06</b><span class="sp"></span>完成</div><div class="t-v">OK</div><div class="t-s">已判定</div></div>
+                  <div class="tile sel"><div class="t-h"><i class="t-dot"></i><b>08</b><span class="sp"></span>选中</div><div class="t-v">41%</div><div class="t-s">A2406</div></div>
+                </div>
+              </div>
+              <div class="card-f"><span>一格只放：编号 + 一个主值 + 状态点</span></div>
+            </div>
+            <div class="col" style="gap:8px;min-width:0">
+              <div class="card fold">
+                <div class="f-h"><span>▾</span>折叠组卡<span class="sp"></span><span class="mono tiny">.card.fold</span></div>
+                <div class="f-b">
+                  <div class="tiny muted">设置类页面的分组：组头常驻、组身折叠。</div>
+                  <div class="row" style="margin-top:8px"><span class="tiny">通讯参数</span><span class="sp"></span><span class="mono tiny">6 项</span></div>
+                  <div class="row" style="margin-top:5px"><span class="tiny muted">工艺参数</span><span class="sp"></span><span class="mono tiny">12 项</span></div>
+                </div>
+              </div>
+              <div class="card glass" style="padding:11px 12px">
+                <div class="row" style="margin-bottom:6px"><b class="tiny">玻璃浮层卡</b><span class="sp"></span><span class="mono tiny">.card.glass</span></div>
+                <div class="tiny muted">只给压在内容上的浮层/抽屉，普通分块不用。</div>
+              </div>
+            </div>
+          </div>
+          <div class="cs-sub" style="margin-top:14px">本方案卡片气质</div>
+          <div id="cardMood" class="tiny muted" style="line-height:1.85"></div>
+          <div class="sp-note">
+            必做：①卡内间距只用 6 / 9 / 14 三档；②数字一律 tabular-nums 且右对齐；③一张卡只出现一个语义色；
+            ④动作与汇总放卡脚，卡身只放读得懂的内容；⑤内容只有两行就换 .card.tight，别让卡片空着半张脸。<br>
+            禁做：①卡套卡再描一圈边；②整卡铺语义色底；③标题与正文同字号同级色；④卡里塞满 5 种颜色和 3 种圆角。
+          </div>
+        </div>
         <div class="sp-card">
           <h4>当前方案 Token</h4>
           <div class="tok" id="tokList"></div>
@@ -1515,7 +1851,57 @@ html[data-motion="off"] *::after{animation:none!important;transition:none!import
            '<span class="v">' + v + '</span>';
     });
     document.getElementById('tokList').innerHTML = h;
+    buildCardSpec();
     buildMapping();
+  }
+
+  /* ---------------------------------------------------------------- 卡片规范
+     卡片参数表与"本方案卡片气质"都由当前 computed Token 现算：切方案/切明暗时数字跟着变，
+     评审看到的是这套方案真实的卡片参数，而不是一段写死的说明文字。 */
+  var CARD_MOOD = {
+    a: '描边 + 顶缘高光 + 轻投影：工业仪表气质，深色下层次最清楚。',
+    b: '无高光、近乎无投影：纸面极简，靠留白与 1px 细线分块。',
+    c: '大圆角 + 柔和投影：圆润亲和，适合对外演示与触屏操作。',
+    d: '无高光无投影、内边距收紧：接近表格的密度，一屏信息最多。',
+    e: '青色高光 + 发光边：霓虹气质，深色最佳，浅色自动收敛。'
+  };
+
+  function buildCardSpec() {
+    var cs = getComputedStyle(html);
+    function v(k) { return cs.getPropertyValue(k).trim(); }
+    function num(k, dflt) { var n = parseFloat(v(k)); return isNaN(n) ? dflt : n; }
+
+    var r = num('--card-r', 10);
+    var pad = num('--card-pad', 16);
+    var gap = num('--card-gap', 14);
+    var fs = num('--fs', 13);
+    var rows = [
+      ['描边', '1px solid var(--card-line)'],
+      ['圆角', r + 'px（内嵌分区 ' + Math.max(0, r - 4) + 'px）'],
+      ['内边距', pad + 'px（紧凑 ' + Math.max(0, pad - 4) + 'px）'],
+      ['卡间距', gap + 'px（= --card-gap）'],
+      ['头部', '图标块 20×20 · 标题 12.5/700 · 副标题 10.5'],
+      ['正文', fs + 'px · 行高 1.6 · 数字等宽 tabular-nums'],
+      ['顶缘高光', 'inset 0 1px 0 ' + v('--card-hi')],
+      ['悬停', '上移 1px + 边框提亮 + 轻投影'],
+      ['卡脚', '负 margin 通栏 · panel2 底 · 11px'],
+      ['语义条', '左缘 3px（.rail）/ 顶线 3px（.top）']
+    ];
+    document.getElementById('cardParamList').innerHTML = rows.map(function (row) {
+      return '<div class="map-i"><span class="k">' + escHtml(row[0]) + '</span>' +
+             '<span class="v">' + escHtml(row[1]) + '</span></div>';
+    }).join('');
+
+    var csEls = document.querySelectorAll('[data-cs]');
+    for (var i = 0; i < csEls.length; i++) {
+      var key = csEls[i].getAttribute('data-cs');
+      csEls[i].textContent = key === 'r' ? r + 'px' : (key === 'hd' ? '12.5px / 700' : '');
+    }
+
+    var vid = html.dataset.variant || 'a';
+    document.getElementById('cardMood').innerHTML =
+      '<b>' + VAR_NAME[vid] + '</b> · ' + (CARD_MOOD[vid] || '') +
+      '<br>卡片规则本身不随方案变：三段结构、6/9/14 三档间距、单一语义色 —— 换方案只换气质。';
   }
 
   /* ---------------------------------------------------------------- 落地映射（两栈）
