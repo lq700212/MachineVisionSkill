@@ -67,6 +67,25 @@ D:\galaxy\           （或 E:\Project\galaxy，以 resolve_galaxy.py 缓存为�
 | 开关 | `toggle` `switch` `theme-switch` |
 | 卡片 | `card` `glass card` `profile card` `stat card` |
 
+**按风格原型检索**（基因池 14 原型 → 词组，步骤 2b 用）：
+
+| 原型 | 检索词 |
+| --- | --- |
+| 工业仪表 | `tech` `dark` `dashboard` `sharp` |
+| 杂志留白 | `minimal` `clean` `simple` `flat` |
+| 瑞士网格 | `grid` `typography` `bold` `minimal` |
+| 终端极客 | `terminal` `mono` `green` `hacker` `console` |
+| 新拟态软糖 | `neumorphism` `soft` `3d` |
+| 蓝图工程 | `blueprint` `outline` `wireframe` `line` |
+| 暖色亲和 | `warm` `orange` `coral` `friendly` |
+| 渐变流体 | `gradient` `animated gradient` `colorful` |
+| 粗野 brutalism | `brutalist` `raw` `hard shadow` `bold border` |
+| 暗金奢华 | `gold` `luxury` `elegant` `dark gold` |
+| 霓虹暗夜 | `neon` `glow` `light` `cyberpunk` |
+| 玻璃拟态 | `glass` `glassmorphism` `blur` |
+| 孟菲斯撞色 | `memphis` `playful` `colorful` `geometric` |
+| 极简数字风 | `stat` `number` `counter` `minimal` |
+
 ```powershell
 $G = "C:\Users\Administrator\.config\opencode\skills\ui-mockup-studio\scripts\galaxy_search.py"
 python $G --category Buttons --q gradient --limit 8
@@ -75,16 +94,18 @@ python $G --q neon --any --limit 10          # 跨分类
 python $G --show "Buttons/0x-Sarthak_hungry-penguin-30.html"
 ```
 
-### 1.4 选型产出（不是代码，是 6 个决策）
+### 1.4 选型产出（不是代码，是 8 个决策）
 
-1. 主色 + 辅色（各给 hex）
-2. 圆角尺度（卡片 / 按钮 / 输入框三档）
-3. 密度（表格行高、卡片内边距）
-4. 阴影策略（平面无阴影 / 仅浮层 / 全局柔和）
+1. 主色 + 辅色（各给 hex；**跨色相家族**，check C23 查）
+2. 圆角尺度（卡片 / 按钮 / 输入框三档；直角~胶囊是差异轴）
+3. 密度（表格行高、卡片内边距、字号）
+4. 阴影策略（平面无阴影 / 仅浮层 / 全局柔和 / 发光边）
 5. 强调手法（渐变胶囊 / 发光边 / 细边框大留白 / 玻璃）
-6. 动效节奏（悬停 x ms、入场 y ms、循环 z s）
+6. **字体气质**（雅黑 / 等线 / 等宽混排 / 黑体——写进 `--font`）
+7. **壳层构图**（`sidebar/tabs/dock/cmdbar/iconrail`——写进 `--shell`）
+8. 动效节奏（`--dur-page/--ease-page` 等 Token；悬停 x ms、入场 y ms）
 
-这 6 个决策直接写进 CSS Token，再映射到两栈。
+这 8 个决策直接写进 CSS Token，再映射到两栈。
 
 ---
 
@@ -104,6 +125,7 @@ python $G --show "Buttons/0x-Sarthak_hungry-penguin-30.html"
 | `box-shadow:0 8px 24px rgba(0,0,0,.35)` | `<DropShadowEffect BlurRadius="24" ShadowDepth="8" Opacity="0.35"/>` | **只给浮层**，大列表掉帧 |
 | `color:#e6edf7` | `Foreground="{DynamicResource TextBrush}"` | |
 | `font-size:13px` | `FontSize="13"` | WPF 单位是 DIP，1:1 |
+| `font-family:var(--font)` | `FontFamily="{DynamicResource AppFont}"` | 字体随方案基因变（等线/等宽混排…），App.xaml 里也做成 DynamicResource |
 | `font-weight:700` | `FontWeight="Bold"` | 600 用 `SemiBold` |
 | `letter-spacing:.05em` | `Typography` 不直接支持 | 用 `TextBlock` + 自定义，或忽略 |
 | `transition:all .2s ease` | `DoubleAnimation Duration="0:0:0.2"` + `CubicEase` | 放 Storyboard/Trigger |
@@ -301,7 +323,7 @@ python $G --show "Buttons/0x-Sarthak_hungry-penguin-30.html"
 | `margin` | `Margin` + `TableLayoutPanel` | |
 | `box-shadow` | 双层 Panel（偏移 2px + 黑 35%）；或 `CS_DROPSHADOW` | 无原生阴影 |
 | `color:#e6edf7` | `ForeColor` | |
-| `font-size:13px` | `Font("Microsoft YaHei UI", 9.75F)` | **px × 0.75 = pt** |
+| `font-size:13px` | `Font(方案字体名, 9.75F)` | **px × 0.75 = pt**；字体名随方案 `--font` 走（雅黑/等线/Consolas 混排），Theme 类里做成常量 |
 | `font-weight:700` | `FontStyle.Bold` | |
 | `transition` | `Timer`（≥30ms）+ 双缓冲 | 无内建动画 |
 | `:hover` | `MouseEnter/Leave` + `Invalidate()` | |

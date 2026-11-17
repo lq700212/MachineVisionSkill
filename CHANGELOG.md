@@ -3,6 +3,46 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-18（本次·ui-mockup-studio v1.3.0 方案差异度大改）
+
+### 改动范围
+
+1. **ui-mockup-studio**（v1.2.0 → v1.3.0）：反同质化大改——用户反馈 A-E 方案
+   "配色、控件设计风格差异不大"，本次把差异轴从"密度/圆角/主色/留白"四维扩为
+   **9 基因**（色相/明暗/圆角/密度/质感/字体/强调/壳构图/动效性格）。
+
+### 各文件改动
+
+- `templates/mockup_base.html`：内置 5 方案 Token 重校准（跨 5 个色相家族，修复
+  b 与 d 主色 hex 相同事故）；新增 `--font`/`--shell`/`--dur-*`/`--ease-*` Token；
+  5 种壳层构图 variant CSS（sidebar/tabs/dock/cmdbar/iconrail，同一 DOM 重排）；
+  门面页 `data-layout` 布局分叉机制；深色 `--grid` 写死青色修复；VAR_NAME/CARD_MOOD/
+  规范视图文案同步。
+- `scripts/check_mockup.py`：核验 29 → **33 项**，新增 C23 主色色相家族差异（FAIL）、
+  C24 基因对差计数 ≥5/10（FAIL）、C25 字体差异（WARN）、C26 壳层构图差异（FAIL）。
+- `SKILL.md`：铁律 1/2 修订（基因池可追溯、data-layout 例外）；步骤 2 重构
+  （2a 从 14 原型基因池抽 5 个 + 2b 每原型独立 galaxy 检索产出基因卡）；步骤 3 重写
+  （9 基因红线 + 出厂 Token 禁止原样交付、每次重校准）；核验口径 29 → 33 项。
+- `references/design-playbook.md`：第五节重写（5.1 基因池 14 原型 / 5.2 出厂方案表 /
+  5.3 九基因红线 / 5.4 壳形态库）；第六节动效改"结构照抄、性格随方案"；破相清单 +3 行。
+- `references/mockup-spec.md`：Token 说明补 9 基因分组；新增 2.4 data-layout 小节；
+  7.3 checklist 更新。
+- `references/galaxy-map.md`：新增"按风格原型检索"词组表（14 原型）；选型产出
+  6 → 8 决策（补字体气质、壳层构图）；两栈映射表补 `--font` 行。
+
+### 验证结论
+
+- 生成验证稿 → `check_mockup.py` **33 项全 PASS / 0 WARN**；
+- 注入测试（b 主色=d → C23 FAIL；删 `--shell` → C26 FAIL）拦截有效；
+- Edge headless 截图 5 方案目检：A 深蓝侧栏 / B 浅白顶栏Tab / C 暖橙底部Dock /
+  D 翠绿命令条 / E 暗紫图标窄栏，配色·构图·质感·密度全部拉开。
+
+### 建议 commit message
+
+```
+feat(ui-mockup-studio): v1.3.0 方案差异度大改（9基因+5壳构图+data-layout分叉+check C23~C26；内置5方案重校准跨5色相家族修b=d事故；基因池14原型每次抽5个；核验29→33项全绿）
+```
+
 ## 2026-11-17（本次·ui-mockup-studio v1.2.0 卡片体系）
 
 ### 改动范围

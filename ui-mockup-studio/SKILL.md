@@ -43,11 +43,14 @@ description: >
 
 **视觉来源**
 
-1. **一切视觉语言来自 galaxy**。按钮圆角/渐变/阴影/开关/加载动画，先去
-   `E:\Project\galaxy`（或缓存路径）里找同款，再映射成目标技术栈。
-   **禁止凭空自创风格**，禁止"我记得某个 Bootstrap 样子"。
-2. **页面 DOM 只写一次，方案 = Token 切换**。5 套方案绝不允许复制 5 份页面 DOM
-   （会失控、跳转图重复、改一处要改五处）。换方案只换 `html[data-variant]`。
+1. **一切视觉语言来自 galaxy + 风格基因池**。按钮圆角/渐变/阴影/开关/加载动画，先去
+   `E:\Project\galaxy`（或缓存路径）里找同款，再映射成目标技术栈。方案的"跳跃"必须
+   可追溯：要么来自 galaxy 组件的气质，要么来自基因池原型（`design-playbook.md` 第五节）
+   ——**禁止拍脑袋自创**，禁止"我记得某个 Bootstrap 样子"。
+2. **页面 DOM 只写一次，方案 = Token 切换 + 基因切换**。5 套方案绝不允许复制 5 份页面
+   DOM（会失控、跳转图重复、改一处要改五处）。换方案只换 `html[data-variant]`。
+   唯一例外：**门面页（主界面等 ≤3 页）可用 `data-layout` 做有限构图分叉**——
+   每页 ≤3 套布局，块内只做容器重排、不重写控件；常规子页/弹窗 DOM 仍然只写一次。
 3. **禁止写死色值/圆角/间距**。页面里只能出现 `var(--primary)` `var(--radius)` 这类
    Token；写死一个 `#3e8bff`，那套方案切过去就破相。
 4. **卡片式页面必须交付「卡片规范」整章**（模板已在规范视图内置）：
@@ -86,8 +89,9 @@ description: >
 
 **交付验收**
 
-13. **交付前 `check_mockup.py` 必须 0 FAIL**（29 项），并至少截图目检：舞台、总览、
-    跳转图、规范（两栈）、一个弹窗（含展开态）、一套非默认方案（浅色）。
+13. **交付前 `check_mockup.py` 必须 0 FAIL**（33 项：结构/跳转/编码/离线/两栈/卡片/
+    文字色 + **方案差异度 C23~C26**），并至少截图目检：舞台、总览、跳转图、规范（两栈）、
+    一个弹窗（含展开态）、**5 套方案逐套切一遍**（每套都要像不同的作品）。
     只看代码不截图 = 没验收。
 14. **文件必须严格 UTF-8**。禁止用 PowerShell `Out-File`/`Add-Content` 写含中文的 HTML；
     用 write / edit 工具。终端中文乱码是 GBK 显示假象，判定内容请用 read 工具。
@@ -104,9 +108,9 @@ description: >
 │   ├── resolve_galaxy.py         定位 galaxy；找不到就 git clone 到 D:\galaxy；写缓存
 │   ├── galaxy_search.py          按 tags 检索组件 / 看源码 / 随机抽样 / 列分类
 │   ├── new_mockup.py             从模板生成设计稿到项目 Docs（支持 --stack）
-│   └── check_mockup.py           交付前 29 项核验（结构/跳转/编码/离线/两栈/卡片体系/文字色继承/减法预算）
+│   └── check_mockup.py           交付前 33 项核验（结构/跳转/编码/离线/两栈/卡片体系/文字色继承/减法预算/方案差异度 C23~C26）
 ├── templates/
-│   └── mockup_base.html          工作台模板（5 方案 Token + 4 视图 + 3 示例页 + 3 弹窗 + 双栈映射）
+│   └── mockup_base.html          工作台模板（5 方案 9 基因 Token + 5 种壳构图 + 4 视图 + 3 示例页 + 3 弹窗 + 双栈映射）
 └── references/
     ├── design-playbook.md        设计方法与"干净整洁"的硬指标（写页面前必读）
     ├── simplify-playbook.md      简化现有界面的完整标准（原 ui-simplify 并入）
@@ -151,28 +155,39 @@ python "C:\Users\Administrator\.config\opencode\skills\ui-mockup-studio\scripts\
 **新项目/新功能**：让用户确认功能清单；拿不到就用"主界面 + 3~6 个子页 + 3~5 个弹窗"
 的最小闭环起步，并在交付说明里标注假设。
 
-### 步骤 2：galaxy 选型（决定这套设计"像不像专业作品"）
+### 步骤 2：风格基因选型（决定 5 套方案"像不像 5 个不同的作品"）
 
-先看分类概览，再按控件类型检索 2~4 个参考组件：
+**先抽基因，再按基因做 galaxy 定向检索**——两个动作都必须做：
+
+**2a. 从基因池抽 5 个互不相同的风格原型**。基因池 14 个原型及各自的基因标签见
+`references/design-playbook.md` 第五节（工业仪表 / 杂志留白 / 瑞士网格 / 终端极客 /
+新拟态软糖 / 蓝图工程 / 暖色亲和 / 渐变流体 / 粗野 brutalism / 暗金奢华 / 霓虹暗夜 /
+玻璃拟态 / 孟菲斯撞色 / 极简数字风）。按项目气质挑，但**禁止每次都拿默认 A-E 五件套**
+——上轮项目用过的组合这轮就换。拿不准时用 `galaxy_search.py --random` 抽样找感觉。
+
+**2b. 为每个抽中的原型各做一次 galaxy 定向检索**（每个原型 1~2 次即可），
+检索词跟着原型换风格（brutalism / neumorphism / glassmorphism / terminal / swiss /
+memphis…，见 `galaxy-map.md` 1.2 节），不要全套稿都搜 "glass card"：
 
 ```powershell
 $G = "C:\Users\Administrator\.config\opencode\skills\ui-mockup-studio\scripts\galaxy_search.py"
 python $G --list-categories
-python $G --category Cards --q glass card --limit 6
-python $G --category Buttons --q gradient rounded --limit 6
+python $G --category Cards --q glass blur --limit 6          # 玻璃拟态原型
+python $G --category Buttons --q gradient rounded --limit 6  # 渐变流体原型
 python $G --category Toggle-switches --q toggle --limit 4
-python $G --show "Cards/0xnihilism_cold-tiger-22.html"   # 直接看源码
+python $G --show "Cards/0xnihilism_cold-tiger-22.html"       # 直接看源码
 ```
 
-**选型的产出不是代码，而是"视觉语言决策"**，至少定下：
+**每个原型的检索产出一张"基因卡"**（不是代码），至少定下 7 项：
 
-| 决策项 | 例子 |
+| 基因 | 例子 |
 | --- | --- |
-| 主色 + 辅色 | 工业蓝 `#3e8bff` + 青 `#22d3ee` |
-| 圆角尺度 | 卡片 10px / 按钮 8px（紧凑工业） |
-| 密度 | 紧凑（表格行高 28）/ 舒适（行高 36） |
-| 阴影策略 | 仅浮层有阴影，平面不用（工业风） |
-| 强调手法 | 渐变胶囊 / 发光边 / 细边框 + 大留白 |
+| 色相家族（主色+辅色） | 翠绿 `#059669` + 深青 `#0d9488`（终端极客） |
+| 圆角形态 | 3px 硬边 / 99px 胶囊 / 12px 软圆角 |
+| 密度留白 | 极紧 `gap 9` / 舒适 `gap 22` |
+| 质感手法 | 描边+高光 / 无描边+大投影 / 发光边 / 全平面硬边 |
+| 字体气质 | 雅黑 / 等线 / 等宽混排 |
+| 壳层构图 | `sidebar / tabs / dock / cmdbar / iconrail`（模板内置 5 种） |
 | 参考组件（写进 data-galaxy） | `Cards,Forms,Toggle-switches` |
 
 不要求把 galaxy 的 CSS 原样搬进设计稿——**搬的是比例、圆角、留白、渐变方向、交互反馈**。
@@ -193,21 +208,26 @@ CSS → 控件的两套映射代码见 `references/galaxy-map.md`。
 每页按钮少 1/3——这才是应该出 5 版的量。减法的判断依据不是"好看"，而是
 **"这个控件删掉后用户还能不能完成任务"**。
 
-### 步骤 3：定 4-5 套方案（必须有区分度，不是换个颜色）
+### 步骤 3：定 4-5 套方案（9 基因拉开，不是换个颜色）
 
-每套方案一句话定位 + 适用客户，例如：
+把步骤 2 的 5 张基因卡落成 5 套方案，每套一句话定位 + 适用客户。模板内置 A-E 五组
+出厂 Token（A 深夜中控·侧栏后台 / B 杂志留白·顶栏Tab / C 日落活力·底部Dock /
+D 终端密度·命令条 / E 暗夜霓虹·图标窄栏）——**它们只是兜底示例，禁止原样交付**：
+生成骨架后先把每组 Token 按本次基因卡重校准（主色 / 圆角 / 字体 / 壳形态至少各
+重新取值一次），再写页面。
 
-- **A 深夜中控**：工业蓝 + 紧凑小圆角 → 车间大屏/操作台（默认推荐）
-- **B 极简留白**：黑白灰 + 大留白 + 细边框 → 给外企/客户演示
-- **C 渐变活力**：紫青渐变 + 胶囊按钮 → 汇报 PPT、年轻化产品
-- **D 高密度灰蓝**：小字号 + 6px 圆角 + 密集表格 → 数据录入/工程师
-- **E 暗夜霓虹**：近黑 + 霓虹青发光 → 展厅、Demo 演示
+**9 基因红线（check 脚本 C23~C26 自动核验，不是靠人工自觉）**：
 
-红线：**每套方案必须在"密度 / 圆角 / 主色 / 留白"四个维度里至少变三个**。
-只换主色的两套方案不算两套，直接删掉。
+- 每套方案的 9 个基因：**色相家族 / 明暗默认 / 圆角形态 / 密度留白 / 质感手法 /
+  字体气质 / 强调手法 / 壳层构图 / 动效性格**（`--dur-*`/`--ease-*`）。
+- **任意两套方案，10 个基因 Token（primary/primary2/accent/radius/btnradius/
+  gap/pad/fs/font/shell）至少 5 项不同**（C24）。
+- 主色两两色相距离 ≥ 30°、跨 ≥ 3 个色相家族、至少 1 套暖色或中性色（C23）；
+  `--font` 至少 2 种（C25）；`--shell` 至少 3 种形态或存在 data-layout 分叉（C26）。
+- 只换主色的两套方案不算两套，直接删掉。
 
-方案与明暗**正交**：每套方案有默认明暗（A/E 深、B/C/D 浅），但用户可任意切换，
-共 10 种组合。页面 DOM 不复制。
+方案与明暗**正交**：每套方案有默认明暗，但用户可任意切换。页面 DOM 不复制
+（门面页 data-layout 分叉除外，见铁律 2）。
 
 ### 步骤 3.5：定目标技术栈（决定规范视图哪套映射高亮）
 
@@ -253,7 +273,9 @@ python "C:\Users\Administrator\.config\opencode\skills\ui-mockup-studio\scripts\
 - **分辨率统一 1440×900**（工业软件基准）。页面多留余量，不要在 1366 上溢出。
 - **页面结构固定四段**：`.app-bar`（标题+状态+全局操作）→ `.app-nav`（侧栏，可选）
   → `.app-main`（内容）→ `.app-foot`（运行状态，可选）。
-  子页面必须有"← 返回"，并且要 `data-go="main"`。
+  DOM 结构全稿一套；切方案时壳层构图由各方案的 variant CSS 重排（模板内置 5 种
+  `--shell` 形态），**写页面时不要写死 nav 的方向/宽度/对齐**，让 Token 和 variant
+  规则去控制。子页面必须有"← 返回"，并且要 `data-go="main"`。
 - **多状态**：`data-states="default,empty,loading"`，页面内用
   `<div class="state-block" data-for="empty" data-display="flex">` 承载。
   `data-display` 声明正常显示时的 display 值（`contents` / `flex` / `block`），
@@ -287,7 +309,7 @@ python "C:\Users\Administrator\.config\opencode\skills\ui-mockup-studio\scripts\
 
 ### 步骤 7：核验（两道，缺一不可）
 
-**第一道：脚本 29 项**
+**第一道：脚本 33 项**
 
 ```powershell
 python "C:\Users\Administrator\.config\opencode\skills\ui-mockup-studio\scripts\check_mockup.py" `
@@ -304,6 +326,10 @@ python "C:\Users\Administrator\.config\opencode\skills\ui-mockup-studio\scripts\
 C22 查"内容区有没有自己声明文字色"：工作台外壳 body 的文字色是写死的浅色，
 `.page` / `.sp-grid` 若不写 `color:var(--fg)`，浅色方案整片变白底浅字（脚本能抓，但眼睛
 在深色下看不出来，务必别靠目检）。
+
+C23~C26 查**方案差异度**（反同质化闸门）：C23 主色色相家族 / C24 基因对差计数 /
+C25 字体差异 / C26 壳层构图。任何一项 FAIL 都要回到步骤 3 重校准 Token，不许绕过
+——同质化的 5 套方案对用户没有选择价值，宁可 4 套差异拉满，不要 5 套一个模子。
 
 **第二道：截图目检**（脚本查不出"难看"）
 
@@ -500,6 +526,15 @@ python "$S\check_mockup.py" "Docs\ui_design_mockups.html" --min-pages 8 --min-di
 
 ## 9. 版本
 
+- V1.3.0（2026-11-18）：**方案差异度大改**（反同质化）。差异轴从"密度/圆角/主色/留白"
+  四维扩为 **9 基因**（色相/明暗/圆角/密度/质感/字体/强调/壳构图/动效性格）：
+  模板新增 `--font`（B 等线、D 等宽混排）与 `--dur-*`/`--ease-*` 动效性格 Token，
+  内置 5 方案重校准为跨色相家族（蓝/中性墨黑/暖橙粉/翠绿/霓虹品红，b=d 同主色事故修复）
+  + **5 种壳层构图**（sidebar/tabs/dock/cmdbar/iconrail，variant CSS 重排同一 DOM）；
+  新增门面页 `data-layout` 有限构图分叉机制（≤3 页、每页 ≤3 套布局、纯 CSS 切换）；
+  工作流新增步骤 2a 基因池抽原型（14 原型池）+ 每原型独立 galaxy 检索产出基因卡，
+  出厂 Token 禁止原样交付（每次重校准）；核验 29 → **33 项**（C23 主色色相家族 /
+  C24 基因对差 ≥5/10 / C25 字体差异 WARN / C26 壳构图差异），深色 `--grid` 写死青色修复。
 - V1.2.0（2026-11-17）：卡片体系重构（AgingTestSystem 设计稿实做回刷）。
   模板 `.card` 升级为**三段结构**（`.card-h` / 卡身 / `.card-f`）＋ 卡片 Token
   （`--card-r/-pad/-gap/-line/-hi/-lift`，五方案气质差异只覆盖这几个）；

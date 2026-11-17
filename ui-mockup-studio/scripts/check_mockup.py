@@ -33,6 +33,12 @@ check_mockup.py —— UI 设计稿 HTML 的交付前核验（结构 + 完整性
   C20 规范视图有「卡片规范」整章（解剖 + 参数表 + 状态矩阵 + 语言库）
   C21 卡片职责变体数 >= --min-card-variants（默认 6 种）
   C22 内容区（.page / .sp-grid）显式声明 color:var(--fg)（防浅色方案白字白底）
+  C23 方案主色差异：各方案 --primary 互不相同、彩色两两色相距离 >= 30°、
+      色相家族（含中性）>= 3、中性色最多 1 套 —— 钉死"5 套里 3 套蓝"的同质化
+  C24 基因对差计数：每两套方案在 10 个基因 Token（primary/primary2/accent/radius/
+      btnradius/gap/pad/fs/font/shell）上至少 5 项不同
+  C25 字体差异（WARN）：各方案 --font 至少 2 种，防止"换色不换字"
+  C26 壳层构图差异：各方案 --shell 至少 3 种不同形态，或存在 data-layout 布局分叉
   W1  页面缺 data-desc（右栏说明会空）
   W2  页面缺 data-galaxy（无法追溯 galaxy 参考来源）
   W3  页面声明了多状态但找不到对应 .state-block
@@ -365,6 +371,146 @@ def main():
                     "切到浅色方案会变成白底浅字。给这些规则体加 color:var(--fg)。" % "、".join(miss_fg))
     else:
         ok("C22", "页面与规范区都显式声明 color:var(--fg)，浅色方案不会白字白底")
+
+    # ---------- C23~C26 方案差异度（反同质化闸门） ----------
+    # 从 <style> 里把每个 data-variant 的自定义属性按源序合并成字典（后面的规则覆盖前面），
+    # 再做四项差异核验。方案可以重新校准出厂 Token，但差异度必须真实存在。
+    styles = "\n".join(re.findall(r"<style\b[^>]*>(.*?)</style>", text, flags=re.S | re.I))
+    var_rules = {}   # variant -> {"--prop": "value"}
+    for m_rule in re.finditer(r"([^{}]+)\{([^{}]*)\}", styles):
+        sel, body = m_rule.group(1), m_rule.group(2)
+        m_var = re.search(r'data-variant="([a-z0-9]+)"', sel)
+        if not m_var:
+            continue
+        bucket = var_rules.setdefault(m_var.group(1), {})
+        for decl in body.split(";"):
+            if ":" not in decl:
+                continue
+            k, _, v = decl.partition(":")
+            k = k.strip()
+            if k.startswith("--"):
+                bucket[k] = v.strip()
+
+    def _hex_rgb(hx):
+        hx = (hx or "").strip().lower()
+        m_h = re.fullmatch(r"#([0-9a-f]{3}|[0-9a-f]{6})", hx)
+        if not m_h:
+            return None
+        s = m_h.group(1)
+        if len(s) == 3:
+            s = "".join(c * 2 for c in s)
+        return [int(s[i:i + 2], 16) for i in (0, 2, 4)]
+
+    def _hsl(rgb):
+        r, g, b = [v / 255.0 for v in rgb]
+        mx, mn = max(r, g, b), min(r, g, b)
+        l = (mx + mn) / 2
+        if mx == mn:
+            return None, 0.0, l
+        d = mx - mn
+        s = d / (mx + mn) if l <= 0.5 else d / (2 - mx - mn)
+        if mx == r:
+            h = ((g - b) / d) % 6
+        elif mx == g:
+            h = (b - r) / d + 2
+        else:
+            h = (r - g) / d + 4
+        return h * 60, s, l
+
+    def _is_neutral(hsl_t):
+        # 近黑/近白/低饱和都算中性：墨黑主色（如 #111827）在 HSL 上偏蓝但视觉是黑白灰
+        h, s, l = hsl_t
+        return h is None or s < 0.12 or l < 0.18 or l > 0.92
+
+    def _fam(h):
+        if h is None:
+            return "中性"
+        for lo, hi, name in ((345, 360, "红"), (0, 15, "红"), (15, 70, "橙黄"),
+                             (70, 170, "绿"), (170, 200, "青"), (200, 260, "蓝"),
+                             (260, 320, "紫"), (320, 345, "品红")):
+            if lo <= h < hi:
+                return name
+        return "其他"
+
+    prim_raw = {v: var_rules.get(v, {}).get("--primary", "") for v in variants}
+    prim_hsl = {v: (_hsl(_hex_rgb(p)) if _hex_rgb(p) else None) for v, p in prim_raw.items()}
+
+    bad_prim = [v for v, t in prim_hsl.items() if t is None]
+    neutral = sorted(v for v, t in prim_hsl.items() if t is not None and _is_neutral(t))
+    chroma = sorted(v for v, t in prim_hsl.items() if t is not None and not _is_neutral(t))
+    close_pairs = []
+    for i in range(len(chroma)):
+        for j in range(i + 1, len(chroma)):
+            h1, h2 = prim_hsl[chroma[i]][0], prim_hsl[chroma[j]][0]
+            d = abs(h1 - h2)
+            d = min(d, 360 - d)
+            if d < 30:
+                close_pairs.append("%s(%d°)~%s(%d°) 只差 %.0f°" % (chroma[i], h1, chroma[j], h2, d))
+    fam_set = {_fam(prim_hsl[v][0]) for v in chroma}
+    if neutral:
+        fam_set.add("中性")
+
+    if bad_prim:
+        fail("C23", "这些方案的 --primary 缺失或不是合法 hex：%s。"
+                    "每套方案必须声明主色供差异度核验。" % "、".join(bad_prim))
+    elif len(set(prim_raw.values())) < len(prim_raw):
+        dup = sorted({p for p in prim_raw.values() if list(prim_raw.values()).count(p) > 1})
+        fail("C23", "存在主色完全相同的方案（%s）：换色不换相 = 不是两套方案。" % "、".join(dup))
+    elif close_pairs:
+        fail("C23", "彩色主色两两色相距离必须 >= 30°，违规对：%s。"
+                    "5 套里 3 套蓝就是同质化，把其中一套的色相家族换掉。" % "；".join(close_pairs))
+    elif len(fam_set) < 3:
+        fail("C23", "色相家族只有 %d 种（%s），要求 >= 3，且至少 1 套暖色或中性色。"
+                    "拉开色相是分方案的第一差异轴。" % (len(fam_set), "、".join(sorted(fam_set))))
+    elif len(neutral) > 1:
+        fail("C23", "中性（黑白灰）主色最多 1 套，实际 %d 套：%s" % (len(neutral), "、".join(neutral)))
+    else:
+        ok("C23", "主色差异合格：家族 %s，彩色两两距离 >= 30°"
+                  % "、".join(sorted(fam_set)))
+
+    genes = ("--primary", "--primary2", "--accent", "--radius", "--btnradius",
+             "--gap", "--pad", "--fs", "--font", "--shell")
+
+    def _norm_tok(x):
+        return re.sub(r"\s+", "", (x or "").lower())
+
+    weak_pairs = []
+    vs = sorted(var_rules)
+    for i in range(len(vs)):
+        for j in range(i + 1, len(vs)):
+            a, b = var_rules[vs[i]], var_rules[vs[j]]
+            diff = sum(1 for g in genes
+                       if _norm_tok(a.get(g)) and _norm_tok(b.get(g))
+                       and _norm_tok(a.get(g)) != _norm_tok(b.get(g)))
+            if diff < 5:
+                weak_pairs.append("%s~%s 仅 %d 项不同" % (vs[i], vs[j], diff))
+    if weak_pairs:
+        fail("C24", "存在基因几乎相同的方案对（%s）。"
+                    "每两套方案必须在 10 个基因 Token（primary/primary2/accent/radius/"
+                    "btnradius/gap/pad/fs/font/shell）上至少 5 项不同——"
+                    "回步骤 3 重校准这两套方案的基因。" % "；".join(weak_pairs))
+    else:
+        ok("C24", "方案两两基因差异合格（每对 >= 5/10 项不同）")
+
+    font_set = {_norm_tok(var_rules.get(v, {}).get("--font", "")) for v in variants}
+    font_set.discard("")
+    no_font = [v for v in variants if not var_rules.get(v, {}).get("--font")]
+    if len(font_set) < 2:
+        warn("C25", "各方案 --font 相同或未声明（%s）。字体是零成本的气质差异轴，"
+                    "至少给 2 种（如雅黑 / 等线 / 等宽混排）。" % ("、".join(no_font) or "全部相同"))
+    else:
+        ok("C25", "方案字体有差异（%d 种）" % len(font_set))
+
+    shell_set = {var_rules.get(v, {}).get("--shell", "") for v in variants}
+    shell_set.discard("")
+    has_layout_fork = 'data-layout="' in dom
+    if len(shell_set) >= 3 or has_layout_fork:
+        ok("C26", "壳层构图有差异：%s%s" % ("、".join(sorted(shell_set)),
+                                            "（另有 data-layout 分叉）" if has_layout_fork else ""))
+    else:
+        fail("C26", "壳层构图无差异（--shell：%s，无 data-layout 分叉）。"
+                    "同一 DOM 至少给 3 种壳形态（sidebar/tabs/dock/cmdbar/iconrail...），"
+                    "或对门面页做 data-layout 构图分叉——布局一样=看起来就是同一个软件。" % ("、".join(sorted(shell_set)) or "未声明"))
 
     # ---------- W1 / W2 / W3 ----------
     no_desc = [p.get("data-page", "?") for p in pages if not p.get("data-desc")]

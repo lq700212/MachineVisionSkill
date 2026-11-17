@@ -20,6 +20,11 @@
 - 这 6 个属性是**唯一全局开关**，由顶栏按钮 / URL 参数写回；页面 DOM 不感知方案。
 - 页面/弹窗**不得**出现 `#hex`、`px` 圆角、`rgba()` 阴影——一律 `var(--token)`。
   唯一的例外：页面宽高（`data-w/h`、`style="width:220px"`）是**布局尺寸**，允许写死。
+- 方案差异走 **9 基因 Token**：色相（`--primary/--primary2/--accent`）、圆角
+  （`--radius/--btnradius`）、密度（`--gap/--pad/--fs`）、字体（`--font`）、
+  壳层构图（`--shell: sidebar|tabs|dock|cmdbar|iconrail`）、动效性格
+  （`--dur-page/--dur-dlg/--ease-page/--ease-dlg`）。全部定义在
+  `html[data-variant=x]` 层，切方案自动生效，页面零改动。
 
 ---
 
@@ -52,6 +57,25 @@
 | 属性 | 挂在哪 | 作用 |
 | --- | --- | --- |
 | `data-go="pageId"` | 任意可点元素 | 切到目标页面（C10 查目标存在） |
+
+### 2.4 门面页布局分叉（`data-layout`，有限放开）
+
+同一 DOM 内给门面页做有限构图分叉（铁律 2 的唯一例外）：
+
+```html
+<main class="app-main">
+  <!-- 默认布局：所有方案共用 -->
+  <div class="tile-grid">…磁贴阵列…</div>
+  <!-- 方案 C 专属构图：分栏杂志流，只有切到 C 才显示 -->
+  <div data-layout="c" style="display:flex;gap:var(--gap)">…容器重排…</div>
+</main>
+```
+
+- `[data-layout]` 默认全隐藏；每套方案需一条显示规则
+  （模板已内置：`html[data-variant="c"] [data-layout="c"]{display:flex !important}`）。
+- **限制**：只用于门面页（主界面等 ≤3 页）；每页 ≤3 套布局；块内只做容器重排、
+  不重写控件；常规子页/弹窗禁止分叉（DOM 只写一次）。
+- check C26 认可"≥3 种 `--shell`"或"存在 data-layout 分叉"两种构图差异信号。
 | `data-open="dlgId"` | 任意可点元素 | 打开目标弹窗（C11 查目标存在）；换弹窗也用它 |
 | `data-close` | 弹窗内任意元素 | 关闭当前弹窗（遮罩/Esc 也关） |
 | `data-for="state"` | `.state-block` | 该块属于哪个状态 |
@@ -435,12 +459,15 @@
 
 ### 7.3 全局
 
-- [ ] 5 套方案在密度/圆角/主色/留白四个维度至少变三个
+- [ ] **9 基因红线**：主色跨 ≥3 色相家族、两套主色不同色相（C23）；任意两套
+      10 个基因 Token ≥5 项不同（C24）；`--font` ≥2 种（C25）；`--shell` ≥3 种
+      或存在 data-layout 分叉（C26）
+- [ ] 出厂 Token 已按本次基因卡重校准，未原样交付模板内置值
 - [ ] 明暗主题各截一张图，浅色下没有写死深色（尤其弹窗、KPI、表格斑马纹）
 - [ ] 每页只有一个循环炫点（主界面扫描光带）；表单/表格/正文无渐变无光晕
 - [ ] 关掉动效（顶栏"动效"）后信息仍完整可读
-- [ ] `check_mockup.py` 0 FAIL（25 项）
-- [ ] 截图看过：舞台 / 总览 / 跳转图 / 规范两栈 / 弹窗 / 浅色非默认方案
+- [ ] `check_mockup.py` 0 FAIL（33 项）
+- [ ] 截图看过：舞台 / 总览 / 跳转图 / 规范两栈 / 弹窗 / **5 套方案逐套各一张**
 
 ---
 

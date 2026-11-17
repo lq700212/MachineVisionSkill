@@ -19,7 +19,9 @@
     3) <button data-go="页面id"> / <button data-open="弹窗id">  跳转与弹窗全部用 data 属性声明
 
   跳转关系图和总览缩略图由 JS 自动从 data-go / data-open 生成，不用手画。
-  5 套设计方案 = 5 组 CSS 变量（html[data-variant="a".."e"]），页面 DOM 只写一次。
+  5 套设计方案 = 5 组 CSS 变量（html[data-variant="a".."e"]），页面 DOM 只写一次
+  （门面页可用 data-layout 做有限构图分叉，见下方 CSS 注释）。
+  9 基因随方案走：色相/明暗/圆角/密度/质感/字体/强调/壳层构图(--shell)/动效性格(--dur·--ease)。
   明暗主题与方案正交（html[data-scheme="dark"|"light"]），任意方案都能切深浅。
 
   新增页面：复制一个 <section class="page">，改 data-page / data-title / data-group，
@@ -46,7 +48,7 @@ input,select{font:inherit;color:inherit}
 /* ==========================================================================
    1. 方案 Token：5 套设计语言 × 明暗正交
    --------------------------------------------------------------------------
-   方案个性 = 主色 / 圆角 / 密度 / 阴影 / 标题渐变
+   方案个性 = 主色 / 圆角 / 密度 / 阴影 / 字体 / 壳层构图 / 动效性格（9 基因，见下）
    明暗基础 = 背景 / 面板 / 边框 / 文字 / 输入框
    任何页面只用 var(--xxx)，禁止写死色值 —— 这样 5 套方案才能一键切换。
    ========================================================================== */
@@ -57,7 +59,7 @@ html[data-scheme="dark"]{
   --border:#22314f;--sepline:#2a3c5e;--fg:#e8eff9;--muted:#8ea6c5;
   --input:#0d1729;--rowalt:#12203a;--rowhover:#182a48;--theadbg:#152238;--theadfg:#9fb6d4;
   --shadow:0 14px 44px rgba(0,0,0,.55);
-  --grid:rgba(34,211,238,.09);
+  --grid:rgba(126,150,190,.10);
   --ok:#10b981;--warn:#f59e0b;--ng:#ef4444;
   --okdim:rgba(16,185,129,.14);--warndim:rgba(245,158,11,.13);--ngdim:rgba(239,68,68,.13);
   --okglow:0 0 14px rgba(16,185,129,.5);--warnglow:0 0 12px rgba(245,158,11,.45);
@@ -92,74 +94,140 @@ html{
   --card-r-sm:calc(var(--radius) - 4px);
 }
 
-/* —— A 深夜中控：工业蓝 + 紧凑 + 小圆角 —— */
+/* —— 9 基因体系：色相家族 / 明暗 / 圆角形态 / 密度留白 / 质感手法 / 字体 /
+   强调手法 / 壳层构图（--shell）/ 动效性格（--dur-*·--ease-*）——
+   出厂值只是兜底示例：交付前必须按本次风格基因重校准（见 SKILL.md 步骤 3），
+   禁止原样交付这 5 组出厂 Token。check_mockup.py 的 C23~C26 会核验差异度。 —— */
+
+/* —— A 深夜中控：工业蓝 + 紧凑 + 侧栏后台（基因：蓝222°/描边高光/雅黑/侧栏）—— */
 html[data-variant="a"]{
-  --primary:#3e8bff;--primary2:#22d3ee;--primarydim:rgba(62,139,255,.13);
+  --primary:#3e8bff;--primary2:#7dd3fc;--primarydim:rgba(62,139,255,.13);
   --primaryglow:rgba(62,139,255,.42);
-  --titlegrad:linear-gradient(135deg,#1e3a8a,#22d3ee);
-  --badgegrad:linear-gradient(135deg,#3e8bff,#22d3ee);
+  --titlegrad:linear-gradient(135deg,#1e3a8a,#7dd3fc);
+  --badgegrad:linear-gradient(135deg,#3e8bff,#7dd3fc);
   --radius:10px;--btnradius:8px;--gap:14px;--pad:16px;--fs:13px;
-  --accent:#22d3ee;
+  --accent:#7dd3fc;
+  --font:"Microsoft YaHei UI","微软雅黑",Inter,system-ui,sans-serif;
+  --shell:sidebar;
+  --dur-page:.34s;--dur-dlg:.26s;
+  --ease-page:cubic-bezier(.22,.9,.28,1);--ease-dlg:cubic-bezier(.2,.9,.25,1.08);
 }
-/* —— B 极简留白：黑白灰 + 大留白 + 细边框 —— */
+/* —— B 杂志留白：墨黑+琥珀点缀 + 大留白细线 + 顶栏Tab（基因：中性/纸面细线/等线/顶栏）—— */
 html[data-variant="b"]{
-  --primary:#2563eb;--primary2:#0f172a;--primarydim:rgba(37,99,235,.08);
-  --primaryglow:rgba(37,99,235,.18);
-  --titlegrad:linear-gradient(135deg,#0f172a,#334155);
-  --badgegrad:linear-gradient(135deg,#2563eb,#60a5fa);
-  --radius:12px;--btnradius:9px;--gap:20px;--pad:22px;--fs:13.5px;
-  --accent:#2563eb;
+  --primary:#111827;--primary2:#d97706;--primarydim:rgba(17,24,39,.06);
+  --primaryglow:rgba(17,24,39,.14);
+  --titlegrad:linear-gradient(135deg,#0f172a,#475569);
+  --badgegrad:linear-gradient(135deg,#111827,#1f2937);
+  --radius:12px;--btnradius:9px;--gap:22px;--pad:24px;--fs:13.5px;
+  --accent:#d97706;
+  --font:"DengXian","等线","Microsoft YaHei UI",sans-serif;
+  --shell:tabs;
+  --dur-page:.26s;--dur-dlg:.2s;
+  --ease-page:cubic-bezier(.25,.7,.3,1);--ease-dlg:ease-out;
 }
-/* —— C 渐变活力：紫青渐变 + 胶囊按钮 —— */
+/* —— C 日落活力：橙粉渐变 + 胶囊 + 底部Dock（基因：暖橙25°/无描边大投影/雅黑/Dock）—— */
 html[data-variant="c"]{
-  --primary:#6366f1;--primary2:#22b1cf;--primarydim:rgba(99,102,241,.09);
-  --primaryglow:rgba(99,102,241,.3);
-  --titlegrad:linear-gradient(135deg,#6366f1,#22b1cf);
-  --badgegrad:linear-gradient(135deg,#6366f1,#22b1cf);
+  --primary:#f97316;--primary2:#ec4899;--primarydim:rgba(249,115,22,.10);
+  --primaryglow:rgba(249,115,22,.30);
+  --titlegrad:linear-gradient(135deg,#ea580c,#ec4899);
+  --badgegrad:linear-gradient(135deg,#f97316,#ec4899);
   --radius:16px;--btnradius:99px;--gap:16px;--pad:18px;--fs:13px;
-  --accent:#22b1cf;
+  --accent:#ec4899;
+  --font:"Microsoft YaHei UI","微软雅黑",Inter,system-ui,sans-serif;
+  --shell:dock;
+  --dur-page:.42s;--dur-dlg:.32s;
+  --ease-page:cubic-bezier(.2,.9,.25,1.05);--ease-dlg:cubic-bezier(.2,.9,.3,1.12);
 }
-/* —— D 高密度灰蓝：数据密集 + 6px 圆角 + 小字号 —— */
+/* —— D 终端密度：翠绿 + 全平面硬边 + 顶部命令条（基因：绿162°/平面硬边/等宽/命令条）—— */
 html[data-variant="d"]{
-  --primary:#2563eb;--primary2:#0284c7;--primarydim:rgba(37,99,235,.10);
-  --primaryglow:rgba(37,99,235,.2);
-  --titlegrad:linear-gradient(135deg,#1e3a5f,#0284c7);
-  --badgegrad:linear-gradient(135deg,#2563eb,#0284c7);
-  --radius:6px;--btnradius:5px;--gap:9px;--pad:11px;--fs:12px;
-  --accent:#0284c7;
+  --primary:#059669;--primary2:#0d9488;--primarydim:rgba(5,150,105,.10);
+  --primaryglow:rgba(5,150,105,.22);
+  --titlegrad:linear-gradient(135deg,#064e3b,#0d9488);
+  --badgegrad:linear-gradient(135deg,#059669,#0d9488);
+  --radius:4px;--btnradius:3px;--gap:9px;--pad:11px;--fs:12px;
+  --accent:#0d9488;
+  --font:Consolas,"Cascadia Mono","Microsoft YaHei UI",monospace;
+  --shell:cmdbar;
+  --dur-page:.16s;--dur-dlg:.14s;
+  --ease-page:ease-out;--ease-dlg:ease-out;
 }
-/* —— E 暗夜霓虹：近黑 + 霓虹青 + 发光边 —— */
+/* —— E 暗夜霓虹：霓虹品红×青 + 发光边 + 图标窄栏（基因：品红292°/发光/雅黑/窄栏）—— */
 html[data-variant="e"]{
-  --primary:#22d3ee;--primary2:#a3e635;--primarydim:rgba(34,211,238,.1);
-  --primaryglow:rgba(34,211,238,.35);
-  --titlegrad:linear-gradient(135deg,#07131c,#22d3ee);
-  --badgegrad:linear-gradient(135deg,#22d3ee,#a3e635);
+  --primary:#e879f9;--primary2:#22d3ee;--primarydim:rgba(232,121,249,.12);
+  --primaryglow:rgba(232,121,249,.38);
+  --titlegrad:linear-gradient(135deg,#4a044e,#22d3ee);
+  --badgegrad:linear-gradient(135deg,#e879f9,#22d3ee);
   --radius:12px;--btnradius:10px;--gap:14px;--pad:16px;--fs:13px;
   --accent:#22d3ee;
+  --font:"Microsoft YaHei UI","微软雅黑",Inter,system-ui,sans-serif;
+  --shell:iconrail;
+  --dur-page:.38s;--dur-dlg:.3s;
+  --ease-page:cubic-bezier(.3,.8,.3,1);--ease-dlg:cubic-bezier(.3,.9,.3,1.1);
 }
-/* 方案自身的明暗底色微调（正交覆盖，保证每套方案的气质一致） */
+/* 方案自身的明暗底色微调（正交覆盖，底色随各方案主色气质走） */
 html[data-variant="b"][data-scheme="dark"]{--bg:#0d1117;--panel:#151b24;--panel2:#1a212c;--bar:#11161e;--border:#242c39}
-html[data-variant="b"][data-scheme="light"]{--bg:#fbfbfc;--panel:#ffffff;--border:#e7e9ee}
-html[data-variant="c"][data-scheme="dark"]{--bg:#0f1120;--panel:#171a2e;--panel2:#1d2138;--bar:#141628;--border:#2a2f4d}
-html[data-variant="c"][data-scheme="light"]{--bg:#fafaff;--panel:#ffffff;--border:#e6e4f4}
-html[data-variant="d"][data-scheme="dark"]{--bg:#0c121a;--panel:#121a24;--panel2:#17212d;--bar:#0f161f;--border:#202c3b}
-html[data-variant="d"][data-scheme="light"]{--bg:#f4f6f9;--panel:#ffffff;--border:#dfe4ec}
-html[data-variant="e"][data-scheme="dark"]{--bg:#05080d;--panel:#0a1119;--panel2:#0f1822;--bar:#070c12;--border:#16303a}
-html[data-variant="e"][data-scheme="light"]{--bg:#f5fbfc;--panel:#ffffff;--border:#d9e9ee}
+html[data-variant="b"][data-scheme="light"]{--bg:#fbfbfa;--panel:#ffffff;--border:#e7e5e0}
+html[data-variant="c"][data-scheme="dark"]{--bg:#1a1020;--panel:#241730;--panel2:#2b1d3a;--bar:#1d1228;--border:#3d2b52}
+html[data-variant="c"][data-scheme="light"]{--bg:#fdf9f7;--panel:#ffffff;--border:#f0e4de}
+html[data-variant="d"][data-scheme="dark"]{--bg:#0a120e;--panel:#101914;--panel2:#14201a;--bar:#0c1410;--border:#1d2f26}
+html[data-variant="d"][data-scheme="light"]{--bg:#f3f7f5;--panel:#ffffff;--border:#dce5e0}
+html[data-variant="e"][data-scheme="dark"]{--bg:#07060d;--panel:#0d0b16;--panel2:#12101e;--bar:#0a0812;--border:#2a1f3d}
+html[data-variant="e"][data-scheme="light"]{--bg:#faf7fc;--panel:#ffffff;--border:#e8dff0}
 
-/* —— 五套方案的卡片质感微差（同一套卡片规则，换方案换气质）——
-   A 描边 + 顶缘高光（默认，工业仪表）；B 无高光 + 极淡投影（纸面极简）；
-   C 柔和投影更大（圆润）；D 无高光无投影（密度优先、接近表格）；
-   E 青色高光 + 发光（霓虹）。只覆盖 Token，卡片的结构/间距/语义规则不变 ——
-   换方案时页面"长得更不一样"，但评审看到的仍是同一套工程约定。 */
+/* —— 五套方案的卡片质感基因（同一套卡片规则，五种质感语言）——
+   A 描边+顶缘高光（工业仪表，scheme 层默认值即 A）；
+   B 无高光+细线+近乎无投影（纸面杂志）；C 无描边+大投影（圆润悬浮）；
+   D 全平面+硬边框（终端表格）；E 品红高光+霓虹发光。
+   只覆盖质感 Token，卡片的结构/间距/语义规则不变 ——
+   换方案时页面"长得完全不一样"，但评审看到的仍是同一套工程约定。 */
 html[data-variant="b"][data-scheme="dark"]{--card-hi:transparent;--card-lift:none;--card-hover-border:#2c3646}
 html[data-variant="b"][data-scheme="light"]{--card-hi:transparent;--card-lift:0 1px 2px rgba(60,72,110,.05);--card-hover-border:#d8dce6}
-html[data-variant="c"][data-scheme="dark"]{--card-hi:rgba(255,255,255,.07);--card-lift:0 16px 36px rgba(0,0,0,.5)}
-html[data-variant="c"][data-scheme="light"]{--card-hi:rgba(255,255,255,.95);--card-lift:0 16px 34px rgba(80,80,150,.16)}
-html[data-variant="d"][data-scheme="dark"]{--card-hi:transparent;--card-lift:none;--card-hover-border:#26374a}
-html[data-variant="d"][data-scheme="light"]{--card-hi:transparent;--card-lift:none;--card-hover-border:#cfd6e2}
-html[data-variant="e"][data-scheme="dark"]{--card-hi:rgba(34,211,238,.14);--card-lift:0 0 24px rgba(34,211,238,.12)}
-html[data-variant="e"][data-scheme="light"]{--card-hi:rgba(255,255,255,.95);--card-lift:0 10px 24px rgba(34,150,166,.14)}
+html[data-variant="c"]{--card-line:transparent;--card-well:var(--panel2)}
+html[data-variant="c"][data-scheme="dark"]{--card-hi:rgba(255,255,255,.08);--card-lift:0 18px 40px rgba(0,0,0,.5)}
+html[data-variant="c"][data-scheme="light"]{--card-hi:rgba(255,255,255,.9);--card-lift:0 14px 34px rgba(234,88,12,.14)}
+html[data-variant="d"]{--card-hi:transparent;--card-lift:none;--card-line:var(--border);--card-hover-border:var(--primary)}
+html[data-variant="e"][data-scheme="dark"]{--card-hi:rgba(232,121,249,.16);--card-lift:0 0 26px rgba(232,121,249,.14);--card-hover-border:#4d2b5e}
+html[data-variant="e"][data-scheme="light"]{--card-hi:rgba(255,255,255,.95);--card-lift:0 10px 24px rgba(160,80,190,.14)}
+
+/* —— 五套方案的壳层构图（同一 DOM，五种构图；--shell 供 check 脚本 C26 核验）——
+   A sidebar  侧栏后台（默认）：nav 垂直居左 150px；
+   B tabs     顶栏Tab：nav 横排到顶栏下方，下划线式大间距 tab，杂志感；
+   C dock     底部Dock：nav 沉底居中变悬浮胶囊，主区全宽；
+   D cmdbar   顶部命令条：nav 横排成一行紧凑命令条（虚线分隔+等宽小字号）；
+   E iconrail 图标窄栏：nav 收窄为 56px 图标栏（文字隐藏、图标保留）。 */
+html[data-variant="b"] .app-body{flex-direction:column}
+html[data-variant="b"] .app-nav{width:100%;flex-direction:row;align-items:center;gap:2px;padding:6px 14px;border-right:none;border-bottom:1px solid var(--border);background:transparent}
+html[data-variant="b"] .nav-i{flex:0 0 auto;padding:7px 16px;border-radius:0}
+html[data-variant="b"] .nav-i.active{background:transparent;color:var(--primary);box-shadow:inset 0 -2px 0 var(--primary)}
+html[data-variant="b"] .nav-i[style*="margin-top:auto"]{margin-top:0 !important;margin-left:auto}
+
+html[data-variant="c"] .app-body{flex-direction:column}
+html[data-variant="c"] .app-nav{order:2;width:100%;flex-direction:row;justify-content:center;gap:8px;padding:8px 14px 12px;border-right:none;border-top:none;background:transparent}
+html[data-variant="c"] .nav-i{flex:0 0 auto;padding:8px 18px;border-radius:99px;background:var(--panel2);border:1px solid var(--border);box-shadow:var(--card-lift)}
+html[data-variant="c"] .nav-i.active{background:var(--badgegrad);color:#fff;border-color:transparent}
+html[data-variant="c"] .nav-i[style*="margin-top:auto"]{margin-top:0 !important}
+
+html[data-variant="d"] .app-body{flex-direction:column}
+html[data-variant="d"] .app-nav{width:100%;flex-direction:row;gap:1px;padding:4px 10px;border-right:none;border-bottom:1px dashed var(--border);background:transparent}
+html[data-variant="d"] .nav-i{flex:0 0 auto;padding:5px 12px;border-radius:2px;font-size:11.5px;letter-spacing:.3px}
+html[data-variant="d"] .nav-i.active{background:var(--primarydim);color:var(--primary);font-weight:700}
+html[data-variant="d"] .nav-i[style*="margin-top:auto"]{margin-top:0 !important}
+
+html[data-variant="e"] .app-nav{width:56px;padding:10px 6px;align-items:center}
+html[data-variant="e"] .nav-i{width:42px;justify-content:center;padding:9px 0;font-size:0;overflow:hidden}
+html[data-variant="e"] .nav-i > span:first-child{font-size:14px}
+html[data-variant="e"] .nav-i .n{display:none}
+
+/* —— 门面页布局分叉（同一 DOM 内的有限构图分叉，配套铁律 2）——
+   写法：<div data-layout="c">…方案 C 专属构图…</div>，块内只做容器重排、不重写控件；
+   [data-layout] 默认全隐藏，只有对应方案的显示规则把它放出来（防止写一半忘删）。
+   限制：门面页 ≤3 页使用、每页 ≤3 套布局；常规子页/弹窗禁止分叉（DOM 只写一次）。 */
+[data-layout]{display:none !important}
+html[data-variant="a"] [data-layout="a"]{display:flex !important}
+html[data-variant="b"] [data-layout="b"]{display:flex !important}
+html[data-variant="c"] [data-layout="c"]{display:flex !important}
+html[data-variant="d"] [data-layout="d"]{display:flex !important}
+html[data-variant="e"] [data-layout="e"]{display:flex !important}
 
 /* ==========================================================================
    2. 外壳布局：顶栏 / 左栏导航 / 舞台 / 右栏说明
@@ -267,7 +335,7 @@ html[data-variant="e"][data-scheme="light"]{--card-hi:rgba(255,255,255,.95);--ca
 }
 /* 状态块：默认全隐藏，由 JS 按 html[data-state] 显示当前页对应块 */
 .state-block{display:none}
-.page.active{display:block;animation:sPageIn .34s cubic-bezier(.22,.9,.28,1)}
+.page.active{display:block;animation:sPageIn var(--dur-page,.34s) var(--ease-page,cubic-bezier(.22,.9,.28,1))}
 html[data-motion="off"] .page.active{animation:none}
 
 /* —— 右栏说明 —— */
@@ -306,7 +374,7 @@ html[data-motion="off"] .page.active{animation:none}
 /* ==========================================================================
    3. mockup 控件库（页面内部只用这些，配合 Token 自动换肤）
    ========================================================================== */
-.app{width:var(--pw);height:var(--ph);display:flex;flex-direction:column;background:var(--bg);color:var(--fg);overflow:hidden}
+.app{width:var(--pw);height:var(--ph);display:flex;flex-direction:column;background:var(--bg);color:var(--fg);overflow:hidden;font-family:var(--font,"Microsoft YaHei UI","微软雅黑",Inter,system-ui,sans-serif)}
 .app-bar{
   height:46px;flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 14px;
   background:var(--bar);border-bottom:1px solid var(--border);
@@ -675,7 +743,7 @@ html[data-motion="off"] *::after{animation:none!important;transition:none!import
   padding:26px;background:rgba(4,8,14,.62);backdrop-filter:blur(3px);overflow:auto;
 }
 .modal-layer.open{display:flex;animation:sFade .18s ease}
-.modal-layer.open .dlg{animation:sDlgIn .26s cubic-bezier(.2,.9,.25,1.08)}
+.modal-layer.open .dlg{animation:sDlgIn var(--dur-dlg,.26s) var(--ease-dlg,cubic-bezier(.2,.9,.25,1.08))}
 .modal-layer .dlg{--dw:560px;max-width:min(96vw,1000px);max-height:92vh}
 
 /* ==========================================================================
@@ -830,11 +898,11 @@ html[data-motion="off"] *::after{animation:none!important;transition:none!import
     <div class="tb-sp"></div>
     <span class="tb-label">方案</span>
     <div class="tb-group" id="varbtns">
-      <button class="tb-varbtn on" data-variant="a" title="A 深夜中控">A</button>
-      <button class="tb-varbtn" data-variant="b" title="B 极简留白">B</button>
-      <button class="tb-varbtn" data-variant="c" title="C 渐变活力">C</button>
-      <button class="tb-varbtn" data-variant="d" title="D 高密度灰蓝">D</button>
-      <button class="tb-varbtn" data-variant="e" title="E 暗夜霓虹">E</button>
+      <button class="tb-varbtn on" data-variant="a" title="A 深夜中控 · 侧栏后台">A</button>
+      <button class="tb-varbtn" data-variant="b" title="B 杂志留白 · 顶栏Tab">B</button>
+      <button class="tb-varbtn" data-variant="c" title="C 日落活力 · 底部Dock">C</button>
+      <button class="tb-varbtn" data-variant="d" title="D 终端密度 · 命令条">D</button>
+      <button class="tb-varbtn" data-variant="e" title="E 暗夜霓虹 · 图标窄栏">E</button>
     </div>
     <button class="tb-mini" id="stackBtn" title="切换目标技术栈（规范视图的落地映射以此为主）">WinForms</button>
     <button class="tb-mini" id="schemeBtn" title="切换深色 / 浅色">🌙 深色</button>
@@ -1407,7 +1475,7 @@ html[data-motion="off"] *::after{animation:none!important;transition:none!import
 
   // 方案默认明暗：A/E 天生深色，B/C/D 天生浅色
   var VAR_SCHEME = { a: 'dark', b: 'light', c: 'light', d: 'light', e: 'dark' };
-  var VAR_NAME = { a: 'A 深夜中控', b: 'B 极简留白', c: 'C 渐变活力', d: 'D 高密度灰蓝', e: 'E 暗夜霓虹' };
+  var VAR_NAME = { a: 'A 深夜中控', b: 'B 杂志留白', c: 'C 日落活力', d: 'D 终端密度', e: 'E 暗夜霓虹' };
 
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $$(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
@@ -1860,10 +1928,10 @@ html[data-motion="off"] *::after{animation:none!important;transition:none!import
      评审看到的是这套方案真实的卡片参数，而不是一段写死的说明文字。 */
   var CARD_MOOD = {
     a: '描边 + 顶缘高光 + 轻投影：工业仪表气质，深色下层次最清楚。',
-    b: '无高光、近乎无投影：纸面极简，靠留白与 1px 细线分块。',
-    c: '大圆角 + 柔和投影：圆润亲和，适合对外演示与触屏操作。',
-    d: '无高光无投影、内边距收紧：接近表格的密度，一屏信息最多。',
-    e: '青色高光 + 发光边：霓虹气质，深色最佳，浅色自动收敛。'
+    b: '无高光、近乎无投影：纸面杂志感，靠留白与 1px 细线分块，等线字体更轻盈。',
+    c: '无描边 + 大投影：圆润悬浮，橙粉渐变强调，适合对外演示与触屏操作。',
+    d: '全平面 + 硬边框：终端表格密度，等宽字体，一屏信息最多。',
+    e: '品红高光 + 发光边：霓虹气质，深色最佳，浅色自动收敛。'
   };
 
   function buildCardSpec() {
@@ -1901,7 +1969,7 @@ html[data-motion="off"] *::after{animation:none!important;transition:none!import
     var vid = html.dataset.variant || 'a';
     document.getElementById('cardMood').innerHTML =
       '<b>' + VAR_NAME[vid] + '</b> · ' + (CARD_MOOD[vid] || '') +
-      '<br>卡片规则本身不随方案变：三段结构、6/9/14 三档间距、单一语义色 —— 换方案只换气质。';
+      '<br>卡片结构规则全稿统一（三段结构、6/9/14 三档间距、单一语义色）；配色/字体/质感/壳层构图/动效性格随方案基因变 —— 这是分方案的意义。';
   }
 
   /* ---------------------------------------------------------------- 落地映射（两栈）
