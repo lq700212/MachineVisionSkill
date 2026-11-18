@@ -83,7 +83,7 @@ mklink /J "C:\Users\Administrator\.agents\skills" "C:\Users\Administrator\.confi
 
 | 调用名 | 说明 |
 |------|------|
-| `dashi-ppt` | 预置视觉主题的 HTML 演示生成，可导出 PPTX / PDF |
+| `ppt-master` | 原生可编辑 PPTX 生成/重构/美化：SVG→DrawingML、母版模板填充、旁白与动画（第三方，v6.9.0） |
 | `image-to-editable-ppt` | 把图片/扫描版 PPT、PDF 重建为对象级可编辑 .pptx |
 | `ppt-merge` | 复刻模板母版到结果文件，基于结果母版建新页并复制内容形状 |
 | `docx-cn-to-en` | 中文 .docx 批量翻译成英文 .docx，保留字体/加粗/列宽/拓扑图 |
@@ -133,7 +133,7 @@ MachineVisionSkill/
 ├── ui-mockup-studio/        # UI 设计稿工作台 + 界面简化标准（galaxy 组件库 + 双栈映射）
 ├── readme/                  # 本 skill：README 流程 + 两个核验脚本
 ├── scanner-config/          # 扫码枪 E10 网络配置与排障（ScannerTool.ps1）
-├── dashi-ppt/ 等 7 个目录    # 本地安装不入库（见上表），随 opencode 直接加载
+├── ppt-master/ 等 7 个目录   # 本地安装不入库（见上表），随 opencode 直接加载
 ├── README.md                # 本文件
 ├── CHANGELOG.md             # 全仓库变更总览（时间倒序，每条含 commit message 建议）
 └── AGENTS.md                # 改 skill 前必读的铁律与收尾清单
@@ -150,4 +150,4 @@ MachineVisionSkill/
 
 本仓库按白名单跟踪 skill 目录（见 `.gitignore`）：当前只跟踪 `视觉硬件选型`、`视觉选型测试`、`git自动提交推送`、`winforms-ui-debug`、`上位机通讯封装`、`上位机报价`、`opencode-cache-cleaner`、`盖章专员*`、`viewturbo-checkin`、`培训文档生成`、`软件卸载清理`、`readme`、`scanner-config`、`ui-mockup-studio`。新开发的 skill 需要入库时，在 `.gitignore` 加一行 `!目录名/` 并同步更新上表与根 `AGENTS.md` 放行清单；本机运行时缓存（如 `viewturbo-checkin/accounts.json`、`ui-mockup-studio/config.json`）单独忽略。
 
-> 上表其余 skill（`dashi-ppt`/`image-to-editable-ppt`/`PPT智能合并`/`docx中文转英文`/`solidworks-automation`/`pdf-analysis`/`pixel2motion`）是**本地安装、不入库**的第三方/自有 skill，保留在目录里供 opencode / DSH 直接引用。
+> 上表其余 skill（`ppt-master`/`image-to-editable-ppt`/`PPT智能合并`/`docx中文转英文`/`solidworks-automation`/`pdf-analysis`/`pixel2motion`）是**本地安装、不入库**的第三方/自有 skill，保留在目录里供 opencode / DSH 直接引用。

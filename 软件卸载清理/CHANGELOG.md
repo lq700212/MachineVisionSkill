@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### 修复：阶段 8 快捷方式清理只处理 .lnk/.url（2026-11-18）
+
+- `scripts/uninstall.ps1` 阶段 8 扫描开始菜单/桌面时加 `-File`，且仅匹配扩展名 `.lnk` / `.url`，避免与软件关键词同名的目录或普通文件被当成快捷方式删除
+- 验证：`Parser::ParseFile` 语法解析 0 error
+
 ### 元数据：frontmatter `name` 改 ASCII slug（DSH 接入，2026-10-22）
 
 - 仅改 SKILL.md frontmatter 的 `name`：`软件卸载清理` → `software-uninstall-cleaner`（1 行）；目录名/正文/脚本零改动，未升版

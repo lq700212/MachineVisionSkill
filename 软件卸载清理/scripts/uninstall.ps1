@@ -587,8 +587,8 @@ $shortcutRoots = @(
 $shortcutCleaned = 0
 foreach ($kw in $allKeywords) {
     foreach ($smPath in $shortcutRoots) {
-        $hits = Get-ChildItem -LiteralPath $smPath -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "*$kw*" } |
+        $hits = Get-ChildItem -LiteralPath $smPath -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { ($_.Extension -eq '.lnk' -or $_.Extension -eq '.url') -and $_.Name -like "*$kw*" } |
             Sort-Object { $_.FullName.Length } -Descending
         foreach ($h in $hits) {
             $hp = $h.FullName

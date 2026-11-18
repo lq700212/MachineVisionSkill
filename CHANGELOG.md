@@ -3,6 +3,50 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-18（安装第三方 skill ppt-master 6.9.0；卸载 dashi-ppt；软件卸载清理快捷方式误删修复）
+
+### 改动范围
+
+1. **ppt-master**（第三方 skill，本地安装不入库 v6.9.0）：从
+   https://github.com/hugohe3/ppt-master 的 `skills/ppt-master` 子目录（sparse
+   checkout）安装到 `skills/ppt-master/`，含 SKILL.md、scripts/、references/、
+   templates/、workflows/、requirements.txt；frontmatter `name: ppt-master` 已是
+   kebab-case ASCII，无需改名，opencode 已加载。依赖按 requirements.txt 安装到
+   本机 Python 3.11。`.gitignore` 未放行（保持不入库，git status 不显示该目录属
+   预期）。
+2. **dashi-ppt**（卸载，用户要求删干净）：删除 `skills/dashi-ppt/`（2877 files /
+   118.0 MB，含 project/node_modules 与空的 output/exports，无用户产物），
+   opencode 加载器已同步移除该 skill；README "本地安装、不入库" 8→7 并删登记行，
+   目录树与文末引用同步。
+3. **软件卸载清理**（`scripts/uninstall.ps1`，阶段 8）：快捷方式清理扫描加 `-File`，
+   且仅匹配 `.lnk` / `.url`，避免把与软件关键词同名的目录或普通文件误当快捷方式删除。
+
+### 验证
+
+- `python scripts/attribution_guard.py` 退出码 0（skill 自带完整性校验通过）。
+- 文件完整性：13094 files / 38.5 MB（与 sparse checkout 源一致）。
+- opencode 系统加载器实证：`ppt-master` 已出现在可用 skill 列表（用户级
+  `~/.config/opencode/skills`，无需重启）。
+- Python 依赖全装（阿里云镜像，`PIP_EXIT=0`）：yaml/pptx/xlsxwriter/pathops/
+  uharfbuzz/edge_tts/pymupdf/mammoth/markdownify/ebooklib/nbconvert/openpyxl/
+  Pillow/numpy/requests/bs4/curl_cffi/flask/google-genai 全部 import 通过。
+- 端到端冒烟：`project_manager.py init` → 单页 SVG → `finalize_svg.py` →
+  `svg_quality_checker.py`（0 errors）→ `svg_to_pptx.py --quick-generate`
+  产出 1 页 16:9 PPTX（12.9 KB，3 个原生形状：1 矩形 + 2 文本框，python-pptx
+  可正常打开），postflight `quality_gate=passed`。
+- 备注：Windows 上 `python3` 是 WindowsApps stub（退出码 9009），按 SKILL.md
+  规则改用 `python` 执行即可，未改系统 PATH。
+- dashi-ppt 卸载：`skills/dashi-ppt/` 已删除且路径不存在；`.config/opencode`
+  与当前工作目录全文检索无 `dashi-ppt` 残留引用（CHANGELOG 历史条目除外）；
+  opencode 系统通知该 skill ID 已不可用。无 junction/符号链接需要清理。
+- `uninstall.ps1` PowerShell 语法解析通过（`Parser::ParseFile` 0 error）。
+
+### 建议 commit message
+
+```
+docs(skills): 安装 ppt-master 6.9.0、卸载 dashi-ppt（均不入库，README 一览 8→7）；fix(软件卸载清理): 阶段8 快捷方式只清理 .lnk/.url
+```
+
 ## 2026-11-18（本次·ui-mockup-studio v1.3.0 方案差异度大改）
 
 ### 改动范围
