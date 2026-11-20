@@ -320,14 +320,29 @@ class TestValidateNoneCycle(unittest.TestCase):
 
 class TestFlyShootingLightChain(unittest.TestCase):
     """飞拍光源链回归（2026-09-03：三处断裂一次修通——类型过滤误杀频闪、
-    曝光上限检查方向反了、主流程忽略飞拍且丢 strobe 标记）"""
+    曝光上限检查方向反了、主流程忽略飞拍且丢 strobe 标记）
+
+    光源池一律显式注入：本组验的是过滤/透传逻辑，不能依赖真实库恰好有频闪
+    型号（2026-11-20 光源库改为只收官网核验条目后，库内暂无频闪型号）。
+    """
+
+    @staticmethod
+    def _strobe_pool():
+        return [{
+            'brand': 'CCS', 'model': 'LFV-300X10', 'type': '频闪光源',
+            'angle': 45, 'outer_diameter': 150, 'inner_diameter': 120,
+            'working_distance_range': [40, 120],
+            'strobe': True, 'min_exposure_us': 10, 'max_exposure_us': 1000,
+            'verified': True, 'verification_url': 'https://example.invalid/fly',
+        }]
 
     def test_strobe_survives_default_type_filter(self):
         """回归: 飞拍+默认类型(环形光)不得把频闪光源提前滤空；
         历史bug：唯一频闪 type=频闪光源≠环形光，查询恒为空"""
         from light_selector import select_light_source
         r = select_light_source(100, 120, light_type='环形光',
-                                is_fly_shooting=True, max_exposure_us=100)
+                                is_fly_shooting=True, max_exposure_us=100,
+                                lights=self._strobe_pool())
         self.assertTrue(r, msg='飞拍查询恒为空=频闪被类型过滤误杀')
         self.assertTrue(all(l.get('strobe') for l in r),
                         msg='飞拍结果必须全是频闪光源')
@@ -337,26 +352,31 @@ class TestFlyShootingLightChain(unittest.TestCase):
         不得过滤；历史bug：上确界检查方向反了，该过不过"""
         from light_selector import select_light_source
         r = select_light_source(100, 120, light_type='频闪光源',
-                                is_fly_shooting=True, max_exposure_us=2000)
+                                is_fly_shooting=True, max_exposure_us=2000,
+                                lights=self._strobe_pool())
         self.assertTrue(r, msg='宽松上限被过滤=上确界检查方向错误')
 
     def test_too_short_exposure_filtered(self):
         """注入防误伤: 系统要求5μs短于光源最短10μs，必须滤掉（下确界仍有效）"""
         from light_selector import select_light_source
         r = select_light_source(100, 120, light_type='频闪光源',
-                                is_fly_shooting=True, max_exposure_us=5)
+                                is_fly_shooting=True, max_exposure_us=5,
+                                lights=self._strobe_pool())
         self.assertFalse(r, msg='光源打不到系统要求的短曝光，必须无候选')
 
     def test_main_flow_recommends_strobe(self):
         """回归: 主流程飞拍必须推荐频闪光源且透传 strobe 标记；
         历史bug：主流程忽略 is_fly_shooting，随机拿普通环形光→核验必FAIL"""
+        from unittest import mock
         from vision_proposal_generator import VisionProposalGenerator
         g = VisionProposalGenerator()
-        light = g._recommend_light_source(
-            {'field_of_view': {'width': 46.2, 'height': 26.4},
-             'is_fly_shooting': True, 'precision_requirement': 0.03,
-             'pixel_per_precision': 3.0},
-            {'working_distance': 110})
+        with mock.patch('light_selector.load_light_database',
+                        return_value=self._strobe_pool()):
+            light = g._recommend_light_source(
+                {'field_of_view': {'width': 46.2, 'height': 26.4},
+                 'is_fly_shooting': True, 'precision_requirement': 0.03,
+                 'pixel_per_precision': 3.0},
+                {'working_distance': 110})
         self.assertTrue(light.get('strobe'), msg=f'飞拍必须推荐频闪: {light}')
         self.assertNotIn('光源光源', light.get('type', ''),
                          msg=f"类型标签重复后缀: {light.get('type')}")
@@ -438,6 +458,43 @@ class TestConfigDirectHardwareValidation(unittest.TestCase):
         finally:
             vt_common.rmtree(tmp)
 
+    def test_explicit_hardware_light_not_fabricated(self):
+        """回归: 显式相机/镜头但未指定光源时，光源必须来自硬件库；
+        历史bug：此处用硬编码 {'brand':'OPT','model':'RL-100-90-W'} 兜底，
+        该型号官网无此命名，会绕过核验直接进 selection_result 与 PPT"""
+        from vision_proposal_generator import VisionProposalGenerator
+        cam, lens = self._real_pair()
+        tmp = vt_common.temp_dir()
+        try:
+            out = os.path.join(tmp, 'out')
+            g = VisionProposalGenerator()
+            g.auto_mode = True
+            r = g.generate_from_config_data(
+                {'project_name': 't', 'precision_requirement': 0.03,
+                 'cycle_time': 3, 'detection_area': '10x8',
+                 'camera': cam, 'lens': lens}, out)
+            self.assertIsNotNone(r, msg='合法显式硬件不应中止')
+            with open(os.path.join(out, 'selection_result.json'),
+                      encoding='utf-8') as f:
+                saved = json.load(f)
+            light = (saved.get('hardware_selection') or {}).get('light_source') or {}
+            model = light.get('model') or ''
+            self.assertNotEqual(model, 'RL-100-90-W',
+                                msg='不得回退到历史硬编码光源型号')
+            if model:
+                with open(os.path.join(vt_common.SKILL_DIR, 'config',
+                                       'hardware_database.json'),
+                          encoding='utf-8') as f:
+                    db = json.load(f)
+                models = {l.get('model') for l in db['light_sources']}
+                self.assertIn(model, models,
+                              msg=f'光源 {model} 不在已核验硬件库中')
+            else:
+                self.assertTrue(light.get('needs_expansion'),
+                                msg='无型号时必须标记 needs_expansion')
+        finally:
+            vt_common.rmtree(tmp)
+
 
 class TestStringFovAccepted(unittest.TestCase):
     """视野字符串回归：config 手填 "60x40" 字符串此前穿透全部分支、
@@ -452,6 +509,226 @@ class TestStringFovAccepted(unittest.TestCase):
                                 'field_of_view': '60x40'})
         self.assertAlmostEqual(v['field_of_view']['width'], 60, places=6)
         self.assertAlmostEqual(v['field_of_view']['height'], 40, places=6)
+
+
+class TestLightSourceHonesty(unittest.TestCase):
+    """光源防幻觉回归（2026-11-20 事故：light_selector 硬编码 6 条由
+    \"品牌+尺寸+角度+颜色\"拼造的光源型号，核验只查相机/镜头，不存在的
+    OPT RL-150-120-W 一路进交付 PPT，报告仍显示全 PASS）
+    """
+
+    CAM = {'brand': 'X', 'model': 'C', 'sensor_size': '2/3"',
+           'resolution': {'width': 2448, 'height': 2048},
+           'pixel_size': 3.45, 'lens_mount': 'C-Mount', 'max_fps': 24}
+    LENS = {'brand': 'Y', 'model': 'L', 'type': '物方远心镜头',
+            'magnification': 0.5, 'working_distance': 110, 'mount': 'C-Mount',
+            'supported_sensor_size': '1.1"'}
+    PARAMS = {'precision_requirement': 0.03, 'pixel_per_precision': 3.0,
+              'field_of_view': {'width': 16, 'height': 13}, 'cycle_time': 3}
+
+    def test_empty_db_no_fabricated_model(self):
+        """库空时主流程必须返回空型号 + needs_expansion，禁止兜底编造"""
+        from unittest import mock
+        from vision_proposal_generator import VisionProposalGenerator
+        with mock.patch('light_selector.load_light_database', return_value=[]):
+            light = VisionProposalGenerator()._recommend_light_source(
+                {'field_of_view': {'width': 24, 'height': 19.2},
+                 'detection_type': '定位引导'},
+                {'working_distance': 300})
+        self.assertEqual(light.get('model', ''), '', msg='库空却给出了型号')
+        self.assertTrue(light.get('needs_expansion'), msg='库空必须标记需扩库')
+        self.assertIn('已核验', light.get('expansion_note', ''))
+        self.assertNotIn('RL-', light.get('model', ''),
+                         msg='不得回退到历史硬编码型号')
+
+    def test_load_empty_file_returns_empty(self):
+        """库文件 light_sources=[] 时必须返回空列表并提示扩库，不得抛错/编造"""
+        import io
+        import json
+        import contextlib
+        from light_selector import load_light_database
+        tmp = vt_common.temp_dir()
+        try:
+            path = os.path.join(tmp, 'db.json')
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump({'light_sources': []}, f)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                lights = load_light_database(path)
+            self.assertEqual(lights, [])
+            self.assertIn('光源库', buf.getvalue())
+        finally:
+            vt_common.rmtree(tmp)
+
+    def _light_verifiability_check(self, light):
+        from validate_selection import SelectionValidator
+        checks = SelectionValidator().validate(
+            self.CAM, self.LENS, self.PARAMS, light=light, verbose=False)
+        return [c for c in checks if c.name == '光源可查证性']
+
+    def test_unverified_light_warns(self):
+        """库内 verified=false 条目必须出 WARNING（此前光源完全不进核验）"""
+        items = self._light_verifiability_check({
+            'brand': '孚根', 'model': 'FG-DR150-A30',
+            'verified': False, 'verification_url': 'https://example.invalid/a'})
+        self.assertEqual(len(items), 1, msg='光源可查证性检查未接入 validate')
+        self.assertEqual(items[0].result.value, '[WARN]')
+
+    def test_verified_without_url_warns(self):
+        """标记已核验但缺官网链接 = 来源不可追溯，仍须 WARNING"""
+        items = self._light_verifiability_check({
+            'brand': '追光者', 'model': 'FL-R-9260-W',
+            'verified': True, 'verification_url': ''})
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].result.value, '[WARN]')
+        self.assertIn('verification_url', items[0].message)
+
+    def test_verified_light_passes(self):
+        """完整核验信息的光源应 PASS"""
+        items = self._light_verifiability_check({
+            'brand': '追光者', 'model': 'FL-R-9260-W',
+            'verified': True,
+            'verification_url': 'http://f-lighting.cn/show.asp?id=34'})
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].result.value, '[PASS]')
+
+    def test_missing_light_warns(self):
+        """未提供光源（库无匹配）不得静默——至少 WARNING 提示无法核验"""
+        items = self._light_verifiability_check(None)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].result.value, '[WARN]')
+
+    def test_missing_inner_diameter_warns_not_fabricated(self):
+        """内径缺失（真实情况：孚根页面未给）→ WARNING，不得编一个数字"""
+        from validate_selection import SelectionValidator
+        checks = SelectionValidator().validate(
+            self.CAM, self.LENS, self.PARAMS,
+            light={'brand': '孚根', 'model': 'FG-DR150-A30',
+                   'verified': False, 'inner_diameter': None},
+            verbose=False)
+        inner = [c for c in checks if c.name == '光源内径覆盖']
+        self.assertEqual(len(inner), 1)
+        self.assertEqual(inner[0].result.value, '[WARN]')
+
+
+class TestLightAngleAndBrand(unittest.TestCase):
+    """光源角度档位与品牌优先级（2026-11-20 用户要求：优先追光者/孚根，
+    且环光必须区分高角度与低角度）"""
+
+    def _light(self, brand, model, angle, outer=100, inner=60, verified=True):
+        return {'brand': brand, 'model': model, 'type': '环形光',
+                'angle': angle, 'outer_diameter': outer,
+                'inner_diameter': inner,
+                'working_distance_range': [40, 300],
+                'verified': verified,
+                'verification_url': 'https://example.invalid/x'}
+
+    def test_positioning_prefers_high_angle(self):
+        from light_selector import recommend_light_angle
+        r = recommend_light_angle('定位引导')
+        self.assertEqual(r['mode'], 'high')
+        self.assertGreaterEqual(r['preferred'], 60)
+
+    def test_surface_defect_prefers_low_angle(self):
+        from light_selector import recommend_light_angle
+        r = recommend_light_angle('外观缺陷检测', ['划痕', '毛刺'])
+        self.assertEqual(r['mode'], 'low')
+        self.assertLessEqual(r['preferred'], 30)
+
+    def test_default_is_mid_angle(self):
+        from light_selector import recommend_light_angle
+        self.assertEqual(recommend_light_angle('').get('preferred'), 45)
+
+    def test_brand_priority_first_brand_wins(self):
+        from light_selector import select_light_source
+        pool = [self._light('孚根', 'FG-DR150-A30', 60),
+                self._light('追光者', 'FL-R-9260-W', 60)]
+        r = select_light_source(30, 200, angle=60, lights=pool,
+                                preferred_brands=['追光者', '孚根'])
+        self.assertTrue(r)
+        self.assertEqual(r[0]['brand'], '追光者',
+                         msg='追光者层有合适型号时不得降级到孚根')
+
+    def test_brand_falls_back_when_first_layer_unsuitable(self):
+        from light_selector import select_light_source
+        pool = [self._light('追光者', 'FL-R-9030-W', 30, outer=90, inner=57),
+                self._light('孚根', 'FG-DR180-A60', 60, outer=180, inner=80)]
+        # 请求高角度 60°：追光者只有低角度 → 整层无候选 → 降级到孚根高角度
+        r = select_light_source(30, 200, angle=60, lights=pool,
+                                preferred_brands=['追光者', '孚根'])
+        self.assertTrue(r, msg='首品牌无合适型号时必须降级到下一品牌')
+        self.assertEqual(r[0]['brand'], '孚根')
+
+    def test_high_angle_request_excludes_low_angle_models(self):
+        from light_selector import select_light_source
+        pool = [self._light('追光者', 'FL-R-9030-W', 30),
+                self._light('追光者', 'FL-R-9260-W', 60)]
+        r = select_light_source(30, 200, angle=60, lights=pool)
+        self.assertTrue(r)
+        self.assertTrue(all(l['angle'] >= 60 for l in r),
+                        msg='高角度请求不得返回低角度环光')
+
+    def test_missing_fields_kept_and_flagged(self):
+        """内径/WD区间缺失的条目保留但标记未核验（不得丢弃也不得编造）"""
+        from light_selector import select_light_source
+        pool = [{'brand': '孚根', 'model': 'FG-DR150-A30', 'type': '环形光',
+                 'angle': 30, 'outer_diameter': 150, 'inner_diameter': None,
+                 'working_distance_range': None, 'verified': False}]
+        r = select_light_source(30, 200, angle=30, lights=pool)
+        self.assertTrue(r, msg='缺内径/WD的条目不应被直接丢弃')
+        self.assertFalse(r[0]['inner_diameter_verified'])
+        self.assertFalse(r[0]['wd_range_verified'])
+        self.assertIsNone(r[0]['inner_diameter'])
+
+
+class TestPrecisionUnitHeuristic(unittest.TestCase):
+    """口径复核回归（2026-11-20：客户\"偏差≤0.5mm\"被填成 precision_requirement，
+    精度链松 10 倍，24mm 视野只需 144px 的荒谬结论）"""
+
+    def _validate_capture(self, params):
+        import io
+        import contextlib
+        from vision_proposal_generator import VisionProposalGenerator
+        g = VisionProposalGenerator()
+        g.auto_mode = True
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            g._validate_params(params)
+        return buf.getvalue()
+
+    def test_tolerance_scale_precision_aborts(self):
+        """auto 模式必须硬阻断：弱模型不会读提示，只会把低配方案交付出去"""
+        with self.assertRaises(ValueError) as cm:
+            self._validate_capture(
+                {'precision_requirement': 0.5, 'detection_type': '定位引导',
+                 'field_of_view': {'width': 24, 'height': 19.2}, 'cycle_time': 1})
+        msg = str(cm.exception)
+        self.assertIn('口径复核', msg)
+        self.assertIn('tolerance', msg)
+        self.assertIn('0.05', msg, msg='应提示按公差/10 反推 0.05mm')
+        self.assertIn('precision_basis_confirmed', msg,
+                      msg='必须给出"确为设备精度"的显式确认出口')
+
+    def test_confirmed_precision_passes(self):
+        """用户拍板确为设备精度后，显式确认字段可放行"""
+        out = self._validate_capture(
+            {'precision_requirement': 0.5, 'detection_type': '定位引导',
+             'field_of_view': {'width': 24, 'height': 19.2}, 'cycle_time': 1,
+             'precision_basis_confirmed': True})
+        self.assertNotIn('已中止', out)
+
+    def test_tolerance_filled_no_hint(self):
+        """已按 tolerance 填口径时不得再提示"""
+        out = self._validate_capture(
+            {'tolerance': 0.5, 'detection_type': '定位引导',
+             'field_of_view': {'width': 24, 'height': 19.2}, 'cycle_time': 1})
+        self.assertNotIn('口径复核', out)
+
+    def test_small_precision_no_hint(self):
+        out = self._validate_capture(
+            {'precision_requirement': 0.05, 'detection_type': '定位引导',
+             'field_of_view': {'width': 24, 'height': 19.2}, 'cycle_time': 1})
+        self.assertNotIn('口径复核', out)
 
 
 if __name__ == '__main__':

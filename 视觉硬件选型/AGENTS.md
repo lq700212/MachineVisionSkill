@@ -111,3 +111,9 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 | 弱模型死循环调参 | 无解输出无决策指引 | 无解诊断+口径自动复核+铁律输出 |
 | 光源WD公式可算出>镜头WD | 公式没看镜头WD | cap约束+核验FAIL |
 | PPT的WD断行/类型矛盾/残留 | 模板替换边界 | check_ppt_quality 7项机检 |
+| 光源型号 `OPT RL-150-120-W` 进交付PPT（官网无此命名） | `light_selector.py` 把 6 条光源硬编码在代码里，型号由"品牌+尺寸+角度+颜色"拼造，且无 verified/官网链接；核验只查相机/镜头，CLI 连 light 都没传给 validator | 光源库改读 `hardware_database.json.light_sources`；库空/无匹配返回空型号并写"待选型（需扩库）"；新增光源可查证性+内径覆盖两项核验；CLI 补传 light；入库真实追光者/孚根型号 |
+| 客户"偏差≤0.5mm"被填成 precision_requirement，需 144px 的荒谬结论 | 公差与设备精度口径混淆，精度链松 10 倍；原实现只提示不阻断，弱模型会忽略提示继续交付 | `_validate_params` 改为**硬阻断(exit 2)**：给出"公差/设备精度"原话问法 + `precision_basis_confirmed` 确认出口；禁止模型自行添加；SKILL.md 增加判别三问 |
+| `--hardware_page 5` 越界后静默不生成PPT | 参数语义是"第N个硬件页"而非页码，越界只打印一行错误并 return None，上层继续验收 | 越界打印每个硬件页的真实页码；上层检查 None 并中止，main exit 非零 |
+| 验收 FAIL 的 PPT 仍留在 `output\` 根目录 | `_run_acceptance` 只打印一句"处理前不要交付"，不改变文件位置，主流程仍 exit 0，弱模型看到文件就交付 | FAIL/验收异常 → PPT 移入 `output\_rejected\`，`_run_acceptance` 返回 False，主流程 return None / exit 1 |
+| 弱模型用 `--no_verify` 跳过验收，或从 `_rejected` 取文件改名交付 | 只靠文档提醒，无硬约束 | `--no_verify` 打印"产物不得作为交付依据"；SKILL.md 禁止事项第5条；汇报模板仅限退出码=0 |
+| 追光者正确型号 `FL-R-10045-W` 被质检判"旧型号残留" | `FL-R-` 既是模板旧型号前缀，也是追光者真实型号前缀，前缀匹配无法区分 | 选中型号白名单放行；旧型号/历史假型号仍拦截；新增 `test_ppt_quality_contract.py` 锁边界 |

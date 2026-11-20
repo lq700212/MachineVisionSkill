@@ -120,5 +120,140 @@ class TestPptPipeline(unittest.TestCase):
             vt_common.rmtree(tmp)
 
 
+    def test_hardware_page_out_of_range_fails_loudly(self):
+        """回归: --hardware_page 语义是\"第N个硬件页\"而非幻灯片页码，越界此前
+        只打印一行错误并 return None，上层继续走验收，用户只看到\"跑完没PPT\"。
+        现要求：非零退出 + 列出真实硬件页 + 不产出半成品 PPT/验收报告"""
+        tmp = vt_common.temp_dir('vt_page_')
+        try:
+            cfg = os.path.join(tmp, 'project_config.json')
+            tpl = os.path.join(tmp, 'template.pptx')
+            out = os.path.join(tmp, 'out')
+            write_config(cfg)
+            write_template(tpl)
+            cmd = [sys.executable, GENERATOR, '--config', cfg,
+                   '--template', tpl, '--output', out, '--auto',
+                   '--hardware_page', '5']
+            p = subprocess.run(cmd, capture_output=True, text=True,
+                               encoding='utf-8', errors='replace',
+                               timeout=300)
+            combined = (p.stdout or '') + (p.stderr or '')
+            self.assertNotEqual(p.returncode, 0,
+                                f'越界必须非零退出\n{combined[-1200:]}')
+            self.assertIn('超出范围', combined)
+            self.assertIn('第几个硬件页', combined)
+            self.assertIn('第1页=第1个硬件页', combined,
+                          msg='必须列出模板里硬件页的真实页码')
+            self.assertFalse(glob.glob(os.path.join(out, '*.pptx')),
+                             '越界不得产出半成品PPT')
+            self.assertFalse(os.path.exists(
+                os.path.join(out, 'acceptance_report.txt')),
+                '未生成PPT不得进入验收')
+        finally:
+            vt_common.rmtree(tmp)
+
+
+def slide_texts(pptx_path):
+    """收集整份 PPT 的全部文本（含表格单元格）"""
+    from pptx import Presentation
+    texts = []
+
+    def walk(shapes):
+        for sh in shapes:
+            if getattr(sh, 'has_text_frame', False) and sh.has_text_frame:
+                texts.append(sh.text_frame.text)
+            if getattr(sh, 'has_table', False) and sh.has_table:
+                for row in sh.table.rows:
+                    for cell in row.cells:
+                        texts.append(cell.text)
+    for slide in Presentation(pptx_path).slides:
+        walk(slide.shapes)
+    return texts
+
+
+class TestLightPlaceholderInPpt(unittest.TestCase):
+    """光源库无匹配时，PPT 必须把\"待选型（需扩库）\"写进光源行，
+    并覆盖模板里的旧型号（否则评审会以为本方案选的就是模板那个型号）"""
+
+    def test_needs_expansion_overwrites_template_model(self):
+        from generate_ppt import generate_ppt
+        tmp = vt_common.temp_dir('vt_lightph_')
+        try:
+            tpl = os.path.join(tmp, 'template.pptx')
+            out = os.path.join(tmp, 'out.pptx')
+            write_template(tpl)
+            with open(os.path.join(vt_common.SKILL_DIR, 'config',
+                                   'hardware_database.json'),
+                      encoding='utf-8') as f:
+                db = json.load(f)
+            cam = next(c for c in db['cameras']
+                       if c.get('model') == 'MV-CS050-10GM')
+            lens = next(l for l in db['lenses']
+                        if l.get('model') == 'WWK05-110-111V3')
+            r = generate_ppt(
+                template_path=tpl, output_path=out,
+                camera=cam, lens=lens,
+                light_source={'brand': '', 'model': '',
+                              'needs_expansion': True,
+                              'type': 'LED环形光光源',
+                              'working_distance': 200},
+                project_name='待选型测试',
+                field_of_view={'width': 60, 'height': 40},
+                hardware_page=None)
+            self.assertTrue(r, msg='generate_ppt 不应返回 None')
+            joined = '\n'.join(slide_texts(out))
+            self.assertIn('待选型（需扩库）', joined,
+                          msg='光源未选中时必须写明待选型')
+            self.assertNotIn('RL-100-90-W', joined,
+                             msg='模板旧型号必须被覆盖')
+        finally:
+            vt_common.rmtree(tmp)
+
+
+class TestAcceptanceQuarantine(unittest.TestCase):
+    """回归: 验收 FAIL 此前只打印一句"处理前不要交付"，PPT 仍留在 output 根
+    目录，弱模型看到文件就会交付。现要求：FAIL → 返回 False + PPT 移入
+    _rejected\\\\ + 主流程据此非零退出，物理上杜绝误交付。"""
+
+    def test_fail_quarantines_ppt(self):
+        import contextlib
+        import io
+
+        from pptx import Presentation
+        from pptx.util import Mm
+
+        from vision_proposal_generator import VisionProposalGenerator
+        tmp = vt_common.temp_dir('vt_quar_')
+        try:
+            out = os.path.join(tmp, 'out')
+            os.makedirs(out)
+            ppt = os.path.join(out, '方案.pptx')
+            prs = Presentation()
+            prs.slide_width, prs.slide_height = Mm(254), Mm(142)
+            slide = prs.slides.add_slide(prs.slide_layouts[6])
+            box = slide.shapes.add_textbox(Mm(10), Mm(10), Mm(200), Mm(20))
+            box.text_frame.text = '硬件选型'
+            box2 = slide.shapes.add_textbox(Mm(10), Mm(40), Mm(200), Mm(20))
+            box2.text_frame.text = '相机： Basler acA2500-14gm'  # 故意留旧型号
+            prs.save(ppt)
+
+            g = VisionProposalGenerator()
+            g.auto_mode = True
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                ok = g._run_acceptance(ppt, out)
+            log = buf.getvalue()
+
+            self.assertFalse(ok, msg=f'验收FAIL必须返回False\n{log[-800:]}')
+            self.assertFalse(os.path.exists(ppt),
+                             msg='FAIL的PPT不得留在可交付目录根')
+            rejected = glob.glob(os.path.join(out, '_rejected', '*.pptx'))
+            self.assertTrue(rejected, msg='FAIL的PPT必须移入_rejected留证')
+            self.assertIn('拒绝交付', log)
+            self.assertIn('_rejected', log)
+        finally:
+            vt_common.rmtree(tmp)
+
+
 if __name__ == '__main__':
     unittest.main()

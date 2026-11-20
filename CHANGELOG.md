@@ -3,6 +3,66 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-20（本次·视觉硬件选型 v1.12.0 光源防幻觉 + 视觉选型测试 v1.1.0 六层体系）
+
+### 改动范围
+
+1. **视觉硬件选型**（v1.11.2 → v1.12.0）：光源防幻觉与交付可信度专项。
+   - `light_selector.py`：删除代码内硬编码的 6 条光源，改读
+     `config/hardware_database.json.light_sources`（唯一数据源）；库空/无匹配返回
+     空型号 + `needs_expansion`，**禁止拼造型号兜底**；新增品牌优先级
+     `追光者 > 孚根 > OPT > CCS`（逐层降级，`light_brand_priority` 可覆盖）与
+     角度档位（定位/测量 60~90°、划痕/纹理 10~30°、通用 45°，`light_angle` 可强制）。
+   - `validate_selection.py`：新增"光源可查证性"（verified + verification_url）与
+     "光源内径覆盖"（内径 ≥ 视野对角线×1.1）两项核验；`--selection` 补传 light_source。
+   - `vision_proposal_generator.py`：`precision_requirement ≥ 0.2mm` 且定位/贴装类
+     时**硬阻断 exit 2**，给出"图纸公差还是设备精度"原话问法，
+     `precision_basis_confirmed: true` 才放行；验收 FAIL/异常时 PPT 自动移入
+     `output/_rejected/` 并 exit 1；`--hardware_page` 越界打印真实页码并中止；
+     SKILL 补"WD/镜头被机械结构锁死时先反推最小靶面"分支。
+   - `check_ppt_quality.py`：选中型号白名单，修复追光者 `FL-R-` 与旧型号触发词
+     重叠导致的正确交付误杀；旧型号/历史假型号（`RL-150-120-W` 等）仍拦截。
+   - `hardware_database.json`：入库追光者 FL-R 高角度 6 款 + 低角度 4 款（官网参数
+     逐项抄录，verified=true + 官网链接）；孚根 FG-DR 2 款仅有型号页信息
+     （内径/功率/WD 缺失），verified=false 待厂商确认。
+   - `SKILL.md` / `AGENTS.md` / `README.md` / `config_template.json`：光源规则、
+     口径判别三问、靶面反推、事故档案与配置项同步。
+2. **视觉选型测试**（v1.0.0 → v1.1.0）：六层分区测试体系。
+   - `run_all.py`：新增 `--layer smoke|data|doc|core|ppt|workflow`（支持逗号多层）、
+     `--list`、`--failfast`；`--fast` 兼容旧用法（跳过端到端重层）。
+   - 新增 `test_smoke.py`、`test_data_integrity.py`、`test_doc_contract.py`、
+     `test_ppt_quality_contract.py`、`test_workflow_contract.py`；扩充
+     `test_selection_core.py` 与 `test_ppt_pipeline.py`。
+   - 新增用例覆盖：硬件库 schema/官网链接/假型号黑名单、文档引用与代码一致、
+     当前型号白名单放行与旧型号拦截、退出码三态/产物 schema/幂等/口径硬阻断。
+3. **根文件**：
+   - `README.md`：按 readme skill 重新核对事实——徽章加 tests；新增"先验证，再使用"
+     与"质量防线"章节；更新视觉硬件选型/视觉选型测试两行能力描述；**本地安装
+     不入库清单 7 → 18 个**（删掉已不存在的 `dashi-ppt`，补 `ppt-master`、mem0 生态、
+     `mes-station-master`、`multi-agent-batch-refactor`、`cli-hub-meta-skill` 等）；
+     目录树与版本管理约定同步。
+   - `AGENTS.md`：新增铁律"每次提交前必须判断 README 是否需要更新"（含触发条件、
+     判断留痕、`check_readme.py` / `img_inventory.py` 核验命令），收尾清单加两项；
+     新增"行尾纪律"小节。
+   - `.gitattributes`（新增）+ `.gitignore` 放行：统一行尾 `text=auto eol=lf`、
+     二进制 `binary`、`.bat/.cmd` 保留 CRLF；一次性把 `.gitignore` / `CHANGELOG.md` /
+     盖章专员 3 个 md + 1 个 py + 视觉硬件选型 3 个 draft json 共 9 个 CRLF 文件
+     归一化为 LF，根治"保存一次就整文件假 diff"（`CHANGELOG.md` 曾一次重写 1482 行）。
+
+### 验证结论
+
+- **视觉选型测试**：全量 `run_all.py` **139/139 通过、0 失败、0 跳过、27.4s（本次实跑）**；
+  分层入口 `--layer smoke|data|doc|core|ppt|workflow` 均实跑通过。
+- **README**：`check_readme.py` **NG=0 / WARN=0 / RESULT: OK**；
+  `img_inventory.py`（跳过 18 个本地不入库目录）**RESULT: OK**，无死引用。
+- **新增文件可见性**：5 个新测试文件在 `git status` 中均可见（白名单未拦）。
+
+### 建议 commit message
+
+```
+feat(视觉硬件选型,视觉选型测试): 光源防幻觉+口径硬阻断+验收隔离(v1.12.0)；六层测试体系139用例(v1.1.0)；docs(README) 重写门户含质量防线+本地skill清单7→18；chore(AGENTS) 提交前必须判断README同步
+```
+
 ## 2026-11-18（安装第三方 skill ppt-master 6.9.0；卸载 dashi-ppt；软件卸载清理快捷方式误删修复）
 
 ### 改动范围
@@ -46,6 +106,7 @@
 ```
 docs(skills): 安装 ppt-master 6.9.0、卸载 dashi-ppt（均不入库，README 一览 8→7）；fix(软件卸载清理): 阶段8 快捷方式只清理 .lnk/.url
 ```
+
 
 ## 2026-11-18（本次·ui-mockup-studio v1.3.0 方案差异度大改）
 

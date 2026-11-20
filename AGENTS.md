@@ -28,6 +28,20 @@
 - 改完 frontmatter **无需重启 DSH**：filesystem provider 监听 skill 根目录，
   frontmatter 一改即热更新进会话目录（2026-10-22 实测：改完当轮即出现在可用 skill 列表）
 
+**⛔ 铁律：每次提交前必须判断 README 是否需要更新（无需用户提醒）**
+- 只要本次改动涉及以下任一项，就**必须同步更新根 `README.md`**：
+  - 新增 / 删除 / 改名 skill 目录，或改 frontmatter 的 `name` / `description`；
+  - 某个 skill 的能力边界、支持格式、入口命令、测试规模发生变化；
+  - 新增 / 删除本地安装（不入库）的 skill。
+- 改动不涉及上述内容时，也要在提交前**明确判断一次**，并在根 `CHANGELOG.md`
+  本次记录里写一句"README 无需更新（原因：…）"，避免下一个人重复判断。
+- 判断后必须跑 README 卫生核验：
+  `python readme/scripts/check_readme.py .`；有 NG 先修再提交。
+  README 有图片引用时再跑 `python readme/scripts/img_inventory.py .`
+  （本地安装不入库的目录用 `--skip-dir` 跳过，清单见根 `README.md`）。
+- 自检口诀：**"这次提交改变了读者对仓库的认知吗？"** 是 → 改 README；
+  否 → 在 CHANGELOG 里留一句判断依据。
+
 **改完 skill 后，必须在根目录 `CHANGELOG.md` 顶部追加本次记录**，内容固定为
 "给 git commit 用"的总览：
 
@@ -57,6 +71,18 @@
 - 本机运行时缓存单独忽略：`viewturbo-checkin/accounts.json`（真实账号）、
   `ui-mockup-studio/config.json`（galaxy 路径缓存，resolve_galaxy 自动生成）。
 
+## 行尾纪律（CRLF 假 diff 根治）
+
+- 根 `.gitattributes` 已统一：文本 `text=auto eol=lf`，二进制 `binary`，`.bat/.cmd`
+  保留 CRLF。**Git 存储与工作区都是 LF**，clone 后无需任何本机配置。
+- 新增文本文件必须 LF；提交前用 `git ls-files --eol` 自查，文本应全部
+  `i/lf w/lf`，出现 `i/crlf` 或大面积 `w/crlf` 先归一化再提交。
+- 用脚本读写文本时显式 `newline=''`（如 `open(p, encoding='utf-8', newline='')`）；
+  默认 universal-newline 会把 CRLF 静默改成 LF，导致整文件假 diff（2026-11-20
+  踩过：`CHANGELOG.md` 以 CRLF 入库，一次保存重写 1482 行）。
+- 万一历史文件仍是 CRLF，先 `git add --renormalize .` 归一化并单独说明，
+  不要把整文件行尾变化混进功能提交。
+
 ## 历史教训（每次提交前扫一眼）
 
 | 教训 | 根因 | 正确做法 |
@@ -68,5 +94,7 @@
 
 - [ ] 各 skill 目录内：代码/文档/测试已改，`CHANGELOG.md` 已更新
 - [ ] 根目录 `CHANGELOG.md` 顶部已追加本次记录（哪些 skill + 各改了什么 + 验证 + commit message）
+- [ ] 根 `README.md` 已判断是否需要更新：需要 → 已改；不需要 → 在根 CHANGELOG 写明判断依据
+- [ ] README 卫生核验 `check_readme.py` 已跑；有图片引用时加跑 `img_inventory.py`
 - [ ] 新增文件/目录已检查 `git status` 是否可见（`.gitignore` 白名单放行）
-- [ ] 无需用户提醒即可执行以上三条（本文件即固化规则，任何会话开始即载入）
+- [ ] 无需用户提醒即可执行以上各条（本文件即固化规则，任何会话开始即载入）

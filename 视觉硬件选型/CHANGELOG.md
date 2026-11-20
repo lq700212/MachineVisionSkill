@@ -2,7 +2,48 @@
 
 本 skill 的所有版本变动统一记录在此。格式参考 Keep a Changelog。
 
-## [Unreleased]
+## [Unreleased]（v1.12.0）
+
+### 修复+新增：光源防幻觉、品牌优先级与角度档位、公差口径复核（2026-11-20）
+
+- **背景**：贴片方案交付后发现 PPT 里的光源 `OPT RL-150-120-W` 在 OPT 官网
+  并不存在——`light_selector.py` 把 6 条光源硬编码在代码里，型号由"品牌+尺寸+
+  角度+颜色"拼造，且无 verified/官网链接；核验只查相机/镜头，CLI 连 light 都
+  没传给 validator，于是"19 项 PASS、0 警告"的报告带着假型号进了交付物。
+- **光源唯一数据源**：删除 `LIGHT_SOURCE_DATABASE`，`light_selector` 改读
+  `config/hardware_database.json.light_sources`，并清掉显式硬件分支里
+  `{'brand':'OPT','model':'RL-100-90-W'}` 的默认值（无光源则按需求自动选）；
+  库空/无匹配返回空型号 + `needs_expansion`，PPT 写"待选型（需扩库）"，
+  **禁止拼造型号兜底**（删除 `_recommend_light_source` 中 `RL-100-90-W` 的兜底）。
+- **核验补两项**：`光源可查证性`（verified + verification_url；库内查无型号
+  提示疑似编造）、`光源内径覆盖`（内径 ≥ 视野对角线×1.1；缺内径=WARNING 待
+  核验）。`validate_selection.py --selection` 现在会把 light_source 一起核验。
+- **品牌优先级**（用户指定）：默认 `追光者 > 孚根 > OPT > CCS`，逐层降级，
+  首层有合适型号不降级；config 可用 `light_brand_priority` 覆盖。
+- **角度档位**（用户指定，环光必须区分高/低角度）：定位/测量/孔中心/贴装引导
+  → 高角度 60~90°（孔壁阴影短、边缘位置真实）；表面划痕/纹理/凹凸 → 低角度
+  10~30°（掠射增强凹凸对比）；通用 → 45°。`light_angle` 可强制指定。
+- **口径复核（硬阻断）**：`precision_requirement ≥ 0.2mm` 且定位/贴装类时
+  **直接中止(exit 2)**，输出"是图纸公差还是设备检测精度"的原话问法。此前只打印
+  提示，弱模型会忽略提示继续交付低配方案（0.5mm 被算成 144px 的荒谬结论）。
+  用户确认非公差后填 `precision_basis_confirmed: true` 放行，**禁止模型自行添加**。
+- **验收隔离（防误交付）**：规则自查 FAIL 或验收脚本异常时，PPT 自动移入
+  `output\_rejected\`，`_run_acceptance` 返回 False，主流程 return None / exit 1。
+  此前 FAIL 只打印"处理前不要交付"，PPT 仍留在 output 根目录，弱模型看到文件就交付。
+- **质检白名单误杀修复**：追光者真实型号以 `FL-R-` 开头，与"旧型号残留"触发词
+  重叠，正确交付会被 `check_ppt_quality` 判 FAIL（本轮实测复现）。现把本次选中的
+  相机/镜头/光源型号作为白名单传入；旧型号与历史假型号（`RL-150-120-W`、
+  `RL-100-90-W`、`OPT-RI15030-W` 等）仍照常拦截。
+- **靶面反推**：SKILL.md 补"工作距离/镜头被机械结构锁死时先反推最小靶面，
+  再选相机"分支（24mm×0.333=8.0mm → 必须 2/3"）。
+- **`--hardware_page` 越界**：打印每个硬件页的真实页码并明确失败；上层检查
+  `generate_ppt` 返回 None 后中止，不再"跑完没 PPT"；不产出半成品、不进入验收。
+- **硬件库**：入库追光者 FL-R 高角度 6 款 + 低角度 4 款（官网参数表逐项抄录
+  外径/内径/角度/功率/重量，verified=true + 官网链接）；孚根 FG-DR 2 款仅有
+  型号页信息（内径/功率/WD 缺失），verified=false 待厂商确认。
+- **测试**：新增 37 条回归/注入用例（分层冒烟/数据完整性/文档契约/质检判定边界/
+  工作流退出码与幂等），加上光源与口径相关用例，全量 139/139 通过、0 跳过、26.3s。
+  分层入口见 `视觉选型测试/SKILL.md`（`--layer smoke|data|doc|core|ppt|workflow`）。
 
 ### 元数据：frontmatter `name` 改 ASCII slug（DSH 接入，2026-10-22）
 

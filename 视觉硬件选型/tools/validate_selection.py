@@ -10,7 +10,8 @@
   5. 光学兼容性（像圆覆盖靶面、卡口匹配）
   6. 性能余量（帧率≥1.5×节拍、景深≥零件高度波动）
   7. 远心必要性（尺寸测量/高精度时应使用远心镜头）
-  8. 型号可查证性（verified标记 + 官网链接）
+  8. 型号可查证性（相机/镜头/光源 verified标记 + 官网链接）
+  9. 光源内径覆盖（内孔 ≥ 视野对角线×1.1，防遮挡视野）
 """
 
 import json
@@ -82,6 +83,8 @@ class SelectionValidator:
         self._check_performance_margin(camera, lens, params)
         self._check_telecentric_necessity(lens, params)
         self._check_verifiability(camera, lens)
+        self._check_light_verifiability(light)
+        self._check_light_inner_diameter(light, params)
         self._check_light_working_distance(lens, light)
         self._check_fly_shooting(camera, lens, params, light)
 
@@ -90,6 +93,79 @@ class SelectionValidator:
         return self.checks
 
     # ------------------------------------------------------------------
+    def _check_light_verifiability(self, light: Dict = None):
+        """光源可查证性（2026-11-20 事故：光源型号由代码硬编码拼造，
+        核验 19 项全 PASS 仍让不存在的 OPT RL-150-120-W 进了 PPT）"""
+        if not light or not light.get('model'):
+            self.checks.append(CheckItem(
+                "光源可查证性", CheckResult.WARNING,
+                "未指定光源型号（光源库无匹配或未提供），无法核验可查证性",
+                "按 SKILL.md 扩库流程入库已核验光源后重跑；"
+                "禁止用品牌+尺寸+角度拼型号"))
+            return
+
+        model = light['model']
+        # 与硬件库交叉校验：库内查无此型号时给出明确提示（不直接 FAIL，
+        # 兼容用户显式指定并已人工核验的真实型号）
+        in_db = None
+        try:
+            from light_selector import load_light_database
+            db_models = {l.get('model') for l in load_light_database()}
+            if db_models:
+                in_db = model in db_models
+        except Exception:
+            pass
+
+        if not light.get('verified'):
+            extra = "；且该型号不在已核验硬件库中，疑似编造" if in_db is False else ""
+            self.checks.append(CheckItem(
+                "光源可查证性", CheckResult.WARNING,
+                f"光源 {model} 未标记 verified=true（未对照官网核验）{extra}",
+                "官网详情页逐项核对型号/角度/内外径后 verify 置真；"
+                "未核验型号不得作为交付型号"))
+            return
+
+        if not light.get('verification_url'):
+            self.checks.append(CheckItem(
+                "光源可查证性", CheckResult.WARNING,
+                f"光源 {model} 标记已核验但缺少 verification_url（来源不可追溯）",
+                "补官网详情页链接后重新 verify"))
+            return
+
+        suffix = "" if in_db in (True, None) else "（注意：该型号不在当前硬件库中）"
+        self.checks.append(CheckItem(
+            "光源可查证性", CheckResult.PASS,
+            f"光源 {model} 已验证，官网链接在案{suffix}"))
+
+    def _check_light_inner_diameter(self, light: Dict = None, params: Dict = None):
+        """光源内孔必须覆盖视野对角线×1.1，否则光源本体遮挡视野四角"""
+        if not light or not light.get('model'):
+            return
+        fov = (params or {}).get('field_of_view') or {}
+        try:
+            diag = (fov.get('width', 0) ** 2 + fov.get('height', 0) ** 2) ** 0.5
+        except (TypeError, AttributeError):
+            diag = 0
+        if diag <= 0:
+            return
+
+        inner = light.get('inner_diameter')
+        need = round(diag * 1.1, 1)
+        if inner is None:
+            self.checks.append(CheckItem(
+                "光源内径覆盖", CheckResult.WARNING,
+                f"光源内径未核验（视野对角线 {diag:.1f}mm，需内孔≥{need}mm）",
+                "向厂商确认内径后补库；内孔不足会在视野四角形成遮挡"))
+        elif inner < need:
+            self.checks.append(CheckItem(
+                "光源内径覆盖", CheckResult.FAIL,
+                f"光源内径 {inner}mm < 视野对角线×1.1={need}mm，会遮挡视野",
+                "换更大内径的光源型号，或缩小视野"))
+        else:
+            self.checks.append(CheckItem(
+                "光源内径覆盖", CheckResult.PASS,
+                f"光源内径 {inner}mm ≥ 视野对角线×1.1={need}mm"))
+
     def _check_light_working_distance(self, lens: Dict, light: Dict = None):
         """光源工作距离物理约束：环形/同轴光源装在镜头前端，
         光源到工件距离必须小于镜头物方WD（远心系统WD由镜头决定，不可穿透镜头安装）"""
@@ -419,10 +495,11 @@ class SelectionValidator:
             print(f"\n[FAIL] 核验失败：{f}项必须解决")
 
 
-def validate_selection(camera: Dict, lens: Dict, params: Dict) -> bool:
+def validate_selection(camera: Dict, lens: Dict, params: Dict,
+                       light: Dict = None) -> bool:
     """便捷函数：返回是否通过核验（无FAIL）"""
     validator = SelectionValidator()
-    checks = validator.validate(camera, lens, params)
+    checks = validator.validate(camera, lens, params, light=light)
     return all(c.result != CheckResult.FAIL for c in checks)
 
 
@@ -446,7 +523,9 @@ def main():
 
     hw = selection.get('hardware_selection', {})
     validator = SelectionValidator()
-    checks = validator.validate(hw.get('camera', {}), hw.get('lens', {}), params)
+    # 光源必须一起核验：此前 CLI 只传 camera/lens，光源假型号能绕过全部检查
+    checks = validator.validate(hw.get('camera', {}), hw.get('lens', {}), params,
+                                light=hw.get('light_source'))
 
     if args.json_out:
         report = {

@@ -119,7 +119,7 @@ python tools/vision_proposal_generator.py --config project_config.json --auto
 | `--output` | 输出目录 | `--output ./output` |
 | `--auto` | 自动模式，**AI/弱模型调用必加**（非交互自动选最优方案） | `--auto` |
 | `--hardware_page N` | 多视角模板只替换第N个硬件选型页（缺省全部） | `--hardware_page 1` |
-| `--no_verify` | 跳过生成后自动验收（不建议） | `--no_verify` |
+| `--no_verify` | 跳过生成后自动验收（**仅限人工排障，产物不得交付**） | `--no_verify` |
 | `--wizard` | 使用配置向导（交互式） | `--wizard` |
 
 ---
@@ -166,8 +166,8 @@ python tools/vision_proposal_generator.py --config project_config.json --auto
 | 选型计算/联动匹配/核验 | 脚本 | 0 |
 | PPT生成/替换/验收/预览导出 | 脚本（主流程自动） | 0 |
 | 旧版本PPT清理 | 脚本（验收通过自动清） | 0 |
-| 无解诊断/口径混淆矫正 | 脚本（自动复核+提示） | 转述脚本的确认问题给用户 |
-| 交付判断 | 模型看一行结论 | `FAIL=0` → 交付 |
+| 无解诊断/口径混淆矫正 | 脚本（自动复核+硬阻断） | 把脚本给出的确认问法原样转给用户 |
+| 交付判断 | 看脚本退出码 | `0` → 交付；`1/2` → 不得交付 |
 | 向用户汇报 | 按工作区AGENTS.md模板 | 照抄填空 |
 
 ### 模型能力要求矩阵
@@ -205,8 +205,35 @@ python tools/vision_proposal_generator.py --config project_config.json --auto
 | 缺精度/尺寸时卡在交互输入 | 非交互环境直接报错+填写指引，不卡死 |
 | 尺寸格式写错被静默按默认50x40算 | 报`【尺寸格式错误】`+正确格式示例 |
 | config里模板填相对路径，cwd不对时模板"消失" | 按 config 所在目录解析相对路径 |
-| 改 pixel_per_precision 等口径参数凑解 | 文档铁律禁止+脚本口径复核提示 |
+| 改 pixel_per_precision 等口径参数凑解 | 文档铁律禁止+口径偏大硬阻断(exit 2) |
+| 验收 FAIL 后仍把 output 里的 PPT 当交付物 | FAIL 自动移入 `_rejected\` + 主流程 exit 1 |
 | 从型号名"DTCM110"推断WD=110入库（实际158±3/138±3） | refresh官网闭环修正+wd_spec公差字段+README禁止型号推断 |
+
+---
+
+## 测试与回归（改完必跑）
+
+本 skill 的测试套件在独立 skill `视觉选型测试`（`vision-selection-test`），分层入口：
+
+```bash
+# 日常改完先跑冒烟（秒级）
+python "C:\Users\Administrator\.config\opencode\skills\视觉选型测试\tests\run_all.py" --layer smoke
+
+# 改了选型算法/光源库/PPT/主流程，按 README 的"按改动选层"表跑对应层
+# 交付前必须全量
+python "C:\Users\Administrator\.config\opencode\skills\视觉选型测试\tests\run_all.py"
+```
+
+| 层 | 覆盖 |
+|----|------|
+| smoke | 文件/依赖/JSON/目录卫生 |
+| data | 硬件库 schema、verified+官网链接、无假型号回流 |
+| doc | SKILL.md/README/模板字段与代码一致 |
+| core | 选型算法、精度链、光源角度品牌、文本解析、图片获取 |
+| ppt | `check_ppt_quality` 判定边界 |
+| workflow | 端到端退出码 0/1/2、产物 schema、幂等、验收隔离 |
+
+完整映射表见 `视觉选型测试/SKILL.md`。
 
 ---
 

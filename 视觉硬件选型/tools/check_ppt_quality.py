@@ -43,6 +43,9 @@ EMU_PER_MM = 36000.0
 STALE_TOKENS = [
     'FL-COX2', 'FL-R-', 'acA2500', 'Basler', 'DTCM110-80H',
     'FL-CL', 'FL-RL',
+    # 历史假型号/错误命名（2026-11-20 来源：代码拼造，官网查无此型号）
+    'RL-150-120-W', 'RL-100-90-W', 'ZF-150W', 'ZF-300W',
+    'LFV-300X10', 'OPT-RI15030-W',
 ]
 
 # 光源类型同义组（同组=语义一致）
@@ -117,14 +120,23 @@ def para_font_size(para):
     return None
 
 
-def check_stale_models(hw_slides):
-    """C1: 旧型号残留"""
+def check_stale_models(hw_slides, allow_models=()):
+    """C1: 旧型号残留
+
+    allow_models: 本次选型实际选中的型号白名单。追光者型号本身以 ``FL-R-``
+    开头，与"模板旧型号"触发词重叠——不放行会把正确交付误判成残留
+    （2026-11-20 实测：`追光者 FL-R-10045-W` 被判 FAIL）。
+    """
     issues = []
+    allowed = [m for m in allow_models if m]
     for idx, slide in hw_slides:
         for t, _, _ in slide_texts(slide):
             for token in STALE_TOKENS:
-                if token in t:
-                    issues.append(f"第{idx}页残留旧内容 {token!r}: {t[:40]!r}")
+                if token not in t:
+                    continue
+                if any(m in t for m in allowed):
+                    continue
+                issues.append(f"第{idx}页残留旧内容 {token!r}: {t[:40]!r}")
     return issues
 
 
@@ -347,9 +359,15 @@ def main():
 
     sel_light_type = (selection.get('hardware_selection', {})
                       .get('light_source', {}).get('type', ''))
+    _hw = selection.get('hardware_selection', {}) or {}
+    allow_models = [
+        (_hw.get('light_source') or {}).get('model', ''),
+        (_hw.get('camera') or {}).get('model', ''),
+        (_hw.get('lens') or {}).get('model', ''),
+    ]
 
     results = []  # (级别, 消息)
-    c1 = check_stale_models(hw_slides)
+    c1 = check_stale_models(hw_slides, allow_models)
     results += [('FAIL', m) for m in c1]
     c2 = check_light_consistency(hw_slides, sel_light_type)
     results += [('FAIL' if not m.startswith('[WARN]') else 'WARN', m) for m in c2]

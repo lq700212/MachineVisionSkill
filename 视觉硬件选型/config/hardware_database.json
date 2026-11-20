@@ -2,8 +2,8 @@
   "_metadata": {
     "description": "机器视觉硬件参数数据库",
     "version": "1.0.0",
-    "last_updated": "2026-08-28",
-    "notes": "所有型号必须能在对应品牌官网查证，禁止编造型号",
+    "last_updated": "2026-11-20",
+    "notes": "所有型号必须能在对应品牌官网查证，禁止编造型号；光源条目必须含 angle/outer_diameter，内径与WD范围缺失时须显式留 null 并注明待核验",
     "verification_urls": {
       "海康威视": "https://www.hikrobotics.com/cn/machinevision/product/detail",
       "视清科技": "https://coolens.cn/product/",
@@ -704,9 +704,419 @@
       ],
       "updated_at": "2026-08-29T22:13:27.350158",
       "wd_spec": "110±2"
+    },
+    {
+      "brand": "海康威视",
+      "series": "LF-M72系列",
+      "model": "MVL-MF7538M-ML",
+      "type": "微距镜头",
+      "focal_length": 75,
+      "f_number": "F3.8 ~ F12",
+      "magnification": 0.333,
+      "working_distance": 300,
+      "supported_sensor_size": "2/3\"",
+      "supported_sensor_diameter": 11.0,
+      "mount": "C-Mount",
+      "distortion": 0.02,
+      "features": [
+        "75mm微距镜头",
+        "超低畸变TV 0.02%",
+        "工作距离250~550mm可调",
+        "2/3\"像面，C接口"
+      ],
+      "note": "官网原文：75mm，F3.8，2/3\"，C接口，微距镜头（250mm(0.46X)-550mm(0.16X)）；工作距离范围250~400~550mm；视场角D(11.01mm):6.48° H(8.45mm):4.97° V(7.07mm):4.16°。库内magnification/WD为本方案设计工作点：WD=300mm时β≈75/(300-75)=0.333x，FOV约25.4×21.3mm（按官网视场角算约26.0×21.8mm）",
+      "verified": true,
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/productdetail/?id=11588",
+      "source": "browser_page",
+      "verification_note": "2026-11-20 官网详情页逐项核对：型号/焦距/F数/像面/接口/工作距离/视场角/畸变均一致",
+      "auto_imported": true,
+      "created_at": "2026-11-20T14:11:01.794476"
     }
   ],
-  "light_sources": [],
+  "light_sources": [
+    {
+      "brand": "追光者",
+      "series": "FL-R 环形高角度",
+      "model": "FL-R-7060-W",
+      "type": "环形光",
+      "angle": 60,
+      "angle_class": "high",
+      "color": "白",
+      "voltage": "24V",
+      "power_w": 5.5,
+      "outer_diameter": 70,
+      "inner_diameter": 36,
+      "weight_g": 106,
+      "working_distance_range": null,
+      "features": [
+        "高角度环光",
+        "高密度LED阵列",
+        "可选扩散板/偏光片"
+      ],
+      "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证",
+      "verified": true,
+      "verification_url": "http://f-lighting.cn/show.asp?id=34",
+      "verified_at": "2026-11-20",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "官网参数表核对入库",
+          "source": "http://f-lighting.cn/show.asp?id=34",
+          "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证"
+        }
+      ]
+    },
+    {
+      "brand": "追光者",
+      "series": "FL-R 环形高角度",
+      "model": "FL-R-9260-W",
+      "type": "环形光",
+      "angle": 60,
+      "angle_class": "high",
+      "color": "白",
+      "voltage": "24V",
+      "power_w": 8.4,
+      "outer_diameter": 92,
+      "inner_diameter": 48,
+      "weight_g": 171,
+      "working_distance_range": null,
+      "features": [
+        "高角度环光",
+        "高密度LED阵列",
+        "可选扩散板/偏光片"
+      ],
+      "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证",
+      "verified": true,
+      "verification_url": "http://f-lighting.cn/show.asp?id=34",
+      "verified_at": "2026-11-20",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "官网参数表核对入库",
+          "source": "http://f-lighting.cn/show.asp?id=34",
+          "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证"
+        }
+      ]
+    },
+    {
+      "brand": "追光者",
+      "series": "FL-R 环形高角度",
+      "model": "FL-R-12060-W",
+      "type": "环形光",
+      "angle": 60,
+      "angle_class": "high",
+      "color": "白",
+      "voltage": "24V",
+      "power_w": 12.7,
+      "outer_diameter": 120,
+      "inner_diameter": 60,
+      "weight_g": 327,
+      "working_distance_range": null,
+      "features": [
+        "高角度环光",
+        "高密度LED阵列",
+        "可选扩散板/偏光片"
+      ],
+      "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证",
+      "verified": true,
+      "verification_url": "http://f-lighting.cn/show.asp?id=34",
+      "verified_at": "2026-11-20",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "官网参数表核对入库",
+          "source": "http://f-lighting.cn/show.asp?id=34",
+          "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证"
+        }
+      ]
+    },
+    {
+      "brand": "追光者",
+      "series": "FL-R 环形高角度",
+      "model": "FL-R-5075-W",
+      "type": "环形光",
+      "angle": 75,
+      "angle_class": "high",
+      "color": "白",
+      "voltage": "24V",
+      "power_w": 2.0,
+      "outer_diameter": 50,
+      "inner_diameter": 26.6,
+      "weight_g": 54,
+      "working_distance_range": null,
+      "features": [
+        "高角度环光",
+        "高密度LED阵列",
+        "可选扩散板/偏光片"
+      ],
+      "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证",
+      "verified": true,
+      "verification_url": "http://f-lighting.cn/show.asp?id=34",
+      "verified_at": "2026-11-20",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "官网参数表核对入库",
+          "source": "http://f-lighting.cn/show.asp?id=34",
+          "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证"
+        }
+      ]
+    },
+    {
+      "brand": "追光者",
+      "series": "FL-R 环形高角度",
+      "model": "FL-R-10090-W",
+      "type": "环形光",
+      "angle": 90,
+      "angle_class": "high",
+      "color": "白",
+      "voltage": "24V",
+      "power_w": 7.5,
+      "outer_diameter": 100,
+      "inner_diameter": 50,
+      "weight_g": 248,
+      "working_distance_range": null,
+      "features": [
+        "高角度环光",
+        "高密度LED阵列",
+        "可选扩散板/偏光片"
+      ],
+      "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证",
+      "verified": true,
+      "verification_url": "http://f-lighting.cn/show.asp?id=34",
+      "verified_at": "2026-11-20",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "官网参数表核对入库",
+          "source": "http://f-lighting.cn/show.asp?id=34",
+          "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证"
+        }
+      ]
+    },
+    {
+      "brand": "追光者",
+      "series": "FL-R 环形高角度",
+      "model": "FL-R-15090-W",
+      "type": "环形光",
+      "angle": 90,
+      "angle_class": "high",
+      "color": "白",
+      "voltage": "24V",
+      "power_w": 14.5,
+      "outer_diameter": 150,
+      "inner_diameter": 72,
+      "weight_g": 570,
+      "working_distance_range": null,
+      "features": [
+        "高角度环光",
+        "高密度LED阵列",
+        "可选扩散板/偏光片"
+      ],
+      "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证",
+      "verified": true,
+      "verification_url": "http://f-lighting.cn/show.asp?id=34",
+      "verified_at": "2026-11-20",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "官网参数表核对入库",
+          "source": "http://f-lighting.cn/show.asp?id=34",
+          "note": "追光者官网环形高角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证"
+        }
+      ]
+    },
+    {
+      "brand": "追光者",
+      "series": "FL-R 环形低角度",
+      "model": "FL-R-9030-W",
+      "type": "环形光",
+      "angle": 30,
+      "angle_class": "low",
+      "color": "白",
+      "voltage": "24V",
+      "power_w": 4.8,
+      "outer_diameter": 90,
+      "inner_diameter": 57,
+      "weight_g": 123,
+      "working_distance_range": null,
+      "features": [
+        "低角度环光",
+        "掠射增强凹凸对比",
+        "可选扩散板/偏光片"
+      ],
+      "note": "追光者官网环形低角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证",
+      "verified": true,
+      "verification_url": "http://f-lighting.cn/show.asp?id=35",
+      "verified_at": "2026-11-20",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "官网参数表核对入库",
+          "source": "http://f-lighting.cn/show.asp?id=35",
+          "note": "追光者官网环形低角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证"
+        }
+      ]
+    },
+    {
+      "brand": "追光者",
+      "series": "FL-R 环形低角度",
+      "model": "FL-R-12030-W",
+      "type": "环形光",
+      "angle": 30,
+      "angle_class": "low",
+      "color": "白",
+      "voltage": "24V",
+      "power_w": 9.0,
+      "outer_diameter": 120,
+      "inner_diameter": 80,
+      "weight_g": 215,
+      "working_distance_range": null,
+      "features": [
+        "低角度环光",
+        "掠射增强凹凸对比",
+        "可选扩散板/偏光片"
+      ],
+      "note": "追光者官网环形低角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证",
+      "verified": true,
+      "verification_url": "http://f-lighting.cn/show.asp?id=35",
+      "verified_at": "2026-11-20",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "官网参数表核对入库",
+          "source": "http://f-lighting.cn/show.asp?id=35",
+          "note": "追光者官网环形低角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证"
+        }
+      ]
+    },
+    {
+      "brand": "追光者",
+      "series": "FL-R 环形低角度",
+      "model": "FL-R-10045-W",
+      "type": "环形光",
+      "angle": 45,
+      "angle_class": "mid",
+      "color": "白",
+      "voltage": "24V",
+      "power_w": 11.2,
+      "outer_diameter": 100,
+      "inner_diameter": 52,
+      "weight_g": 226,
+      "working_distance_range": null,
+      "features": [
+        "低角度环光",
+        "掠射增强凹凸对比",
+        "可选扩散板/偏光片"
+      ],
+      "note": "追光者官网环形低角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证",
+      "verified": true,
+      "verification_url": "http://f-lighting.cn/show.asp?id=35",
+      "verified_at": "2026-11-20",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "官网参数表核对入库",
+          "source": "http://f-lighting.cn/show.asp?id=35",
+          "note": "追光者官网环形低角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证"
+        }
+      ]
+    },
+    {
+      "brand": "追光者",
+      "series": "FL-R 环形低角度",
+      "model": "FL-R-15015-W",
+      "type": "环形光",
+      "angle": 15,
+      "angle_class": "low",
+      "color": "白",
+      "voltage": "24V",
+      "power_w": 15.0,
+      "outer_diameter": 150,
+      "inner_diameter": 112,
+      "weight_g": 298,
+      "working_distance_range": null,
+      "features": [
+        "低角度环光",
+        "掠射增强凹凸对比",
+        "可选扩散板/偏光片"
+      ],
+      "note": "追光者官网环形低角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证",
+      "verified": true,
+      "verification_url": "http://f-lighting.cn/show.asp?id=35",
+      "verified_at": "2026-11-20",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "官网参数表核对入库",
+          "source": "http://f-lighting.cn/show.asp?id=35",
+          "note": "追光者官网环形低角度FL-R参数表逐项抄录：外径/内径/角度/功率(G,B,W)/重量；官网未给推荐WD范围，须按实际工作距离打光验证"
+        }
+      ]
+    },
+    {
+      "brand": "孚根",
+      "series": "FG-DR 0-45°",
+      "model": "FG-DR150-A30",
+      "type": "环形光",
+      "angle": 30,
+      "angle_class": "low",
+      "color": "可选",
+      "voltage": "24V",
+      "power_w": null,
+      "outer_diameter": 150,
+      "inner_diameter": null,
+      "weight_g": null,
+      "working_distance_range": null,
+      "features": [
+        "0~45°角度可选",
+        "高密度LED阵列",
+        "可选漫射板"
+      ],
+      "note": "孚根官网新闻页示例型号（FG-DR150-A30：外径150mm/角度30°）；内径/功率/推荐WD页面未给出，待厂商确认后 verify",
+      "verified": false,
+      "verification_url": "https://www.fugenmv.com/NewsStd_829.html",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "型号页记录（参数不全，待核验）",
+          "source": "https://www.fugenmv.com/NewsStd_829.html",
+          "note": "孚根官网新闻页示例型号（FG-DR150-A30：外径150mm/角度30°）；内径/功率/推荐WD页面未给出，待厂商确认后 verify"
+        }
+      ]
+    },
+    {
+      "brand": "孚根",
+      "series": "FG-DR 0-45°",
+      "model": "FG-DR180-A45",
+      "type": "环形光",
+      "angle": 45,
+      "angle_class": "mid",
+      "color": "可选",
+      "voltage": "24V",
+      "power_w": null,
+      "outer_diameter": 180,
+      "inner_diameter": null,
+      "weight_g": null,
+      "working_distance_range": null,
+      "features": [
+        "0~45°角度可选",
+        "高密度LED阵列",
+        "可选漫射板"
+      ],
+      "note": "孚根官网新闻页示例型号（FG-DR180-A45：外径180mm/角度45°）；内径/功率/推荐WD页面未给出，待厂商确认后 verify",
+      "verified": false,
+      "verification_url": "https://www.fugenmv.com/NewsStd_829.html",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "型号页记录（参数不全，待核验）",
+          "source": "https://www.fugenmv.com/NewsStd_829.html",
+          "note": "孚根官网新闻页示例型号（FG-DR180-A45：外径180mm/角度45°）；内径/功率/推荐WD页面未给出，待厂商确认后 verify"
+        }
+      ]
+    }
+  ],
   "motion_platforms": [
     {
       "brand": "THK",

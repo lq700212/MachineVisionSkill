@@ -1,0 +1,25 @@
+# 统一行尾：文本文件一律 LF（Git 存储与工作区一致，避免 CRLF 造成整文件假 diff）
+# 背景：2026-11-20 排查发现 CHANGELOG.md 以 CRLF 入库，每次保存都会整文件重写。
+# 规则：文本 text=auto eol=lf；二进制 binary；Windows 批处理保留 CRLF。
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.pptx binary
+*.xlsx binary
+*.docx binary
+*.zip binary
+*.7z binary
+*.exe binary
+*.dll binary
+*.pyc binary
+
+# cmd.exe 对 LF 容错差，批处理脚本必须 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf

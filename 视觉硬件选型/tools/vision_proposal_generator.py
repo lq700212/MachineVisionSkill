@@ -190,8 +190,17 @@ class VisionProposalGenerator:
             hardware_page=getattr(self, 'hardware_page', None)
         )
 
-        # 9. 自动验收（规则自查+渲染导出）
-        self._run_acceptance(ppt_path, output_dir)
+        if not ppt_path:
+            print("\n[失败] PPT 未生成：上方 generate_ppt 已给出原因"
+                  "（如 --hardware_page 越界）")
+            print("  修正参数后重跑；本次不产出半成品，也不进入验收")
+            return None
+
+        # 9. 自动验收（规则自查+渲染导出）；未通过则产物已隔离，不得继续交付
+        if not self._run_acceptance(ppt_path, output_dir):
+            print("\n[失败] PPT 未通过生成后规则自查（FAIL 项见 acceptance_report.txt），"
+                  "已隔离到 output\\_rejected\\，禁止交付")
+            return None
 
         print("\n" + "=" * 60)
         print("方案生成完成！")
@@ -297,10 +306,17 @@ class VisionProposalGenerator:
         
         # 使用配置中的camera和lens（如果有）
         if 'camera' in config and 'lens' in config:
+            # 显式硬件分支：用户只指定相机/镜头时，光源按同一需求自动选型。
+            # 历史事故：此处曾用 {'brand':'OPT','model':'RL-100-90-W'} 兜底，
+            # 该型号官网不存在（拼造），会绕过核验直接进选型结果与 PPT。
+            _light = config.get('light_source')
+            if not _light:
+                _light = self._recommend_light_source(validated_params,
+                                                      config['lens'])
             selection_result = {
                 'camera': config['camera'],
                 'lens': config['lens'],
-                'light_source': config.get('light_source', {'brand': 'OPT', 'model': 'RL-100-90-W'})
+                'light_source': _light,
             }
             print("\n[步骤2] 使用配置文件中的硬件参数")
             print("  相机: {} {}".format(config['camera']['brand'], config['camera']['model']))
@@ -413,8 +429,17 @@ class VisionProposalGenerator:
             hardware_page=getattr(self, 'hardware_page', None)
         )
 
-        # 自动验收（规则自查+渲染导出）
-        self._run_acceptance(ppt_path, output_dir)
+        if not ppt_path:
+            print("\n[失败] PPT 未生成：上方 generate_ppt 已给出原因"
+                  "（如 --hardware_page 越界）")
+            print("  修正参数后重跑；本次不产出半成品，也不进入验收")
+            return None
+
+        # 自动验收（规则自查+渲染导出）；未通过则产物已隔离，不得继续交付
+        if not self._run_acceptance(ppt_path, output_dir):
+            print("\n[失败] PPT 未通过生成后规则自查（FAIL 项见 acceptance_report.txt），"
+                  "已隔离到 output\\_rejected\\，禁止交付")
+            return None
 
         print("\n" + "=" * 60)
         print("方案生成完成！")
@@ -500,6 +525,45 @@ class VisionProposalGenerator:
                         except ValueError:
                             print("输入无效，请输入数字")
         
+        # ============ 口径合理性复核（2026-11-20 事故） ============
+        # 客户口述"偏差/精度不超过 0.5mm"通常是装配公差，不是设备检测精度。
+        # 若把公差直接填进 precision_requirement，精度链会松 10 倍
+        # （0.5/3=0.167mm/px → 24mm 视野只需 144px），相机被严重低配。
+        # 【硬阻断】auto 模式下不允许"提示后继续"——弱模型会忽略提示直接交付
+        # 低配方案。必须由用户确认口径（改填 tolerance 或显式确认非公差）才继续。
+        _prec = validated.get('precision_requirement')
+        _prec_confirmed = bool(validated.get('precision_basis_confirmed'))
+        if _prec is not None and not has_tolerance and not _prec_confirmed:
+            try:
+                _prec_val = float(_prec)
+            except (TypeError, ValueError):
+                _prec_val = 0
+            _dt = str(validated.get('detection_type') or '')
+            _positioning = any(k in _dt for k in
+                               ('定位', '贴装', '引导', '装配', '对位'))
+            if _prec_val >= 0.2 and (_positioning or not _dt):
+                _msg = (
+                    "\n  [口径复核·已中止] precision_requirement ="
+                    f" {_prec_val:g}mm 偏大，更像装配公差而非设备检测精度。\n"
+                    "    这条口径会把精度链放松 10 倍（相机严重低配），"
+                    "必须先向用户确认：\n"
+                    "    问法：“您说的精度/偏差 X mm，是图纸公差(±X)，"
+                    "还是视觉系统要达到的检测精度？”\n"
+                    "    用户答“公差/偏差”→ 改用 \"tolerance\": "
+                    f"{_prec_val:g}（系统按/10反推 {_prec_val / 10:g}mm）；\n"
+                    "    用户明确答“就是设备检测精度，不是公差”→ 在 config 加 "
+                    "\"precision_basis_confirmed\": true 后重跑。\n"
+                    "    禁止自行添加该确认字段来绕过本检查（等于发明口径）。"
+                )
+                if self.auto_mode:
+                    raise ValueError(_msg)
+                print(_msg)
+                _ans = input("  已获用户确认是设备检测精度？(y=继续 / 其他=中止): ").strip().lower()
+                if _ans != 'y':
+                    raise ValueError("用户未确认精度口径，已中止。请先确认口径再重跑。")
+                validated['precision_basis_confirmed'] = True
+                print("  已记录用户确认: precision_basis_confirmed=true\n")
+
         # ============ 检查工件尺寸/检测区域/视野（必须知道其中一个） ============
         has_part_size = 'part_size' in validated and validated['part_size'] is not None
         has_detection_area = 'detection_area' in validated and validated['detection_area'] is not None
@@ -1177,7 +1241,7 @@ class VisionProposalGenerator:
     
     def _recommend_light_source(self, params: Dict, lens: Dict = None) -> Dict:
         """根据视野/应用场景推荐光源，自动计算工作距离（调用light_selector）"""
-        from light_selector import calculate_light_working_distance, LIGHT_SOURCE_DATABASE
+        from light_selector import calculate_light_working_distance, load_light_database
 
         fov = params.get('field_of_view', {'width': 50, 'height': 40})
         fov_width = fov.get('width', 50)
@@ -1187,79 +1251,108 @@ class VisionProposalGenerator:
         # 镜头工作距离作为光源安装参考
         lens_wd = lens.get('working_distance', 110) if lens else 110
 
-        # 默认45度环形光；尺寸测量场景可改用同轴/背光
-        light_angle = 45
+        # 角度档位先定（决定 WD 公式的角度系数）：定位/测量→60~90°，
+        # 表面缺陷→10~30°，通用→45°
+        from light_selector import (calculate_light_working_distance,
+                                    load_light_database,
+                                    recommend_light_angle,
+                                    select_light_source)
+        angle_rule = recommend_light_angle(
+            params.get('detection_type', ''),
+            params.get('detection_items'))
+        if params.get('light_angle') is not None:
+            angle_rule = {**angle_rule, 'preferred': int(params['light_angle']),
+                          'reason': '用户指定角度'}
+        light_angle = angle_rule['preferred']
+
         result = calculate_light_working_distance(
             field_of_view=fov, camera_wd=lens_wd, light_angle=light_angle)
-        light_wd = result['working_distance_mm']
+        light_wd_formula = result['working_distance_mm']
 
-        # 物理约束：环形光安装在镜头前端，光源到工件距离必须小于镜头物方工作距离
-        # （经验公式只看视野对角线；大视野时公式值可能≥镜头WD，物理上装不下）
+        # 物理约束：环形光装在镜头前端。经验公式给的是"光斑覆盖视野所需的最小 WD"，
+        # 实际安装位置由镜头 WD 决定（环光发光面通常距工件 150~250mm）。
+        # 取 max(公式最小值, 镜头WD-100)，再 cap 到 镜头WD-15（不能顶到镜头）。
+        light_wd_install = max(light_wd_formula, round(lens_wd - 100.0, 1))
         light_wd_cap = round(max(20.0, lens_wd - 15.0), 1)
-        if light_wd > light_wd_cap:
-            print(f"  [光源] 经验公式WD {light_wd}mm 超过镜头WD物理约束"
-                  f"（≤镜头WD-15={light_wd_cap}mm），修正为 {light_wd_cap}mm")
-            light_wd = light_wd_cap
+        light_wd = min(light_wd_install, light_wd_cap)
+        if light_wd != light_wd_formula:
+            print(f"  [光源] WD 由经验公式 {light_wd_formula}mm 调整为安装距离 {light_wd}mm"
+                  f"（镜头WD {lens_wd}mm，环光装镜头前端）")
 
         # 从光源数据库选择：照射范围直径需覆盖视野对角线，工作距离匹配
         # 根因注释：飞拍必须频闪（核验 _check_fly_shooting 对非频闪直接FAIL）；
         # 此前本函数忽略 is_fly_shooting，飞拍项目随机拿到普通环形光→核验必FAIL
-        pool = LIGHT_SOURCE_DATABASE
+        # 唯一数据源 = hardware_database.json 的 light_sources。
+        # 历史教训：旧版从代码内硬编码列表取"品牌+尺寸+角度"拼型号（RL-150-120-W），
+        # OPT 官网无此命名，假型号一路进 PPT。库空时只能如实返回"未匹配"。
+        pool = load_light_database()
         if params.get('is_fly_shooting'):
-            strobe_pool = [l for l in LIGHT_SOURCE_DATABASE if l.get('strobe')]
+            strobe_pool = [l for l in pool if l.get('strobe')]
             if strobe_pool:
                 print("  [光源] 飞拍场景：优先频闪光源")
                 pool = strobe_pool
             else:
                 print("  [光源] ⚠ 飞拍场景但库内无频闪光源，按普通光源选型（核验将FAIL，须扩库）")
-        best = None
-        best_score = -1
         is_fly = bool(params.get('is_fly_shooting'))
-        for light in pool:
-            outer_d = light.get('outer_diameter', 0)
-            if outer_d < fov_diagonal * 1.1:
-                continue  # 照射范围不足
-            wd_min, wd_max = light['working_distance_range']
-            # 与 light_selector.select_light_source 同容差（0.8/1.2）：
-            # 此前本函数用精确区间，频闪 LFV 下限60 vs 公式值51 差9mm 即被滤掉，
-            # 飞拍回退到普通环形光→核验必FAIL
-            if not (wd_min * 0.8 <= light_wd <= wd_max * 1.2):
-                continue
-            # 分数：外径接近视野对角线×1.5，工作距离居中
-            size_score = 1 - abs(outer_d - fov_diagonal * 1.5) / (fov_diagonal * 1.5)
-            wd_center = (wd_min + wd_max) / 2
-            wd_score = 1 - abs(light_wd - wd_center) / max(wd_max, 1)
-            score = size_score * 0.6 + wd_score * 0.4
-            if score > best_score:
-                best_score = score
-                best = light
+        # 品牌优先级：默认追光者→孚根→OPT→CCS，逐层降级
+        preferred_brands = params.get('light_brand_priority') or \
+            ['追光者', '孚根', 'OPT', 'CCS']
+        print(f"  [光源] 角度: {angle_rule['preferred']}°（{angle_rule['reason']}）")
+        print(f"  [光源] 品牌优先级: {' > '.join(preferred_brands)}")
+
+        candidates = select_light_source(
+            fov_diagonal, light_wd,
+            light_type='频闪光源' if is_fly else '环形光',
+            is_fly_shooting=is_fly, lights=pool,
+            angle=angle_rule['preferred'],
+            preferred_brands=preferred_brands)
+        best = candidates[0] if candidates else None
 
         if best is None:
-            # 兜底：数据库中固定型号（飞拍场景下兜底仍是非频闪→核验FAIL拦死，不静默交付错光源）
-            best = {'brand': 'OPT', 'model': 'RL-100-90-W', 'type': '环形光',
-                    'angle': 90, 'outer_diameter': 100,
-                    'working_distance_range': [80, 200]}
-            if is_fly:
-                print("  [光源] ⚠ 频闪池内无尺寸/WD匹配，兜底普通环形光（核验将FAIL，须扩库频闪型号）")
-            else:
-                print("  [光源] 无精确匹配，使用通用环形光源")
+            # 诚实降级：库内无匹配就返回空型号，由 PPT 写"待选型（需扩库）"。
+            # 历史事故：旧版此处兜底硬编码 OPT RL-100-90-W（编造型号）一路进交付物。
+            print("  [光源] ⚠ 库内无满足尺寸/角度/WD 的已核验型号 → 本次不指定型号（需扩库）")
+            return {
+                'brand': '', 'model': '', 'type': 'LED环形光光源',
+                'features': [], 'working_distance': light_wd,
+                'light_angle': angle_rule['preferred'],
+                'outer_diameter': None, 'inner_diameter': None,
+                'inner_diameter_verified': False,
+                'strobe': False, 'min_exposure_us': 0,
+                'max_exposure_us': float('inf'),
+                'needs_expansion': True,
+                'angle_reason': angle_rule['reason'],
+                'expansion_note': (f'需外径≥{fov_diagonal * 1.1:.0f}mm、'
+                                   f'内径≥{fov_diagonal:.0f}mm、'
+                                   f'角度≈{angle_rule["preferred"]}°、'
+                                   f'WD≈{light_wd}mm 的已核验环光型号'),
+                'calculation': result['formula'],
+            }
 
         # 类型标签：DB 的 type 已含"光源"后缀（如频闪光源）时不再追加，避免"LED频闪光源光源"
         _t = best.get('type', '环形光')
         _label = f"LED{_t}" if _t.endswith('光源') else f"LED{_t}光源"
         return {
-            'brand': best.get('brand', 'OPT'),
+            'brand': best.get('brand', ''),
             'model': best.get('model', ''),
+            'series': best.get('series', ''),
             'type': _label,
-            'features': ['可调亮度', '均匀照明'],
+            'features': best.get('features', ['可调亮度', '均匀照明']),
             'working_distance': light_wd,
-            'light_angle': light_angle,
+            'light_angle': best.get('angle', angle_rule['preferred']),
             'outer_diameter': best.get('outer_diameter'),
+            'inner_diameter': best.get('inner_diameter'),
+            'inner_diameter_verified': best.get('inner_diameter_verified', False),
+            'wd_range_verified': best.get('wd_range_verified', False),
+            'verified': bool(best.get('verified', False)),
+            'verification_url': best.get('verification_url', ''),
+            'needs_expansion': False,
+            'angle_reason': angle_rule['reason'],
             # 频闪三字段必须透传：缺失时核验拿不到 strobe 标记，飞拍误判FAIL
             'strobe': bool(best.get('strobe', False)),
             'min_exposure_us': best.get('min_exposure_us', 0),
             'max_exposure_us': best.get('max_exposure_us', float('inf')),
-            'calculation': result['formula']
+            'calculation': result['formula'],
         }
     
     def _design_algorithm(self, params: Dict, selection: Dict) -> Dict:
@@ -1322,11 +1415,39 @@ class VisionProposalGenerator:
         except Exception as e:  # noqa: BLE001 - 补图是增益步骤，任何异常不阻断主流程
             print(f"  [WARN] 补图异常（不阻断）: {e}")
 
-    def _run_acceptance(self, ppt_path: str, output_dir: str):
-        """生成后自动验收：规则自查 + 渲染导出（把AI临场验收行为固化为脚本）"""
+    def _quarantine_ppt(self, ppt_path: str, output_dir: str, reason: str) -> str:
+        """验收未通过时把 PPT 移入 _rejected\\，物理上防止弱模型误交付"""
+        out_dir = output_dir or os.path.dirname(ppt_path)
+        rejected = os.path.join(out_dir, '_rejected')
+        os.makedirs(rejected, exist_ok=True)
+        base = os.path.basename(ppt_path)
+        target = os.path.join(rejected, base)
+        if os.path.abspath(target) == os.path.abspath(ppt_path):
+            return ppt_path
+        if os.path.exists(target):
+            stem, ext = os.path.splitext(base)
+            target = os.path.join(
+                rejected, f"{stem}_{datetime.now().strftime('%H%M%S')}{ext}")
+        try:
+            os.replace(ppt_path, target)
+        except OSError as e:
+            print(f"[验收] [严重] PPT 隔离失败: {e}；请勿交付 {ppt_path}")
+            return ppt_path
+        print(f"[验收] [拒绝交付] {reason}，PPT 已隔离到: {target}")
+        print("[验收] 禁止把 _rejected 里的文件当成交付物；修复后重跑同一命令")
+        return target
+
+    def _run_acceptance(self, ppt_path: str, output_dir: str) -> bool:
+        """生成后自动验收：规则自查 + 渲染导出（把AI临场验收行为固化为脚本）
+
+        Returns:
+            True  = 验收通过（或显式 --no_verify），PPT 在 output 根目录可交付
+            False = 验收未通过/无法验收，PPT 已被隔离到 _rejected\\，禁止交付
+        """
         if getattr(self, 'no_verify', False):
-            print("\n[验收] 已按要求跳过（--no_verify）")
-            return
+            print("\n[验收] [警告] 已按要求跳过（--no_verify）：本次产物未经规则自查，"
+                  "不得作为交付依据")
+            return True
         tools_dir = os.path.dirname(os.path.abspath(__file__))
         # 子进程以 tools_dir 为 cwd，其内部对路径做 abspath——相对路径（如
         # --output output）会错位到 tools\output，必须先归一为绝对路径
@@ -1347,25 +1468,31 @@ class VisionProposalGenerator:
             # 只打印结论段（避免与主流程输出混杂），完整报告在文件里
             tail = "\n".join(out.splitlines()[:6])
             print(tail)
-            if r.returncode == 0:
-                # 验收通过 → 自动清理 output 下旧版本PPT（弱模型无需判断清理）
-                out_dir = output_dir or os.path.dirname(ppt_path)
-                ppt_path_abs = os.path.abspath(ppt_path)
-                removed = 0
-                for f in os.listdir(out_dir):
-                    if f.lower().endswith('.pptx') and \
-                       os.path.abspath(os.path.join(out_dir, f)) != ppt_path_abs:
-                        try:
-                            os.remove(os.path.join(out_dir, f))
-                            removed += 1
-                        except OSError:
-                            pass
-                if removed:
-                    print(f"[验收] 已自动清理旧版本PPT {removed} 个（只保留本次交付版）")
-            else:
-                print("[验收] 存在FAIL项 → 处理对照见报告（处理前不要交付，旧版本PPT未清理）")
         except Exception as e:
-            print(f"[验收] 规则自查执行失败（可手动运行 check_ppt_quality.py）: {e}")
+            self._quarantine_ppt(ppt_path, output_dir,
+                                 f'规则自查脚本执行失败（{e}），产物未经验收')
+            return False
+
+        if r.returncode != 0:
+            self._quarantine_ppt(ppt_path, output_dir, '规则自查存在 FAIL 项')
+            print("[验收] 处理对照见 acceptance_report.txt；修复后重跑同一命令")
+            return False
+
+        # 验收通过 → 自动清理 output 下旧版本PPT（弱模型无需判断清理）
+        out_dir = output_dir or os.path.dirname(ppt_path)
+        ppt_path_abs = os.path.abspath(ppt_path)
+        removed = 0
+        for f in os.listdir(out_dir):
+            if f.lower().endswith('.pptx') and \
+               os.path.abspath(os.path.join(out_dir, f)) != ppt_path_abs:
+                try:
+                    os.remove(os.path.join(out_dir, f))
+                    removed += 1
+                except OSError:
+                    pass
+        if removed:
+            print(f"[验收] 已自动清理旧版本PPT {removed} 个（只保留本次交付版）")
+
         print("[验收] 渲染导出页面图（供人工/评审抽查）...")
         try:
             subprocess.run(
@@ -1375,6 +1502,7 @@ class VisionProposalGenerator:
             print(f"[验收] 页面图已导出至 ppt_review\\ 目录；完整自查报告: {report_path}")
         except Exception:
             print("[验收] 自动导出不可用（无PowerPoint），可手动打开PPT抽查")
+        return True
 
     def _save_selection_result(self, params: Dict, selection: Dict, algorithm: Dict, output_dir: str):
         """保存选型结果"""
@@ -1385,6 +1513,8 @@ class VisionProposalGenerator:
                 'created_at': datetime.now().isoformat(),
                 'detection_type': params.get('detection_type'),
                 'precision_requirement': params.get('precision_requirement'),
+                'precision_basis_confirmed': bool(
+                    params.get('precision_basis_confirmed')),
                 'tolerance': params.get('tolerance'),
                 'cycle_time': params.get('cycle_time'),
                 'field_of_view': params.get('field_of_view'),

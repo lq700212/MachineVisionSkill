@@ -286,6 +286,14 @@ def replace_on_hardware_slide(slide, data: Dict) -> int:
                     para, f"{light_prefix}： {light_brand} {light_model}")
                 count += 1
                 continue
+            if m and not light_model and data.get('light_needs_expansion'):
+                # 光源库无匹配：必须覆盖模板旧型号并写明"待选型"，
+                # 绝不能保留模板里的旧型号（会让人误以为本方案选的就是它）
+                light_prefix = data.get('light_type') or m.group(1)
+                set_text_preserving_format(
+                    para, f"{light_prefix}： 待选型（需扩库）")
+                count += 1
+                continue
 
             # 3.3b 示意图中独立的纯类型词标注框（如"同轴光"三个字）：按实际光源类型纠正
             # 标注框窄（约19~25mm），只放短类型词；light_type可能是"LED环形光光源"长描述，
@@ -434,6 +442,7 @@ def generate_ppt(template_path: str,
         'lens_wd_spec': str(lens.get('wd_spec', '') or ''),
         'light_brand': light_source.get('brand', '') if light_source else '',
         'light_model': light_source.get('model', '') if light_source else '',
+        'light_needs_expansion': bool(light_source.get('needs_expansion')) if light_source else True,
         'light_wd': light_wd,
         'light_type': light_type,
         'pixel_precision': pixel_precision,
@@ -452,8 +461,13 @@ def generate_ppt(template_path: str,
             targets = [hardware_slides[hardware_page - 1]]
             print(f"指定替换第 {hardware_page} 个硬件页（第{targets[0][0] + 1}页）")
         else:
-            print(f"错误: hardware_page={hardware_page} 超出范围 "
-                  f"(1-{len(hardware_slides)})")
+            page_list = '；'.join(
+                f"第{idx + 1}页=第{n + 1}个硬件页"
+                for n, (idx, _) in enumerate(hardware_slides))
+            print(f"错误: hardware_page={hardware_page} 超出范围（1-{len(hardware_slides)}）")
+            print("  说明: --hardware_page 指“第几个硬件页”，不是幻灯片页码")
+            print(f"  本模板硬件页: {page_list}")
+            print(f"  修正: 不传该参数=替换全部硬件页；或传 1-{len(hardware_slides)}")
             return None
     else:
         targets = hardware_slides
