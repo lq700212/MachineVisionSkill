@@ -2,6 +2,38 @@
 
 本 skill 的所有版本变动统一记录在此。格式参考 Keep a Changelog。
 
+## [Unreleased]（v1.12.1）
+
+### 修复：硬件页识别误伤目录页 / 计算页（2026-11-20）
+
+- **背景**：用 11 页交付版跑 `check_ppt_quality` 时，硬件页被识别成 `[2,6,7]`：
+  - 目录页（p2）里"03"和"硬件选型"是两个独立文本框，标题精确命中；
+  - 计算页（p7）标题同为"硬件选型"，但内容是参数表格，没有实物标注框；
+  - 结果：误报"未识别到光源类型标注""未发现产品图片"，噪音掩盖真实问题。
+- **分级判定**：
+  - `is_hardware_slide`：标题精确等于"硬件选型"等 **且**（有 ≥2 个硬件标注框
+    **或** 含分辨率/像素/工作距离/视野等参数词）→ 目录页排除，计算页保留；
+  - 新增 `has_hw_labels`：只有带 相机/镜头/环形光/物料 标注框的展示页才做
+    C2 光源类型一致、C3 两页参数一致、C7 相机图检查；计算页只参与
+    C1 旧型号残留与 C4 溢出检查（这两项对它同样有效）。
+- **验证**：真实交付 PPT 硬件页识别为 `[6,7]`、FAIL=0；新增 3 条边界用例，
+  全量 144/144 通过。
+
+### 修复：`validate_selection` 在"只给公差"时崩溃（2026-11-20）
+
+- **症状**：`python validate_selection.py --selection ... --params project_config.json`
+  直接 `TypeError: '<=' not supported between instances of 'NoneType' and 'int'`。
+  原因：`precision_requirement` 显式为 `null`（正确口径是只填 `tolerance`）时，
+  `.get('precision_requirement', 0)` 返回 `None`，三处比较全部炸掉。
+- **修复**：新增 `resolve_precision_mm()` 统一口径解析（优先
+  `precision_requirement`，否则 `tolerance/10` 推导），`_check_precision_chain`、
+  `_check_magnification_window`、飞拍精度、远心必要性四处共用；
+  `--params` 模式还会用 `selection_result.project_info` 补齐视野等缺失字段，
+  避免 CLI 单独核验时视野检查被静默跳过。
+- **效果**：贴片方案核验从"崩溃"变为 22 PASS / 0 WARN / 0 FAIL。
+- **用例**：`TestValidateToleranceOnly`（公差口径不崩且 PASS、两个口径都缺
+  必须明确 FAIL 而非崩溃）。
+
 ## [Unreleased]（v1.12.0）
 
 ### 修复+新增：光源防幻觉、品牌优先级与角度档位、公差口径复核（2026-11-20）

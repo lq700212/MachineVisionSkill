@@ -318,6 +318,43 @@ class TestValidateNoneCycle(unittest.TestCase):
         v.validate(cam, lens, params, verbose=False)  # 不抛错即通过
 
 
+class TestValidateToleranceOnly(unittest.TestCase):
+    """核验防崩回归：只给图纸公差（precision_requirement 显式为 null）不得崩溃。
+    历史bug：precision_requirement 为 None 时 None <= 0 抛 TypeError，
+    CLI 直接核验会中断（2026-11-20 贴片方案重跑时实测）"""
+
+    CAM = {'brand': '海康威视', 'model': 'MV-CS050-10GM', 'sensor_size': '2/3"',
+           'resolution': {'width': 2448, 'height': 2048},
+           'pixel_size': 3.45, 'lens_mount': 'C-Mount', 'max_fps': 24.2}
+    LENS = {'brand': '海康威视', 'model': 'MVL-MF7538M-ML', 'type': '微距镜头',
+            'magnification': 0.333, 'working_distance': 300, 'mount': 'C-Mount',
+            'supported_sensor_size': '2/3"'}
+
+    def test_tolerance_only_no_crash_and_passes(self):
+        from validate_selection import SelectionValidator, CheckResult
+        v = SelectionValidator()
+        params = {'precision_requirement': None, 'tolerance': 0.5,
+                  'pixel_per_precision': 3.0,
+                  'field_of_view': {'width': 24.0, 'height': 19.2},
+                  'cycle_time': 1}
+        checks = v.validate(self.CAM, self.LENS, params, verbose=False)
+        fails = [c for c in checks if c.result == CheckResult.FAIL]
+        self.assertEqual(fails, [], f'公差口径不应判 FAIL: {[c.message for c in fails]}')
+        chain = next(c for c in checks if c.name == '精度链')
+        self.assertEqual(chain.result, CheckResult.PASS, chain.message)
+        self.assertIn('公差', chain.message)
+
+    def test_both_missing_still_reports_fail(self):
+        """两个口径都缺失时必须明确 FAIL，而不是崩溃"""
+        from validate_selection import SelectionValidator, CheckResult
+        v = SelectionValidator()
+        params = {'pixel_per_precision': 3.0}
+        checks = v.validate(self.CAM, self.LENS, params, verbose=False)
+        chain = next(c for c in checks if c.name == '精度链')
+        self.assertEqual(chain.result, CheckResult.FAIL)
+        self.assertIn('tolerance', chain.suggestion)
+
+
 class TestFlyShootingLightChain(unittest.TestCase):
     """飞拍光源链回归（2026-09-03：三处断裂一次修通——类型过滤误杀频闪、
     曝光上限检查方向反了、主流程忽略飞拍且丢 strobe 标记）

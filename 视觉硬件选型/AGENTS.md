@@ -117,3 +117,5 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 | 验收 FAIL 的 PPT 仍留在 `output\` 根目录 | `_run_acceptance` 只打印一句"处理前不要交付"，不改变文件位置，主流程仍 exit 0，弱模型看到文件就交付 | FAIL/验收异常 → PPT 移入 `output\_rejected\`，`_run_acceptance` 返回 False，主流程 return None / exit 1 |
 | 弱模型用 `--no_verify` 跳过验收，或从 `_rejected` 取文件改名交付 | 只靠文档提醒，无硬约束 | `--no_verify` 打印"产物不得作为交付依据"；SKILL.md 禁止事项第5条；汇报模板仅限退出码=0 |
 | 追光者正确型号 `FL-R-10045-W` 被质检判"旧型号残留" | `FL-R-` 既是模板旧型号前缀，也是追光者真实型号前缀，前缀匹配无法区分 | 选中型号白名单放行；旧型号/历史假型号仍拦截；新增 `test_ppt_quality_contract.py` 锁边界 |
+| 目录页 / 选型计算页被当成硬件展示页 | 目录里"硬件选型"是独立文本框（精确命中标题），计算页标题相同但无实物标注框 | 标题精确 + (标注框≥2 或 含硬件参数词) 才判硬件页；展示页专属检查（光源类型/两页一致/相机图）只对带标注框的页执行 |
+| `validate_selection` 在只填 `tolerance` 时 TypeError | `precision_requirement` 显式 null 时 `.get(k, 0)` 返回 None，`None <= 0` 直接崩 | `resolve_precision_mm()` 统一解析（优先设备精度，否则公差/10），四处共用；`--params` 用 selection 的 project_info 补齐视野 |

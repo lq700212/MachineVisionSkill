@@ -3,7 +3,48 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
-## 2026-11-20（本次·视觉硬件选型 v1.12.0 光源防幻觉 + 视觉选型测试 v1.1.0 六层体系）
+## 2026-11-20（本次·视觉硬件选型 v1.12.1 硬件页识别 + 公差崩溃修复；视觉选型测试 144 用例）
+
+### 改动范围
+
+1. **视觉硬件选型**（v1.12.0 → v1.12.1）：
+   - `check_ppt_quality.py`：`is_hardware_slide` 改分级判定——标题精确命中
+     **且**（≥2 个硬件标注框 **或** 含分辨率/像素/工作距离/视野等参数词）；
+     新增 `has_hw_labels`，光源类型一致（C2）、两页参数一致（C3）、相机图（C7）
+     只对带标注框的展示页执行，计算页仅参与 C1 旧型号残留与 C4 溢出。
+     修复 11 页交付版把目录页 p2、计算页 p7 误判为硬件展示页、
+     误报"未识别到光源类型标注/未发现产品图片"的问题（真实交付识别为 `[6,7]`、FAIL=0）。
+   - `validate_selection.py`：新增 `resolve_precision_mm()` 统一口径解析
+     （优先 `precision_requirement`，否则 `tolerance/10`），
+     `_check_precision_chain`、`_check_magnification_window`、飞拍精度、远心必要性
+     四处共用；修复 `precision_requirement` 显式 `null`（只填 `tolerance`）时
+     `TypeError: '<=' not supported between NoneType and int` 崩溃；
+     `--params` 模式用 `selection_result.project_info` 补齐视野等缺失字段，
+     避免 CLI 单独核验时视野检查被静默跳过（贴片方案由崩溃变为 22 PASS/0 FAIL）。
+   - `AGENTS.md`：历史事故档案补两条（目录/计算页误判、公差口径 TypeError）。
+2. **视觉选型测试**（v1.1.0 内补充）：
+   - `test_ppt_quality_contract.py`：新增目录页/计算页不误判、带标注框展示页
+     仍执行 C2/C3/C7 等边界用例；
+   - `test_selection_core.py`：新增 `TestValidateToleranceOnly`
+     （只给公差口径不崩且 PASS、两个口径都缺必须明确 FAIL 而非崩溃）；
+   - `SKILL.md`：`test_ppt_quality_contract.py` 能力描述补硬件页识别分级。
+3. **根文档**：
+   - `README.md`：测试基线 **139/139 → 144/144**（运行说明、Skill 一览、质量防线
+     三处同步）。
+
+### 验证结论
+
+- **视觉选型测试**：全量 `run_all.py` **144/144 通过、0 失败、0 错误、0 跳过**
+  （本次实跑，约 28s），退出码 0。
+- **README**：`check_readme.py` 核验通过（见下方结果）。
+
+### 建议 commit message
+
+```
+fix(视觉硬件选型): v1.12.1 硬件页分级识别（目录/计算页不再误判）+ validate_selection 只填 tolerance 崩溃修复；test(视觉选型测试): 补 5 条边界用例至 144/144；docs(README) 测试基线 139→144
+```
+
+## 2026-11-20（视觉硬件选型 v1.12.0 光源防幻觉 + 视觉选型测试 v1.1.0 六层体系）
 
 ### 改动范围
 

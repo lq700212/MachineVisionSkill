@@ -67,7 +67,7 @@ python "C:\Users\Administrator\.config\opencode\skills\视觉选型测试\tests\
 | `test_text_entry.py` | core | `--text` 解析、像素精度/设备精度判别、非交互防卡死 |
 | `test_channel3.py` | core | 浏览器接管通道（参数顺序/timeout/降级） |
 | `test_image_fetch.py` | core | 官网产品图获取、型号防串行、诚实降级 |
-| `test_ppt_quality_contract.py` | ppt | 当前型号白名单放行、旧型号/假型号拦截、无硬件页 exit 2 |
+| `test_ppt_quality_contract.py` | ppt | 当前型号白名单放行、旧型号/假型号拦截、硬件页识别（目录/计算页不误判）、无硬件页 exit 2 |
 | `test_ppt_pipeline.py` | workflow | config→选型→核验→PPT→验收 FAIL=0、验收隔离 |
 | `test_workflow_contract.py` | workflow | 无模板 SELECTION_ONLY、缺字段 exit 2、口径硬阻断、幂等、产物 schema |
 

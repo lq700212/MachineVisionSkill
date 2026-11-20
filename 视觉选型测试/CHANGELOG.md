@@ -20,8 +20,10 @@
   - `test_workflow_contract.py`（L2）：无模板 SELECTION_ONLY、缺字段 exit 2、
     口径硬阻断/确认放行、产物 schema、重复运行只留 1 个 PPT、`--no_verify` 警告
 - **被测 skill 同步修复**：`check_ppt_quality.check_stale_models` 增加选中型号
-  白名单（此前 `追光者 FL-R-10045-W` 被误判为旧型号残留，验收会 FAIL）。
-- **验证**：全量 139/139 通过（0失败 0跳过，26.3s）。
+  白名单（此前 `追光者 FL-R-10045-W` 被误判为旧型号残留，验收会 FAIL）；
+  `is_hardware_slide` 改为"标题精确 + 标注框/参数词"分级判定（目录页与
+  选型计算页不再被误当硬件展示页）。
+- **验证**：全量 144/144 通过（0失败 0跳过，26.7s）。
 
 ## 元数据：frontmatter `name` 改 ASCII slug（DSH 接入，2026-10-22）
 

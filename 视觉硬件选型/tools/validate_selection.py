@@ -42,6 +42,22 @@ class CheckItem:
         return d
 
 
+def resolve_precision_mm(params: Dict):
+    """解析设备精度（mm），返回 (值, 口径说明)。
+
+    优先 ``precision_requirement``；只给图纸公差时按 "公差 ÷ 10" 推导，
+    与 precision_calculator 同一口径。此前各处直接 ``.get(..., 0)``，
+    显式 null 时拿到 None 并抛 TypeError（2026-11-20 实测）。
+    """
+    p = params.get('precision_requirement')
+    if p:
+        return float(p), ''
+    tol = params.get('tolerance')
+    if tol:
+        return float(tol) / 10.0, f'（图纸公差 {tol}mm ÷ 10 推导）'
+    return 0.0, ''
+
+
 class SelectionValidator:
     """选型核验器"""
 
@@ -203,10 +219,10 @@ class SelectionValidator:
             return
         
         # 获取像素精度
-        pixel_precision = params.get('pixel_precision', 0)
+        pixel_precision = params.get('pixel_precision') or 0
         if pixel_precision <= 0:
-            # 尝试从精度要求计算
-            precision = params.get('precision_requirement', 0)
+            # 尝试从精度要求计算（只给公差时按公差/10 推导）
+            precision, _ = resolve_precision_mm(params)
             k = params.get('pixel_per_precision') or 3.0
             if precision > 0:
                 pixel_precision = precision / k
@@ -273,15 +289,15 @@ class SelectionValidator:
                                              "缺失必要参数", f"请补充镜头{param}"))
 
     def _check_precision_chain(self, camera: Dict, lens: Dict, params: Dict):
-        pixel_um = camera.get('pixel_size', 0)
-        mag = lens.get('magnification', 0) or 0
-        precision_mm = params.get('precision_requirement', 0)
+        pixel_um = camera.get('pixel_size') or 0
+        mag = lens.get('magnification') or 0
+        precision_mm, basis = resolve_precision_mm(params)
         k = params.get('pixel_per_precision') or 3.0
 
         if pixel_um <= 0 or mag <= 0 or precision_mm <= 0:
             self.checks.append(CheckItem("精度链", CheckResult.FAIL,
                                          "参数无效，无法计算",
-                                         "检查像元尺寸/倍率/精度要求"))
+                                         "检查像元尺寸/倍率/精度要求（precision_requirement 或 tolerance）"))
             return
 
         obj_res_um = pixel_um / mag
@@ -291,7 +307,7 @@ class SelectionValidator:
         if obj_res_um <= pixel_precision_max_um:
             result = CheckResult.PASS if margin >= 1.3 else CheckResult.WARNING
             msg = (f"像素精度{obj_res_um:.2f}μm ≤ 上限{pixel_precision_max_um:.2f}μm "
-                   f"(精度{k}等分)，余量{margin:.2f}x")
+                   f"(精度{k}等分{basis})，余量{margin:.2f}x")
             sug = "" if margin >= 1.3 else "余量偏小，建议提高倍率或换更高分辨率相机"
             self.checks.append(CheckItem("精度链", result, msg, sug))
         else:
@@ -323,7 +339,7 @@ class SelectionValidator:
 
     def _check_magnification_window(self, camera: Dict, lens: Dict, params: Dict):
         fov = params.get('field_of_view') or {}
-        precision_mm = params.get('precision_requirement', 0)
+        precision_mm, _ = resolve_precision_mm(params)
         if not fov or precision_mm <= 0:
             return
         k = params.get('pixel_per_precision') or 3.0
@@ -422,7 +438,7 @@ class SelectionValidator:
         """远心必要性核验：测量场景必须远心（FAIL）；库内远心无匹配由选型层
         分层回退到普通镜头（lens带telecentric_fallback标记）——回退是"库内
         无货的权宜方案"，必须醒目提示与用户确认透视误差风险（WARNING）。"""
-        precision_mm = params.get('precision_requirement', 0)
+        precision_mm, _ = resolve_precision_mm(params)
         # 场景判定复用单点函数（与lens_selector选型分层同一条件，防两链漂移）
         is_measurement = is_measurement_scene(params)
         lens_type = lens.get('type', '')
@@ -518,6 +534,11 @@ def main():
     if args.params:
         with open(args.params, 'r', encoding='utf-8') as f:
             params = json.load(f)
+        # 用选型结果里的 project_info 补齐缺失项（视野/精度口径等），
+        # 否则 CLI 只传 config 时视野检查会被静默跳过
+        for k, v in (selection.get('project_info') or {}).items():
+            if params.get(k) is None and v is not None:
+                params[k] = v
     else:
         params = selection.get('project_info', {})
 

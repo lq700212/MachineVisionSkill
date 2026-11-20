@@ -55,17 +55,55 @@ LIGHT_TYPE_SYNONYMS = [{'环形光', '环光', '圆环光'}, {'同轴光'}, {'�
 LIGHT_TYPE_PATTERN = re.compile(r'(同轴光|环光|环形光|背光|点光源|点光)')
 
 
+HW_LABELS = {'相机', '镜头', '环形光', '环光', '同轴光', '条形光', '背光',
+             '微距镜头', '远心镜头', '物料', '光源'}
+HW_TITLES = {'硬件选型', '相机选型', '相机参数', '硬件配置'}
+# 硬件参数特征词：计算页/参数表页没有实物标注框，但有这些内容
+HW_PARAM_WORDS = ('分辨率', '像素', '工作距离', '视野', '视场', '靶面',
+                  '像元', '倍率', '焦距', '光圈')
+
+
 def is_hardware_slide(slide):
-    """硬件选型页判定（与generate_ppt一致：短标题为硬件选型类）"""
+    """是否硬件选型页：标题精确 + (有标注框 或 有硬件参数)。
+
+    仅看标题会误伤目录页——目录里"03"和"硬件选型"是两个独立文本框，
+    "硬件选型"本身精确命中标题（2026-11-20 实测）。目录页既无标注框
+    也无参数内容，据此排除。
+    """
+    has_title = False
+    texts = []
     for shape in slide.shapes:
         if not shape.has_text_frame:
             continue
-        t = shape.text_frame.text.strip()
-        if t and len(t) <= 12 and ('硬件选型' in t or '相机选型' in t or '相机参数' in t):
-            return True
-        if re.match(r'^(同轴光|环光|环形光|背光|光源)[:：]', t):
-            return True
-    return False
+        for para in shape.text_frame.paragraphs:
+            t = para.text.strip()
+            if not t:
+                continue
+            texts.append(t)
+            if t in HW_TITLES:
+                has_title = True
+    if not has_title:
+        return False
+    if has_hw_labels(slide):
+        return True
+    joined = ' '.join(texts)
+    return any(w in joined for w in HW_PARAM_WORDS)
+
+
+def has_hw_labels(slide):
+    """是否有 相机/镜头/环形光/物料 标注框（硬件展示页专属检查的开关）。
+
+    选型计算页标题同为"硬件选型"，但内容是参数表格，没有实物标注框；
+    对它查"光源类型标注/产品图片"只会产生噪音 WARN。
+    """
+    n = 0
+    for shape in slide.shapes:
+        if not shape.has_text_frame:
+            continue
+        for para in shape.text_frame.paragraphs:
+            if para.text.strip() in HW_LABELS:
+                n += 1
+    return n >= 2
 
 
 def slide_texts(slide):
@@ -365,13 +403,15 @@ def main():
         (_hw.get('camera') or {}).get('model', ''),
         (_hw.get('lens') or {}).get('model', ''),
     ]
+    # 展示页 = 带相机/镜头/光源/物料标注框的硬件页；计算页只做通用检查
+    show_slides = [(i, s) for i, s in hw_slides if has_hw_labels(s)]
 
     results = []  # (级别, 消息)
     c1 = check_stale_models(hw_slides, allow_models)
     results += [('FAIL', m) for m in c1]
-    c2 = check_light_consistency(hw_slides, sel_light_type)
+    c2 = check_light_consistency(show_slides, sel_light_type)
     results += [('FAIL' if not m.startswith('[WARN]') else 'WARN', m) for m in c2]
-    c3 = check_two_page_consistency(hw_slides)
+    c3 = check_two_page_consistency(show_slides)
     results += [('FAIL', m) for m in c3]
     c4 = check_overflow(hw_slides)
     results += [('FAIL' if not m.startswith('[WARN]') else 'WARN', m) for m in c4]
@@ -379,7 +419,7 @@ def main():
     results += [('FAIL', m) for m in c5]
     c6 = check_shadow(pptx_path)
     results += [('FAIL' if not m.startswith('[WARN]') else 'WARN', m) for m in c6]
-    c7 = check_camera_image(hw_slides, sw, sh)
+    c7 = check_camera_image(show_slides, sw, sh) if show_slides else []
     results += [('WARN', m) for m in c7]
 
     n_fail = sum(1 for lv, _ in results if lv == 'FAIL')
