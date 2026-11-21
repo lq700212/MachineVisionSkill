@@ -768,5 +768,336 @@ class TestPrecisionUnitHeuristic(unittest.TestCase):
         self.assertNotIn('口径复核', out)
 
 
+class TestWorkingDistanceContract(unittest.TestCase):
+    """2026-11-20 事故：MOD=500mm 的镜头在 WD=300mm 项目里凭倍率/视野中选，
+    装上去根本不合焦。WD 是硬约束，必须参与过滤与核验。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from lens_selector import LensSelector, lens_wd_status
+        cls.sel = LensSelector()
+        cls.wd_status = staticmethod(lens_wd_status)
+        db_path = os.path.join(vt_common.SKILL_DIR, 'config', 'hardware_database.json')
+        with open(db_path, encoding='utf-8') as f:
+            db = json.load(f)
+        cls.camera = [c for c in db['cameras'] if c['model'] == 'MV-CS050-10GM'][0]
+        cls.fov = {'width': 24, 'height': 19.2}
+
+    def _lens(self, model):
+        return [l for l in self.sel.lenses if l['model'] == model][0]
+
+    def test_fixed_wd_telecentric_rejected(self):
+        """定工作距离 110/138mm 的远心镜头，不能进 WD=300mm 的候选"""
+        for model in ('WWK03-110-230', 'DTCM110-56-AL', 'DTCM110-64H-AL'):
+            status, _ = self.wd_status(self._lens(model), 300)
+            self.assertEqual(status, 'too_far',
+                             f'{model} 在 WD=300 应为 too_far，实际 {status}')
+
+    def test_mod_above_requirement_rejected(self):
+        """MOD=500mm 的海康 KF7528 在 WD=300 应为 too_close（核心回归）"""
+        status, _ = self.wd_status(
+            {'model': 'MVL-KF7528M-12MP', 'mod': 500, 'wd_range': [500, None]}, 300)
+        self.assertEqual(status, 'too_close',
+                         'MOD=500 在 WD=300 必须判 too_close，否则不合焦也能中选')
+
+    def test_native_macro_kept(self):
+        status, detail = self.wd_status(self._lens('MVL-MF7538M-ML'), 300)
+        self.assertEqual(status, 'ok')
+        self.assertEqual(detail, (250, 550))
+
+    def test_selector_excludes_wd_mismatch(self):
+        res = self.sel.select_lenses_for_camera(
+            camera=self.camera, fov=self.fov, required_precision_mm=0.05,
+            pixel_per_precision=3.0, required_working_distance=300, top_n=10)
+        models = [r['model'] for r in res]
+        self.assertIn('MVL-MF7538M-ML', models,
+                      'WD=300 时微距 MF7538 必须保留')
+        for bad in ('WWK03-110-230', 'DTCM110-56-AL', 'WWK10-110-111V3'):
+            self.assertNotIn(bad, models,
+                             f'WD 不符的 {bad} 不得出现在候选里')
+        for r in res:
+            self.assertEqual(r.get('wd_status'), 'ok')
+
+    def test_selector_keeps_output_wd_status(self):
+        res = self.sel.select_lenses_for_camera(
+            camera=self.camera, fov=self.fov, required_precision_mm=0.05,
+            pixel_per_precision=3.0, required_working_distance=300, top_n=5)
+        self.assertTrue(res, 'WD=300 应有可用候选')
+        for r in res:
+            self.assertIn('wd_status', r)
+            self.assertIn('wd_capability', r)
+
+    def test_missing_wd_requirement_keeps_legacy_behavior(self):
+        """不传 WD 时不得因 WD 过滤（兼容旧调用），但条目标记 unknown"""
+        res = self.sel.select_lenses_for_camera(
+            camera=self.camera, fov=self.fov, required_precision_mm=0.05,
+            pixel_per_precision=3.0, top_n=10)
+        self.assertTrue(res)
+        for r in res:
+            self.assertEqual(r.get('wd_status'), 'unknown')
+
+    def test_unknown_capability_not_treated_as_ok(self):
+        status, _ = self.wd_status({'model': 'X', 'magnification': 0.3}, 300)
+        self.assertEqual(status, 'unknown',
+                         '缺 mod/wd_range 必须是 unknown，不能默认 ok')
+
+
+class TestValidateWorkingDistance(unittest.TestCase):
+    """核验链必须与选型链同口径拦截 WD 不符"""
+
+    def _check(self, lens, params):
+        from validate_selection import SelectionValidator
+        v = SelectionValidator()
+        v.checks = []
+        v._check_working_distance(lens, params)
+        self.assertEqual(len(v.checks), 1)
+        return v.checks[0]
+
+    def test_mod_too_far_fails(self):
+        c = self._check({'model': 'X', 'mod': 500, 'wd_range': [500, None]},
+                        {'working_distance': 300})
+        self.assertEqual(c.result.value, '[FAIL]')
+        self.assertIn('500', c.message)
+
+    def test_native_range_passes(self):
+        c = self._check({'model': 'X', 'mod': 250, 'wd_range': [250, 550]},
+                        {'working_distance': 300})
+        self.assertEqual(c.result.value, '[PASS]')
+
+    def test_missing_capability_warns(self):
+        c = self._check({'model': 'X'}, {'working_distance': 300})
+        self.assertEqual(c.result.value, '[WARN]')
+
+    def test_config_wd_takes_priority(self):
+        """配置 WD 是项目事实，不能被镜头标称值覆盖"""
+        c = self._check({'model': 'X', 'working_distance': 300,
+                         'mod': 500, 'wd_range': [500, None]},
+                        {'working_distance': 300})
+        self.assertEqual(c.result.value, '[FAIL]',
+                         '镜头标称 WD=300 不能掩盖 MOD=500 的事实')
+
+
+class TestMagnificationAtWorkingDistance(unittest.TestCase):
+    """2026-11-20 第二轮事故：库内 ``magnification`` 只是某个 WD 下的单点值
+    （MF7538 的 0.333 还是薄透镜估算）。选型拿它当任意 WD 都成立，会把
+    实际视野算大。官方三点表：250→0.46x、400→0.24x、550→0.16x；
+    拟合后 WD=300 实际约 0.352x → 视野 24.0mm，正好卡在需求线（余量≈0）。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from lens_selector import LensSelector, magnification_at_wd
+        cls.sel = LensSelector()
+        cls.mag_at = staticmethod(magnification_at_wd)
+
+    def _lens(self, model):
+        return [l for l in self.sel.lenses if l['model'] == model][0]
+
+    def test_official_points_reproduced(self):
+        lens = self._lens('MVL-MF7538M-ML')
+        for wd, expect in ((250, 0.46), (400, 0.24), (550, 0.16)):
+            mag, src = self.mag_at(lens, wd)
+            self.assertEqual(src, 'wd_mag_table_interp')
+            self.assertAlmostEqual(
+                mag, expect, delta=0.01,
+                msg=f'WD={wd} 应复现官方 {expect}x，实际 {mag:.4f}')
+
+    def test_wd300_is_at_fov_limit(self):
+        lens = self._lens('MVL-MF7538M-ML')
+        mag, _ = self.mag_at(lens, 300)
+        self.assertAlmostEqual(mag, 0.352, delta=0.005)
+        fov_w = 8.4457 / mag
+        self.assertLess(fov_w, 24.2, 'WD300 视野不应再有 25.4mm 的乐观值')
+        self.assertGreater(fov_w, 23.7)
+        self.assertGreater(mag, 0.333,
+                           '薄透镜 0.333 会高估视野，不能当官方值用')
+
+    def test_wd330_has_margin(self):
+        lens = self._lens('MVL-MF7538M-ML')
+        mag, _ = self.mag_at(lens, 330)
+        self.assertLess(mag, 0.352)
+        self.assertGreater(8.4457 / mag, 24 * 1.1,
+                           'WD330 视野余量应超过 10%')
+
+    def test_thin_lens_fallback(self):
+        mag, src = self.mag_at({'focal_length': 75, 'magnification': 0.3}, 300)
+        self.assertEqual(src, 'thin_lens_estimate')
+        self.assertAlmostEqual(mag, 75 / 225, places=4)
+
+    def test_no_wd_uses_single_point(self):
+        mag, src = self.mag_at({'focal_length': 75, 'magnification': 0.3}, None)
+        self.assertEqual((mag, src), (0.3, 'single_point'))
+
+    def test_selection_uses_effective_mag(self):
+        db_path = os.path.join(vt_common.SKILL_DIR, 'config', 'hardware_database.json')
+        with open(db_path, encoding='utf-8') as f:
+            db = json.load(f)
+        cam = [c for c in db['cameras'] if c['model'] == 'MV-CS050-10GM'][0]
+        res = self.sel.select_lenses_for_camera(
+            cam, {'width': 24, 'height': 19.2}, 0.05, 3.0,
+            required_working_distance=300, top_n=5)
+        lens = [r for r in res if r['model'] == 'MVL-MF7538M-ML'][0]
+        self.assertEqual(lens['magnification_source'], 'wd_mag_table_interp')
+        self.assertAlmostEqual(lens['magnification_at_wd'], 0.352, delta=0.005)
+        self.assertLess(lens['actual_fov']['width'], 24.2)
+
+
+class TestValidateFovMargin(unittest.TestCase):
+    """视野余量分级：达标记 PASS；靠 2% 容差过线记 WARN（零余量）；盖不住 FAIL"""
+
+    CAM = {'brand': '海康威视', 'model': 'MV-CS050-10GM', 'sensor_size': '2/3"',
+           'resolution': {'width': 2448, 'height': 2048},
+           'pixel_size': 3.45, 'lens_mount': 'C-Mount', 'max_fps': 24.2}
+    PARAMS = {'tolerance': 0.5, 'pixel_per_precision': 3.0,
+              'field_of_view': {'width': 24.0, 'height': 19.2},
+              'working_distance': 300}
+
+    def _check(self, mag):
+        from validate_selection import SelectionValidator
+        v = SelectionValidator()
+        v.checks = []
+        v._check_fov_coverage(self.CAM, {'magnification': mag}, self.PARAMS)
+        self.assertEqual(len(v.checks), 1)
+        return v.checks[0]
+
+    def test_full_margin_passes(self):
+        self.assertEqual(self._check(0.333).result.value, '[PASS]')
+
+    def test_zero_margin_warns(self):
+        c = self._check(0.3523)
+        self.assertEqual(c.result.value, '[WARN]',
+                         'WD300 视野 24.0mm 是零余量，必须 WARN 而不是 PASS')
+        self.assertIn('上调', c.suggestion)
+
+    def test_not_covering_fails(self):
+        self.assertEqual(self._check(0.50).result.value, '[FAIL]')
+
+
+class TestPrecisionBudget(unittest.TestCase):
+    """2026-11-21 事故：业界两套精度口径被叠加。
+
+    基恩士/HSM：尺寸测量 像素当量 = 公差带 ÷ 10（视觉直测）。
+    整机分配：像素当量 = 视觉允许误差 ÷ 3。
+    旧实现连用 /10 和 /3（等价公差/30），比行业常规严 3 倍，
+    且把中间值叫"设备精度"。本组锁死两种 mode 各自的换算。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from precision_calculator import resolve_precision_budget
+        cls.resolve = staticmethod(resolve_precision_budget)
+
+    def test_system_budget_1_5(self):
+        b = self.resolve({
+            'tolerance': 0.5,
+            'precision_model': {'mode': 'system_budget',
+                                'tolerance_type': 'unilateral',
+                                'allocation_ratio': 0.2, 'pixel_factor': 3.0}})
+        self.assertEqual(b['mode'], 'system_budget')
+        self.assertAlmostEqual(b['tolerance_band_mm'], 0.5)
+        self.assertAlmostEqual(b['allowed_error_mm'], 0.1)
+        self.assertAlmostEqual(b['pixel_precision_max_um'], 33.33, delta=0.1)
+        self.assertFalse(b['is_assumption'])
+
+    def test_system_budget_not_double_divided(self):
+        """回归：不得再出现 公差/10/3（0.5→16.7μm）的叠加口径"""
+        b = self.resolve({
+            'tolerance': 0.5,
+            'precision_model': {'mode': 'system_budget',
+                                'allocation_ratio': 0.2, 'pixel_factor': 3.0}})
+        self.assertGreater(b['pixel_precision_max_um'], 30,
+                           '1/5 分配应为 33μm，不能退化成 16.7μm')
+
+    def test_bilateral_doubles_band(self):
+        b = self.resolve({
+            'tolerance': 0.5,
+            'precision_model': {'mode': 'system_budget',
+                                'tolerance_type': 'bilateral',
+                                'allocation_ratio': 0.1, 'pixel_factor': 3.0}})
+        self.assertAlmostEqual(b['tolerance_band_mm'], 1.0)
+        self.assertAlmostEqual(b['allowed_error_mm'], 0.1)
+        self.assertAlmostEqual(b['pixel_precision_max_um'], 33.33, delta=0.1)
+
+    def test_direct_measurement_factor_10(self):
+        b = self.resolve({
+            'tolerance': 0.5,
+            'precision_model': {'mode': 'direct_measurement',
+                                'application': 'measurement'}})
+        self.assertEqual(b['mode'], 'direct_measurement')
+        self.assertAlmostEqual(b['pixel_precision_max_um'], 50.0)
+
+    def test_direct_defect_factor_4(self):
+        b = self.resolve({
+            'tolerance': 0.5,
+            'precision_model': {'mode': 'direct_measurement',
+                                'application': 'defect'}})
+        self.assertAlmostEqual(b['pixel_precision_max_um'], 125.0)
+
+    def test_explicit_pixel_precision(self):
+        b = self.resolve({'pixel_precision': 0.02})
+        self.assertEqual(b['mode'], 'explicit_pixel')
+        self.assertAlmostEqual(b['pixel_precision_max_um'], 20.0)
+
+    def test_explicit_precision(self):
+        b = self.resolve({'precision_requirement': 0.03})
+        self.assertEqual(b['mode'], 'explicit_precision')
+        self.assertAlmostEqual(b['pixel_precision_max_um'], 10.0)
+
+    def test_tolerance_only_defaults_to_budget_1_10(self):
+        b = self.resolve({'tolerance': 0.5})
+        self.assertEqual(b['mode'], 'system_budget')
+        self.assertTrue(b['is_assumption'], '未声明模型必须标记为假设')
+        self.assertAlmostEqual(b['pixel_precision_max_um'], 16.67, delta=0.1)
+
+    def test_all_missing_returns_none(self):
+        self.assertIsNone(self.resolve({}))
+
+
+class TestValidatePrecisionBasis(unittest.TestCase):
+    """精度口径必须在核验报告里显性化：声明了 model=PASS，默认兜底=WARN"""
+
+    CAM = {'brand': '海康威视', 'model': 'MV-CS050-10GM', 'sensor_size': '2/3"',
+           'resolution': {'width': 2448, 'height': 2048},
+           'pixel_size': 3.45, 'lens_mount': 'C-Mount', 'max_fps': 24.2}
+    LENS = {'brand': '海康威视', 'model': 'MVL-MF7538M-ML', 'type': '微距镜头',
+            'magnification': 0.333, 'working_distance': 320, 'mount': 'C-Mount',
+            'supported_sensor_size': '2/3"'}
+    BASE = {'tolerance': 0.5, 'pixel_per_precision': 3.0,
+            'field_of_view': {'width': 24.0, 'height': 19.2},
+            'working_distance': 320}
+
+    def _checks(self, extra):
+        from validate_selection import SelectionValidator
+        params = dict(self.BASE)
+        params.update(extra)
+        v = SelectionValidator()
+        return v.validate(self.CAM, self.LENS, params, verbose=False)
+
+    def test_declared_model_passes(self):
+        checks = self._checks({'precision_model': {
+            'mode': 'system_budget', 'tolerance_type': 'unilateral',
+            'allocation_ratio': 0.2, 'pixel_factor': 3.0}})
+        basis = next(c for c in checks if c.name == '精度口径')
+        self.assertEqual(basis.result.value, '[PASS]', basis.message)
+        self.assertIn('20%', basis.message)
+
+    def test_undeclared_model_warns(self):
+        checks = self._checks({})
+        basis = next(c for c in checks if c.name == '精度口径')
+        self.assertEqual(basis.result.value, '[WARN]',
+                         '未声明 precision_model 时分配比例只是假设，必须 WARN')
+        self.assertIn('10%', basis.message,
+                      '未声明模型时应按默认 1/10 分配并在报告中标出')
+
+    def test_precision_chain_uses_budget(self):
+        checks = self._checks({'precision_model': {
+            'mode': 'system_budget', 'tolerance_type': 'unilateral',
+            'allocation_ratio': 0.2, 'pixel_factor': 3.0}})
+        chain = next(c for c in checks if c.name == '精度链')
+        self.assertEqual(chain.result.value, '[PASS]', chain.message)
+        self.assertIn('33.3', chain.message, '上限应为 0.5×20%÷3=33.3μm')
+        self.assertIn('3.', chain.message, '余量应约 3.2 倍')
+
+
 if __name__ == '__main__':
     unittest.main()

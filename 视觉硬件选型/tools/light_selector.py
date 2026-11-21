@@ -104,6 +104,21 @@ def calculate_light_working_distance(field_of_view: Dict,
     # 限制最小工作距离（至少30mm）
     light_wd = max(30, light_wd)
 
+    # 物理上限：环形光装在镜头前端，不能顶到镜头。超过镜头WD-15 时
+    # 按安装距离封顶（此前 camera_wd 参数收了却没用，SKILL.md 却声称
+    # 已做该约束——文档与实现不一致，2026-11-21 复核修正）。
+    cap = None
+    capped = False
+    try:
+        cam_wd = float(camera_wd) if camera_wd else 0.0
+    except (TypeError, ValueError):
+        cam_wd = 0.0
+    if cam_wd > 0:
+        cap = max(20.0, cam_wd - 15.0)
+        if light_wd > cap:
+            light_wd = cap
+            capped = True
+
     return {
         "field_of_view": field_of_view,
         "fov_diagonal_mm": round(fov_diagonal, 1),
@@ -111,7 +126,12 @@ def calculate_light_working_distance(field_of_view: Dict,
         "factor": factor,
         "working_distance_mm": round(light_wd, 1),
         "safety_factor": safety_factor,
-        "formula": f"光源WD = 视野对角线({fov_diagonal:.1f}mm) × 角度系数({factor}) × 安全系数({safety_factor}) = {light_wd:.1f}mm"
+        "camera_wd_mm": round(cam_wd, 1) if cam_wd > 0 else None,
+        "camera_wd_cap_mm": round(cap, 1) if cap else None,
+        "capped_by_camera": capped,
+        "formula": f"光源WD = 视野对角线({fov_diagonal:.1f}mm) × 角度系数({factor}) "
+                   f"× 安全系数({safety_factor}) = {light_wd:.1f}mm"
+                   + (f"（受镜头WD {cam_wd:.0f}mm 限制封顶 {cap:.0f}mm）" if capped else ""),
     }
 
 
@@ -254,6 +274,8 @@ def _filter_candidates(pool: List[Dict], fov_diagonal: float,
             "outer_diameter_verified": outer_ok is not None,
             "inner_diameter_verified": not inner_unverified,
             "wd_range_verified": not wd_unverified,
+            # strobe 三态标记：缺字段=未核验，不得当成"不支持"
+            "strobe_unverified": light.get('strobe') is None,
         })
     return out
 
@@ -297,11 +319,15 @@ def select_light_source(fov_diagonal: float,
             if not (is_fly_shooting and light.get("strobe", False)):
                 continue
         if is_fly_shooting:
-            if not light.get("strobe", False):
+            # strobe 三态：True=支持；False=明确不支持（硬排除）；
+            # None/缺字段=厂商资料未给（保留并标记未核验，交核验 WARN）。
+            # 旧逻辑 `if not light.get('strobe')` 把"未核验"当"不支持"，
+            # 库内 12 条光源全无 strobe 字段时飞拍查询恒空（2026-11-21 复核）。
+            if light.get("strobe") is False:
                 continue
             if max_exposure_us is not None:
-                min_exp = light.get("min_exposure_us", 0)
-                if max_exposure_us < min_exp:
+                min_exp = light.get("min_exposure_us")
+                if min_exp is not None and max_exposure_us < min_exp:
                     continue
         typed.append(light)
 

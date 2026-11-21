@@ -8,6 +8,7 @@
 import json
 import math
 import os
+import re
 from typing import Dict, List, Tuple, Optional
 
 
@@ -27,11 +28,501 @@ def is_measurement_scene(params) -> bool:
         return True
     if params.get('application') == 'measurement':
         return True
+    # precision_model.application 是 2026-11-21 引入的口径字段，顶层
+    # application 可能为空。只看顶层会让 direct_measurement 的测量项目
+    # 被判成非测量场景，远心优先策略静默失效（2026-11-21 复核发现）。
+    _model = params.get('precision_model')
+    if isinstance(_model, dict) and _model.get('application') == 'measurement':
+        return True
     try:
         precision = float(params.get('precision_requirement') or 0)
     except (TypeError, ValueError):
         return False
     return 0 < precision <= 0.01
+
+
+# ============================================================
+# 精度口径模型（2026-11-21 事故）
+#
+# 行业里有两套"公差 → 像素当量"的口径，前提不同，禁止叠加：
+#   A. 视觉直接测这个尺寸（基恩士/HSM）：像素当量 = 公差带 / 10
+#      基恩士原文：尺寸测量 测量精度 = 10 × 像素精度；
+#      外观检测 检测精度 = 4 × 像素精度
+#   B. 视觉是整机链路一环：像素当量 = 视觉允许误差 / 3
+#      其中 视觉允许误差 = 整机公差带 × 视觉分配比例（1/10~1/3）
+#
+# 旧实现把 A 的 /10 和 B 的 /3 连用，等价于 公差/30，比行业常规严 3 倍，
+# 还把中间值叫"设备精度"，容易被读成整机精度。现用 mode 显式区分。
+# ============================================================
+
+# ============================================================
+# 光学/接口工程常数（2026-11-21 行业规范复核补齐）
+#
+# 选型只算"分辨率够不够"是不够的：镜头景深、镜头解析力（MTF）、
+# 光圈衍射、相机接口带宽、快门类型都是工控视觉的硬约束。
+# 这些函数只做工程估算，返回值必须标注"估算"，不得冒充厂家实测值。
+# ============================================================
+
+# 接口有效载荷带宽（MB/s，已扣协议开销；8bit 单通道）
+# 参考：GigE 1Gbps 理论 125MB/s，实际有效约 110~118MB/s；
+#       USB3.0 5Gbps 理论 500MB/s，实际有效约 350MB/s。
+INTERFACE_EFFECTIVE_BW_MBPS = {
+    'gige': 110.0,
+    '10gige': 1100.0,
+    'usb3': 350.0,
+    'cameralink': 255.0,
+    'coaxpress': 600.0,
+}
+
+INTERFACE_LABEL = {
+    'gige': 'GigE（有效约110MB/s）',
+    '10gige': '10GigE（有效约1100MB/s）',
+    'usb3': 'USB3（有效约350MB/s）',
+    'cameralink': 'Camera Link Base（有效约255MB/s）',
+    'coaxpress': 'CoaXPress（有效约600MB/s）',
+}
+
+
+def normalize_interface(name) -> str:
+    """接口名归一化：'GigE Vision'/'gige'/'10GigE' → 内部键。"""
+    s = str(name or '').lower().replace(' ', '').replace('-', '').replace('_', '')
+    if '10gige' in s or '10gbase' in s:
+        return '10gige'
+    if 'gige' in s:
+        return 'gige'
+    if 'usb3' in s or 'usb 3' in s:
+        return 'usb3'
+    if 'cameralink' in s:
+        return 'cameralink'
+    if 'coaxpress' in s or s.startswith('cxp'):
+        return 'coaxpress'
+    return ''
+
+
+def interface_effective_bandwidth_mbps(name) -> Optional[float]:
+    """接口有效带宽（MB/s）；未知接口返回 None（调用方应 WARN，不得默认通过）。"""
+    return INTERFACE_EFFECTIVE_BW_MBPS.get(normalize_interface(name))
+
+
+def parse_min_f_number(value) -> Optional[float]:
+    """从 'F3.8 ~ F12' / 'F2.8' / 2.8 中取最小 F 数（最大光圈）。
+
+    景深和衍射都按最大光圈（最小 F 数）估算：这是镜头能力上限，
+    实际收小光圈只会让景深变大、衍射变差，交付文案必须写清工作光圈。
+    """
+    if value is None or value == '':
+        return None
+    if isinstance(value, (int, float)):
+        return float(value) if value > 0 else None
+    nums = [float(x) for x in re.findall(r'\d+(?:\.\d+)?', str(value))]
+    nums = [x for x in nums if x > 0]
+    return min(nums) if nums else None
+
+
+def estimate_object_dof_half_mm(f_number, pixel_size_um: float,
+                                magnification: float,
+                                coc_pixels: float = 1.0) -> Optional[float]:
+    """物方景深半宽（±mm）估算，Harry Norton 近似。
+
+        DOF_total ≈ 2 · N · c · (1 + β) / β²
+
+    其中 c 为像方容许弥散圆，取 ``coc_pixels × 像元``。默认 1 像素
+    （偏保守；行业也有取 2 像素的宽松口径）。返回值是总景深的一半，
+    与数据库 ``depth_of_field="±0.35mm"`` 的语义一致。
+
+    这是估算值，不是厂家实测；厂家给了 depth_of_field 时优先用厂家值。
+    """
+    f = parse_min_f_number(f_number)
+    try:
+        px = float(pixel_size_um)
+        m = float(magnification)
+    except (TypeError, ValueError):
+        return None
+    if not f or px <= 0 or m <= 0:
+        return None
+    c_mm = px / 1000.0 * float(coc_pixels)
+    return f * c_mm * (1.0 + m) / (m * m)
+
+
+def nyquist_lpmm(pixel_size_um: float) -> Optional[float]:
+    """相机奈奎斯特频率（lp/mm）= 1000 / (2 × 像元μm)。
+
+    镜头 MTF30 应不低于该值（工程上建议 ≥1.2 倍），否则镜头成为
+    分辨率瓶颈，换更高像素相机也拿不到更多细节。
+    """
+    try:
+        px = float(pixel_size_um)
+    except (TypeError, ValueError):
+        return None
+    return 1000.0 / (2.0 * px) if px > 0 else None
+
+
+def airy_disk_um(f_number, wavelength_um: float = 0.55) -> Optional[float]:
+    """艾里斑直径（μm）= 2.44 · λ · F#（λ 默认 0.55μm 绿光）。
+
+    要求艾里斑 ≤ 2 个像元；超过 3 个像元说明光圈收得太小、衍射
+    已成为分辨率瓶颈（此时提高像素/倍率都没用，要开大光圈）。
+    """
+    f = parse_min_f_number(f_number)
+    if not f or f <= 0:
+        return None
+    return 2.44 * float(wavelength_um) * f
+
+
+DEFAULT_PRECISION_MODEL = {
+    'mode': 'system_budget',
+    'application': 'positioning',
+    'tolerance_type': 'unilateral',
+    'allocation_ratio': 0.1,
+    'pixel_factor': 3.0,
+}
+
+PRECISION_MODE_LABEL = {
+    'system_budget': '整机误差分配',
+    'direct_measurement': '视觉直接测量',
+    'explicit_pixel': '用户指定像素当量',
+    'explicit_precision': '已确认视觉允许误差',
+}
+
+TOLERANCE_TYPE_LABEL = {
+    'unilateral': '单向公差（给定值即带宽）',
+    'bilateral': '双向公差（±值，带宽×2）',
+    'total': '已给总带宽',
+}
+
+APPLICATION_LABEL = {
+    'positioning': '定位/贴合',
+    'measurement': '尺寸测量',
+    'defect': '外观检测',
+}
+
+# 视觉直接测量时的行业口径系数（基恩士/HSM）
+DIRECT_FACTOR_BY_APPLICATION = {
+    'measurement': 10.0,   # 尺寸测量：测量精度 = 10 × 像素精度
+    'defect': 4.0,         # 外观检测：检测精度 = 4 × 像素精度
+    'positioning': 6.0,    # 定位：介于两者之间（无单一官方值，取中值）
+}
+
+
+def _as_float(value, default=None):
+    try:
+        if value is None or value == '':
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def resolve_precision_budget(params: Dict) -> Optional[Dict]:
+    """把客户给的一个精度数字，统一换算成"像素当量上限"。
+
+    输入优先级（从强到弱）：
+      1. ``pixel_precision``：用户直接给像素当量（mm/pixel），最明确；
+      2. ``precision_model`` + ``tolerance``：按声明的模型从整机公差分配；
+      3. ``precision_requirement``：已确认的视觉允许误差；
+      4. ``tolerance`` + 默认模型：未声明模型时按整机分配 1/10（保守兜底）。
+
+    返回 ``None`` 表示精度口径完全缺失（调用方应判 FAIL/提示补参数）。
+    """
+    if not isinstance(params, dict):
+        return None
+
+    model = dict(DEFAULT_PRECISION_MODEL)
+    model.update(params.get('precision_model') or {})
+    # 兼容 config 里把模型写成平铺字段的写法
+    for key in ('mode', 'application', 'tolerance_type',
+                'allocation_ratio', 'pixel_factor', 'direct_factor'):
+        if key not in model and params.get(key) is not None:
+            model[key] = params[key]
+
+    model_declared = bool(params.get('precision_model'))
+    mode = str(model.get('mode') or 'system_budget')
+    application = str(model.get('application') or 'positioning')
+    tolerance_type = str(model.get('tolerance_type') or 'unilateral')
+    pixel_factor = _as_float(model.get('pixel_factor'), 3.0) or 3.0
+    if pixel_factor <= 0:
+        pixel_factor = 3.0
+
+    # --- 1. 用户直接给像素当量 ---
+    explicit_pixel = _as_float(params.get('pixel_precision'))
+    if explicit_pixel and explicit_pixel > 0:
+        return {
+            'mode': 'explicit_pixel',
+            'mode_label': PRECISION_MODE_LABEL['explicit_pixel'],
+            'application': application,
+            'application_label': APPLICATION_LABEL.get(application, application),
+            'tolerance_type': tolerance_type,
+            'tolerance_input_mm': None,
+            'tolerance_band_mm': None,
+            'allocation_ratio': None,
+            'allowed_error_mm': explicit_pixel * pixel_factor,
+            'pixel_factor': pixel_factor,
+            'pixel_precision_max_mm': explicit_pixel,
+            'pixel_precision_max_um': explicit_pixel * 1000,
+            'assumptions': [],
+            'is_assumption': False,
+            'basis_text': (f"用户指定像素当量 {explicit_pixel * 1000:.1f}μm/px"
+                           f"（等效视觉允许误差 {explicit_pixel * pixel_factor:.3f}mm）"),
+        }
+
+    tolerance = _as_float(params.get('tolerance'))
+
+    # --- 2/4. 从整机公差分配 ---
+    if tolerance and tolerance > 0 and (model_declared or
+                                        not _as_float(params.get('precision_requirement'))):
+        if tolerance_type == 'bilateral':
+            band = tolerance * 2.0
+            band_text = f"±{tolerance:g}mm（带宽 {band:g}mm）"
+        elif tolerance_type == 'total':
+            band = tolerance
+            band_text = f"{tolerance:g}mm（已给总带宽）"
+        else:
+            band = tolerance
+            band_text = f"{tolerance:g}mm（单向，带宽 {band:g}mm）"
+
+        if mode == 'direct_measurement':
+            # 只有显式配了 direct_factor 才覆盖行业口径，否则按应用取
+            # （尺寸测量10 / 外观4 / 定位6）
+            explicit_factor = _as_float(model.get('direct_factor'))
+            factor = explicit_factor or DIRECT_FACTOR_BY_APPLICATION.get(
+                application, 10.0)
+            if factor <= 0:
+                factor = 10.0
+            pixel_max = band / factor
+            basis = (f"公差带 {band:g}mm ÷ {factor:g}"
+                     f"（{APPLICATION_LABEL.get(application, application)}直测口径）"
+                     f" = {pixel_max * 1000:.1f}μm/px")
+            return {
+                'mode': 'direct_measurement',
+                'mode_label': PRECISION_MODE_LABEL['direct_measurement'],
+                'application': application,
+                'application_label': APPLICATION_LABEL.get(application, application),
+                'tolerance_type': tolerance_type,
+                'tolerance_input_mm': tolerance,
+                'tolerance_band_mm': band,
+                'allocation_ratio': 1.0,
+                'direct_factor': factor,
+                'allowed_error_mm': band,
+                'pixel_factor': factor,
+                'pixel_precision_max_mm': pixel_max,
+                'pixel_precision_max_um': pixel_max * 1000,
+                'assumptions': [
+                    f'{APPLICATION_LABEL.get(application, application)}按行业口径'
+                    f'（公差带 ÷ {factor:g}）直接换算，视觉独占该公差带'],
+                'is_assumption': not model_declared,
+                'basis_text': basis,
+            }
+
+        ratio = _as_float(model.get('allocation_ratio'), 0.1)
+        if ratio is None or not (0 < ratio <= 1):
+            ratio = 0.1
+        allowed = band * ratio
+        pixel_max = allowed / pixel_factor
+        assumptions = [
+            f'视觉只承担整机公差的 {ratio:.0%}，其余留给机器人/标定/取料',
+            f'亚像素判据：允许误差内留 {pixel_factor:g} 像素余量',
+        ]
+        basis = (f"整机公差 {band_text} × 视觉分配 {ratio:.0%}"
+                 f" = 视觉允许误差 {allowed * 1000:.0f}μm"
+                 f" ÷ {pixel_factor:g} = {pixel_max * 1000:.1f}μm/px")
+        return {
+            'mode': 'system_budget',
+            'mode_label': PRECISION_MODE_LABEL['system_budget'],
+            'application': application,
+            'application_label': APPLICATION_LABEL.get(application, application),
+            'tolerance_type': tolerance_type,
+            'tolerance_input_mm': tolerance,
+            'tolerance_band_mm': band,
+            'allocation_ratio': ratio,
+            'allowed_error_mm': allowed,
+            'pixel_factor': pixel_factor,
+            'pixel_precision_max_mm': pixel_max,
+            'pixel_precision_max_um': pixel_max * 1000,
+            'assumptions': assumptions,
+            'is_assumption': not model_declared,
+            'basis_text': basis,
+        }
+
+    # --- 3. 已确认的视觉允许误差 ---
+    precision = _as_float(params.get('precision_requirement'))
+    if precision and precision > 0:
+        pixel_max = precision / pixel_factor
+        return {
+            'mode': 'explicit_precision',
+            'mode_label': PRECISION_MODE_LABEL['explicit_precision'],
+            'application': application,
+            'application_label': APPLICATION_LABEL.get(application, application),
+            'tolerance_type': tolerance_type,
+            'tolerance_input_mm': tolerance,
+            'tolerance_band_mm': tolerance,
+            'allocation_ratio': None,
+            'allowed_error_mm': precision,
+            'pixel_factor': pixel_factor,
+            'pixel_precision_max_mm': pixel_max,
+            'pixel_precision_max_um': pixel_max * 1000,
+            'assumptions': [f'视觉允许误差 {precision:g}mm 已确认，未再分摊'],
+            'is_assumption': False,
+            'basis_text': (f"视觉允许误差 {precision * 1000:.0f}μm"
+                           f" ÷ {pixel_factor:g} = {pixel_max * 1000:.1f}μm/px"),
+        }
+
+    return None
+
+
+def format_precision_basis(budget: Optional[Dict]) -> str:
+    """精度口径的一行人话说明，供日志/核验报告/PPT 复用。"""
+    if not budget:
+        return '未声明精度口径'
+    return budget.get('basis_text') or '未声明精度口径'
+
+
+# ============================================================
+# 场景/工程约束判定（2026-11-21 行业规范复核补齐）
+# ============================================================
+
+_MOVING_KEYWORDS = ('飞拍', '运动', '动态', '流水线', '在线', 'on-the-fly',
+                    'onthefly', 'conveyor')
+
+
+def is_moving_scene(params: Dict) -> bool:
+    """是否为运动/飞拍场景（决定快门类型、频闪光源、曝光时间约束）。
+
+    判据（任一成立）：显式 is_fly_shooting；流水线速度 > 0；检测类型/项目
+    文本含运动关键词。静态场景返回 False。
+    """
+    if params.get('is_fly_shooting'):
+        return True
+    try:
+        if float(params.get('conveyor_speed') or 0) > 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    text = f"{params.get('detection_type') or ''} " \
+           f"{' '.join(params.get('detection_items') or [])}".lower()
+    return any(k in text for k in _MOVING_KEYWORDS)
+
+
+def required_fps(params: Dict, margin: float = 1.5) -> Optional[float]:
+    """由节拍推导需求帧率（Hz）：margin / cycle_time；无节拍返回 None。
+
+    工程上帧率要留 1.5 倍余量（触发抖动、曝光占空、通信抖动）。
+    不得用相机 max_fps 冒充需求帧率——max_fps 是上限，不是工作点。
+    """
+    try:
+        cycle = float(params.get('cycle_time') or 0)
+    except (TypeError, ValueError):
+        return None
+    if cycle <= 0:
+        return None
+    return margin / cycle
+
+
+def estimate_camera_data_rate_mbps(camera: Dict, fps: float,
+                                   bit_depth: int = None) -> Optional[float]:
+    """估算某帧率下的接口数据率（MB/s，未计协议开销）。
+
+    MB/s = W × H × 位深/8 × fps ÷ 1e6
+    bit_depth 缺省取 8（黑白工业相机常见输出）；相机字段优先。
+    """
+    res = camera.get('resolution') or {}
+    try:
+        w = int(res.get('width') or 0)
+        h = int(res.get('height') or 0)
+        f = float(fps or 0)
+    except (TypeError, ValueError):
+        return None
+    if w <= 0 or h <= 0 or f <= 0:
+        return None
+    depth = bit_depth or camera.get('bit_depth') or 8
+    try:
+        depth = float(depth)
+    except (TypeError, ValueError):
+        depth = 8.0
+    return w * h * (depth / 8.0) * f / 1e6
+
+
+def camera_interface_status(camera: Dict, fps: float) -> Dict:
+    """接口带宽校核：返回 {status, data_rate_mbps, bandwidth_mbps,
+    utilization, interface}；status ∈ ok/over/warn/unknown。
+
+    超带宽不等于相机不能买：可降帧、开 ROI、换 10GigE/USB3。
+    但"需求帧率下超带宽"必须显式告警，不能默认通过。
+    """
+    iface = camera.get('interface', '')
+    bw = interface_effective_bandwidth_mbps(iface)
+    rate = estimate_camera_data_rate_mbps(camera, fps)
+    out = {'status': 'unknown', 'data_rate_mbps': rate,
+           'bandwidth_mbps': bw, 'utilization': None,
+           'interface': iface}
+    if rate is None or bw is None or bw <= 0:
+        return out
+    util = rate / bw
+    out['utilization'] = util
+    if util > 1.0:
+        out['status'] = 'over'
+    elif util > 0.8:
+        out['status'] = 'warn'
+    else:
+        out['status'] = 'ok'
+    return out
+
+
+def parse_depth_of_field_half_mm(value) -> Optional[float]:
+    """解析镜头景深字段为半宽（±mm）。
+
+    只接受厂家明确标注 ``±X mm`` 的写法（如 '±0.35mm'、'±2.5mm@F5.6'）。
+    纯数字/无 ± 的写法语义不明（可能是总景深），返回 None 交核验标
+    "未核验"，禁止猜成半宽或总宽——景深差 2 倍会直接放行超差方案。
+    """
+    if value is None or value == '' or isinstance(value, (int, float)):
+        return None
+    s = str(value)
+    if '±' not in s:
+        return None
+    m = re.search(r'±\s*([\d.]+)\s*mm', s)
+    if not m:
+        return None
+    try:
+        v = abs(float(m.group(1)))
+    except ValueError:
+        return None
+    return v if v > 0 else None
+
+
+def parse_mtf30_lpmm(value) -> Optional[float]:
+    """解析镜头 MTF30 字段为 lp/mm（取第一个数值）。
+
+    兼容 170、'170 lp/mm'、'≥124lp/mm@...'；无法解析返回 None。
+    """
+    if value is None or value == '':
+        return None
+    if isinstance(value, (int, float)):
+        return float(value) if value > 0 else None
+    m = re.search(r'([\d.]+)', str(value))
+    if not m:
+        return None
+    try:
+        v = float(m.group(1))
+    except ValueError:
+        return None
+    return v if v > 0 else None
+
+
+def shutter_kind(camera: Dict) -> str:
+    """相机快门类型归一化：'global' / 'rolling' / 'unknown'。
+
+    中英混写都识别（'全局快门'、'Global Shutter'、'卷帘快门'、'Rolling'）。
+    无法识别返回 unknown——调用方必须 WARN，不得默认全局快门。
+    """
+    s = str(camera.get('shutter') or '')
+    if not s:
+        return 'unknown'
+    low = s.lower()
+    if '全局' in s or 'global' in low:
+        return 'global'
+    if '卷帘' in s or 'rolling' in low:
+        return 'rolling'
+    return 'unknown'
 
 
 class PrecisionCalculator:
@@ -48,6 +539,12 @@ class PrecisionCalculator:
     def tolerance_to_precision(self, tolerance_mm: float, method: str = 'unilateral') -> Dict:
         """
         根据公差反推检测精度
+
+        ⚠️ 已废弃（2026-11-21）：本方法只保留给旧调用方兼容，主流程一律
+        走 ``resolve_precision_budget()``。它只有单一系数（÷10），无法表达
+        direct_measurement / system_budget 两套口径；bilateral 分支的语义
+        也与预算模型不同（此处 ÷2 再 ÷10，预算模型是 ±值 ×2 成带宽）。
+        新代码禁止调用。
         
         Args:
             tolerance_mm: 公差值（mm）
@@ -184,22 +681,30 @@ class PrecisionCalculator:
 
     def magnification_window(self, camera: Dict, fov: Dict,
                              required_precision_mm: float,
-                             pixel_per_precision: float = 3.0) -> Dict:
+                             pixel_per_precision: float = 3.0,
+                             pixel_precision_max_mm: float = None) -> Dict:
         """
         推导某相机同时满足"视野覆盖+精度"的镜头倍率闭区间
 
         视野约束：  FOV = 传感器宽 / 倍率  →  倍率 ≤ sensor_w / fov_w
-        精度约束：  pixel/倍率 ≤ 精度/k    →  倍率 ≥ pixel / (精度/k)
+        精度约束：  pixel/倍率 ≤ 像素当量上限  →  倍率 ≥ pixel / 上限
+
+        2026-11-21 修正：优先接收 ``pixel_precision_max_mm``（预算模型的
+        最终产物）。此前调用方传 ``允许误差 / 亚像素因子``，在
+        direct_measurement 模式下会把"公差带÷10"又按 ÷3 算，窗口下限
+        松 3.3 倍，选型与核验两链口径不一致。
 
         Args:
             camera: 相机字典（需 resolution.width/height、pixel_size）
             fov: {'width': mm, 'height': mm}
-            required_precision_mm: 要求检测精度（mm）
-            pixel_per_precision: 亚像素因子
+            required_precision_mm: 视觉允许误差（mm），仅在未给
+                pixel_precision_max_mm 时参与换算（兼容旧调用）
+            pixel_per_precision: 亚像素因子（旧口径兜底）
+            pixel_precision_max_mm: 像素当量上限（mm/pixel），优先使用
 
         Returns:
             {'mag_min', 'mag_max', 'feasible', 'reason',
-             'pixel_precision_max_mm': 精度允许的最大像素精度}
+             'pixel_precision_max_mm': 精度允许的最大像素当量}
         """
         res = camera.get('resolution', {})
         res_w = res.get('width', 0)
@@ -211,8 +716,14 @@ class PrecisionCalculator:
         sensor_w_mm = res_w * pixel_um / 1000.0
         sensor_h_mm = res_h * pixel_um / 1000.0
 
-        pixel_precision_max = self.required_object_resolution(
-            required_precision_mm, pixel_per_precision)  # mm/pixel
+        if pixel_precision_max_mm and pixel_precision_max_mm > 0:
+            pixel_precision_max = float(pixel_precision_max_mm)
+        elif required_precision_mm and required_precision_mm > 0:
+            pixel_precision_max = self.required_object_resolution(
+                required_precision_mm, pixel_per_precision)  # mm/pixel
+        else:
+            return {'feasible': False, 'reason': '精度参数无效',
+                    'mag_min': 0, 'mag_max': 0}
 
         # 精度下限：倍率必须够大
         mag_min = (pixel_um / 1000.0) / pixel_precision_max

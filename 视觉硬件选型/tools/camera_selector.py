@@ -45,6 +45,7 @@ class CameraSelector:
                                fov: Dict,
                                required_precision_mm: float,
                                pixel_per_precision: float = 3.0,
+                               pixel_precision_max_mm: float = None,
                                interface: str = None,
                                brand: str = None,
                                min_fps: float = None,
@@ -53,13 +54,18 @@ class CameraSelector:
         基于"视野+精度"双约束筛选相机（需求侧推导，不依赖假设硬件）
 
         判据（与硬件无关的必要条件）：
-          分辨率 ≥ FOV × 亚像素因子 / 精度
-        等价于：该相机存在倍率区间同时满足视野覆盖与精度要求。
+          分辨率 ≥ FOV ÷ 像素当量上限
+
+        2026-11-21 修正：增加 ``pixel_precision_max_mm``。预算模型
+        （precision_model）算出的像素当量上限必须原样传进来，不能再按
+        ``精度 ÷ 亚像素因子`` 二次换算——direct_measurement 模式下
+        会把"公差带÷10"又按 ÷3 算，选型松 3.3 倍。
 
         Args:
             fov: {'width': mm, 'height': mm}
-            required_precision_mm: 要求检测精度（mm）
-            pixel_per_precision: 亚像素因子（默认3：像素精度≤精度/3）
+            required_precision_mm: 视觉允许误差（旧口径兜底）
+            pixel_per_precision: 亚像素因子（旧口径兜底）
+            pixel_precision_max_mm: 像素当量上限（mm/pixel），优先
             interface: 接口类型
             brand: 品牌
             min_fps: 最小帧率（默认由cycle_time无法获知时用5fps）
@@ -69,8 +75,15 @@ class CameraSelector:
             通过验证的相机列表（附倍率窗口、所需像素信息）
         """
         candidates = []
-        pixel_precision_max = self.calculator.required_object_resolution(
-            required_precision_mm, pixel_per_precision)
+        if pixel_precision_max_mm and pixel_precision_max_mm > 0:
+            pixel_precision_max = float(pixel_precision_max_mm)
+        elif required_precision_mm and required_precision_mm > 0:
+            pixel_precision_max = self.calculator.required_object_resolution(
+                required_precision_mm, pixel_per_precision)
+        else:
+            return []
+        if pixel_precision_max <= 0:
+            return []
 
         for camera in self.cameras:
             res = camera.get('resolution', {})
@@ -90,7 +103,8 @@ class CameraSelector:
 
             # 必要条件2：倍率窗口非空（等价于条件1，用于给出窗口数据）
             window = self.calculator.magnification_window(
-                camera, fov, required_precision_mm, pixel_per_precision)
+                camera, fov, required_precision_mm, pixel_per_precision,
+                pixel_precision_max_mm=pixel_precision_max)
             if not window.get('feasible'):
                 continue
 

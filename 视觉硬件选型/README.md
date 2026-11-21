@@ -36,6 +36,14 @@
 
 ## 快速开始
 
+> **先自检再生成**（推荐，几秒出结论，不选型/不生成PPT）：
+> ```bash
+> python tools/vision_proposal_generator.py --check-config project_config.json
+> ```
+> 退出码 0=参数合法；2=口径/字段需修正（脚本给原话问法）。
+> 想先确认能不能选出硬件：同一命令加 `--dry-run`（只选型+核验，落盘
+> `selection_result.json`，不生成PPT）。
+
 ### 方式0：需求文本从0入口（弱模型推荐）
 
 读用户图片/文档/口述后，把数字信息**原样抄录**给 `--text`，解析与口径判断交给脚本：
@@ -229,7 +237,7 @@ python "C:\Users\Administrator\.config\opencode\skills\视觉选型测试\tests\
 | smoke | 文件/依赖/JSON/目录卫生 |
 | data | 硬件库 schema、verified+官网链接、无假型号回流 |
 | doc | SKILL.md/README/模板字段与代码一致 |
-| core | 选型算法、精度链、光源角度品牌、文本解析、图片获取 |
+| core | 选型算法、精度链、光源角度品牌、文本解析、图片获取、行业规范（带宽/快门/景深/MTF/频闪三态） |
 | ppt | `check_ppt_quality` 判定边界 |
 | workflow | 端到端退出码 0/1/2、产物 schema、幂等、验收隔离 |
 

@@ -1,5 +1,21 @@
 # 视觉选型测试 - 变更记录
 
+## Unreleased（v1.1.1）
+
+### 新增：行业规范回归 + 跨 shell 编码稳定（2026-11-21）
+
+- **背景**：被测 skill v1.14.0 对照工控选型规范补齐硬约束（频闪三态/接口带宽/
+  快门类型/景深/MTF/衍射），需要一一沉淀回归；同时发现 Windows cp936 控制台
+  下被测脚本 stdout 为 GBK，用例按 UTF-8 解码导致 12 条中文断言假失败。
+- **新增 `test_industry_compliance.py`（8 条）**：光学估算函数（景深/MTF/艾里斑）、
+  接口带宽判定、快门类型与运动场景、频闪三态、选型链与核验链精度口径一致。
+- **扩充**：`test_data_integrity.py` 补 `mod`/`wd_range`/`wd_mag_table`/
+  `external_candidates` 完整性；`test_selection_core.py` 补精度预算模型
+  （system_budget/direct_measurement）与核验口径用例。
+- **`run_all.py`**：`core` 层纳入新模块；启动时 `PYTHONIOENCODING=utf-8`
+  注入子进程，任何 shell/代码页下结果一致（根因见文件内注释）。
+- **验证**：全量 **211/211 通过、0 失败、0 错误、0 跳过**（17.7s，退出码 0）。
+
 ## Unreleased（v1.1.0）
 
 ### 新增：六层分区测试体系（2026-11-20）

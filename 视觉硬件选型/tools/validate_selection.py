@@ -8,10 +8,14 @@
   3. 视野覆盖（实际视野 ≥ 所需视野，双向）
   4. 倍率窗口（镜头倍率必须落在[精度下限, 视野上限]区间）
   5. 光学兼容性（像圆覆盖靶面、卡口匹配）
-  6. 性能余量（帧率≥1.5×节拍、景深≥零件高度波动）
+  6. 性能余量（帧率≥1.5×节拍）
   7. 远心必要性（尺寸测量/高精度时应使用远心镜头）
   8. 型号可查证性（相机/镜头/光源 verified标记 + 官网链接）
   9. 光源内径覆盖（内孔 ≥ 视野对角线×1.1，防遮挡视野）
+ 10. 光学质量（景深/MTF/衍射；厂家未给则按公式估算并标注）
+ 11. 接口带宽（需求帧率下的数据率 ≤ 接口有效带宽）
+ 12. 快门类型（运动/飞拍必须全局快门）
+ 13. 飞拍频闪（光源 strobe 三态：支持/不支持/未核验）
 """
 
 import json
@@ -20,13 +24,23 @@ from typing import Dict, List
 from dataclasses import dataclass, asdict
 from enum import Enum
 
-from precision_calculator import PrecisionCalculator, is_measurement_scene
+from precision_calculator import (
+    PrecisionCalculator, is_measurement_scene, is_moving_scene,
+    resolve_precision_budget, format_precision_basis,
+    required_fps, camera_interface_status, parse_depth_of_field_half_mm,
+    parse_mtf30_lpmm, estimate_object_dof_half_mm, nyquist_lpmm,
+    airy_disk_um, parse_min_f_number, INTERFACE_LABEL, shutter_kind,
+)
 
 
 class CheckResult(Enum):
     PASS = "[PASS]"
     WARNING = "[WARN]"
     FAIL = "[FAIL]"
+    # INFO 只用于"厂家未给数据、无法判定"的诚实披露：
+    # 不计入 PASS/WARN/FAIL，不阻断交付，但必须在报告里可见，
+    # 禁止把未判定项沉默掉（沉默=假绿）。
+    INFO = "[INFO]"
 
 
 @dataclass
@@ -43,19 +57,43 @@ class CheckItem:
 
 
 def resolve_precision_mm(params: Dict):
-    """解析设备精度（mm），返回 (值, 口径说明)。
+    """解析视觉允许误差（mm），返回 (值, 口径说明)。
 
-    优先 ``precision_requirement``；只给图纸公差时按 "公差 ÷ 10" 推导，
-    与 precision_calculator 同一口径。此前各处直接 ``.get(..., 0)``，
-    显式 null 时拿到 None 并抛 TypeError（2026-11-20 实测）。
+    优先用统一的 ``resolve_precision_budget``：它会区分
+    "整机公差分配" 与 "视觉直接测量" 两种口径，避免 /10 与 /3 叠加。
+    旧实现只给 tolerance 时按 tolerance ÷ 10 处理，会把整机公差
+    当成视觉指标（2026-11-21 复核基恩士/HSM 口径后修正）。
     """
-    p = params.get('precision_requirement')
-    if p:
-        return float(p), ''
-    tol = params.get('tolerance')
-    if tol:
-        return float(tol) / 10.0, f'（图纸公差 {tol}mm ÷ 10 推导）'
+    budget = resolve_precision_budget(params)
+    if budget:
+        return budget['allowed_error_mm'], format_precision_basis(budget)
     return 0.0, ''
+
+
+def effective_magnification(lens: Dict) -> float:
+    """取需求工作距离处的实际倍率。
+
+    优先用选型器按 WD 算出的 ``magnification_at_wd``；直接用库内单点
+    ``magnification`` 会在 WD 偏离标称点时算错视野（2026-11-20 事故）。
+    """
+    v = lens.get('magnification_at_wd')
+    if v is None:
+        v = lens.get('magnification')
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+MAG_SOURCE_LABEL = {
+    'wd_mag_table_interp': ('厂家 WD-倍率表插值', CheckResult.PASS),
+    'wd_mag_table_extrapolated': ('超出厂家 WD-倍率表范围，按拟合外推',
+                                  CheckResult.WARNING),
+    'wd_mag_table_single_point': ('厂家仅给单点倍率，未覆盖需求 WD',
+                                  CheckResult.WARNING),
+    'thin_lens_estimate': ('按薄透镜估算（无厂家 WD-倍率表）', CheckResult.WARNING),
+    'single_point': ('库内单点倍率，未按 WD 修正', CheckResult.WARNING),
+}
 
 
 class SelectionValidator:
@@ -92,16 +130,22 @@ class SelectionValidator:
             print("=" * 70)
 
         self._check_completeness(camera, lens, params)
+        self._check_working_distance(lens, params)
+        self._check_magnification_basis(lens, params)
+        self._check_precision_basis(params)
         self._check_precision_chain(camera, lens, params)
         self._check_fov_coverage(camera, lens, params)
         self._check_magnification_window(camera, lens, params)
         self._check_optical_compatibility(camera, lens)
         self._check_performance_margin(camera, lens, params)
+        self._check_optics_quality(camera, lens, params)
+        self._check_interface_bandwidth(camera, params)
+        self._check_shutter(camera, params)
         self._check_telecentric_necessity(lens, params)
         self._check_verifiability(camera, lens)
         self._check_light_verifiability(light)
         self._check_light_inner_diameter(light, params)
-        self._check_light_working_distance(lens, light)
+        self._check_light_working_distance(lens, light, params)
         self._check_fly_shooting(camera, lens, params, light)
 
         if verbose:
@@ -182,12 +226,16 @@ class SelectionValidator:
                 "光源内径覆盖", CheckResult.PASS,
                 f"光源内径 {inner}mm ≥ 视野对角线×1.1={need}mm"))
 
-    def _check_light_working_distance(self, lens: Dict, light: Dict = None):
+    def _check_light_working_distance(self, lens: Dict, light: Dict = None,
+                                     params: Dict = None):
         """光源工作距离物理约束：环形/同轴光源装在镜头前端，
         光源到工件距离必须小于镜头物方WD（远心系统WD由镜头决定，不可穿透镜头安装）"""
         if not light:
             return
-        lens_wd = lens.get('working_distance', 0) or 0
+        # 优先用项目声明 WD：镜头库内 working_distance 是标称单点值，
+        # 与现场实际安装距离无关（2026-11-20：WD 改 320 后仍打印 300）
+        lens_wd = (params or {}).get('working_distance') \
+            or lens.get('working_distance', 0) or 0
         light_wd = light.get('working_distance', 0) or 0
         if not lens_wd or not light_wd:
             return
@@ -218,10 +266,12 @@ class SelectionValidator:
                 "请提供流水线速度（mm/s）"))
             return
         
-        # 获取像素精度
-        pixel_precision = params.get('pixel_precision') or 0
+        # 获取像素精度：优先用预算模型已算好的像素当量上限
+        # （resolve_precision_mm 返回的是视觉允许误差，除以 k 才是像素当量；
+        #  预算模型已含该步，params['pixel_precision_max_mm'] 可直接用）
+        pixel_precision = params.get('pixel_precision_max_mm') \
+            or params.get('pixel_precision') or 0
         if pixel_precision <= 0:
-            # 尝试从精度要求计算（只给公差时按公差/10 推导）
             precision, _ = resolve_precision_mm(params)
             k = params.get('pixel_per_precision') or 3.0
             if precision > 0:
@@ -245,13 +295,23 @@ class SelectionValidator:
                 "检查流水线速度是否大于0"))
             return
         
-        # 检查光源是否支持频闪
+        # 检查光源是否支持频闪（三态：True=支持 / False=明确不支持 /
+        # None=厂商资料未给、未核验）。未核验给 WARN 而不是 FAIL：
+        # 不能把"不知道"判成"不支持"（反之亦然），但必须显式暴露待确认。
         if light:
-            if not light.get('strobe', False):
+            strobe = light.get('strobe', None)
+            if strobe is False:
                 self.checks.append(CheckItem(
                     "飞拍光源", CheckResult.FAIL,
-                    "飞拍场景需要频闪光源，当前光源不支持频闪",
+                    "飞拍场景需要频闪光源，当前光源明确不支持频闪",
                     "更换为频闪光源（如CCS LFV系列）"))
+            elif strobe is None:
+                self.checks.append(CheckItem(
+                    "飞拍光源", CheckResult.WARNING,
+                    f"光源 {light.get('model') or '未指定型号'} 的频闪能力未核验"
+                    f"（库内缺 strobe/min_exposure_us 字段）",
+                    "向供应商确认是否支持 μs 级频闪及最短脉宽；"
+                    "确认后在硬件库补 strobe=true/min_exposure_us 并核验"))
             else:
                 # 检查曝光时间是否在光源支持范围内：
                 # 系统要求曝光 ≤ max_exposure_us，光源只需能打到一样短
@@ -288,9 +348,107 @@ class SelectionValidator:
                 self.checks.append(CheckItem(f"镜头.{param}", CheckResult.FAIL,
                                              "缺失必要参数", f"请补充镜头{param}"))
 
+    def _check_working_distance(self, lens: Dict, params: Dict):
+        """工作距离 / MOD 核验。
+
+        根因（2026-11-20）：WD 从未进入选型判定，MOD=500mm 的镜头在
+        WD=300mm 的项目里仅凭倍率/视野"中选"，实际装上去不合焦。
+        """
+        wd_req = params.get('working_distance')
+        source = '配置'
+        if not wd_req:
+            wd_req = lens.get('working_distance')
+            source = '镜头标称值兜底（配置未声明项目 WD）'
+
+        if not wd_req:
+            self.checks.append(CheckItem(
+                "工作距离/MOD", CheckResult.WARNING,
+                "项目 WD 与镜头 WD 均缺失，无法校验能否合焦",
+                "在 project_config.json 补 working_distance（镜头前端面到工件）"))
+            return
+
+        from lens_selector import lens_wd_status, format_wd_requirement
+        status, detail = lens_wd_status(lens, float(wd_req))
+        capability = format_wd_requirement(detail)
+
+        if status == 'too_close':
+            self.checks.append(CheckItem(
+                "工作距离/MOD", CheckResult.FAIL,
+                f"需求 WD={float(wd_req):g}mm 小于镜头最近工作距离 {capability}，无法合焦",
+                "换 WD 覆盖该距离的镜头；或确认可否加接圈（超规格需实测畸变/MTF）"))
+        elif status == 'too_far':
+            self.checks.append(CheckItem(
+                "工作距离/MOD", CheckResult.FAIL,
+                f"需求 WD={float(wd_req):g}mm 超出镜头可用范围 {capability}",
+                "换工作距离更远的镜头，或与客户确认安装空间"))
+        elif status == 'ok':
+            result = CheckResult.PASS if source == '配置' else CheckResult.WARNING
+            self.checks.append(CheckItem(
+                "工作距离/MOD", result,
+                f"需求 WD={float(wd_req):g}mm 在镜头可用范围 {capability} 内（依据：{source}）",
+                "" if result == CheckResult.PASS else
+                "配置未声明项目 WD，本次按镜头标称值兜底；交付前须在配置中写明现场 WD"))
+        else:
+            self.checks.append(CheckItem(
+                "工作距离/MOD", CheckResult.WARNING,
+                f"镜头缺 mod/wd_range，无法判定 WD={float(wd_req):g}mm 能否合焦",
+                "官网核查最近摄距后补入数据库；未核验前不得作为交付依据"))
+
+    def _check_magnification_basis(self, lens: Dict, params: Dict):
+        """倍率取值依据核验（2026-11-20 事故）。
+
+        库内 ``magnification`` 是单点值；项目 WD 偏离该点时倍率/视野都会变。
+        没有厂家 WD-倍率表的镜头只能估算，交付前必须实测标定。
+        """
+        source = lens.get('magnification_source')
+        if not source:
+            return
+        label, result = MAG_SOURCE_LABEL.get(
+            source, ('依据未知', CheckResult.WARNING))
+        mag = effective_magnification(lens)
+        wd = params.get('working_distance') or lens.get('working_distance')
+        detail = (f"{label}：WD={float(wd):g}mm 处倍率 {mag:.3f}x"
+                  if wd else f"{label}：倍率 {mag:.3f}x")
+        sug = ''
+        if result != CheckResult.PASS:
+            sug = ('向厂家索取 WD-倍率表并记入 wd_mag_table 后重算；'
+                   '交付前用标定板实测复核视野与畸变')
+        self.checks.append(CheckItem("倍率依据", result, detail, sug))
+
+    def _check_precision_basis(self, params: Dict):
+        """精度口径核验（2026-11-21）。
+
+        业界两套口径不能叠加："公差带÷10"是视觉直测口径，
+        "允许误差÷3"是已分配后的亚像素判据。报告必须写明用的哪套、
+        分配比例多少，否则客户无法判断 0.05mm 是视觉指标还是整机精度。
+        """
+        budget = resolve_precision_budget(params)
+        if not budget:
+            return
+        label = budget['mode_label']
+        if budget['mode'] == 'system_budget':
+            detail = f"{label}：{budget['basis_text']}"
+            if budget.get('is_assumption'):
+                self.checks.append(CheckItem(
+                    "精度口径", CheckResult.WARNING, detail,
+                    "分配比例用的是默认 1/10（未声明 precision_model）；"
+                    "请与客户确认该数字是整机结果公差还是视觉指标后写进 config"))
+            else:
+                self.checks.append(CheckItem("精度口径", CheckResult.PASS, detail))
+        elif budget['mode'] == 'direct_measurement':
+            self.checks.append(CheckItem(
+                "精度口径", CheckResult.PASS,
+                f"{label}：{budget['basis_text']}",
+                "该口径假定视觉独占整个公差带，不再另做误差分配"))
+        else:
+            self.checks.append(CheckItem(
+                "精度口径", CheckResult.PASS,
+                f"{label}：{budget['basis_text']}"))
+
     def _check_precision_chain(self, camera: Dict, lens: Dict, params: Dict):
         pixel_um = camera.get('pixel_size') or 0
-        mag = lens.get('magnification') or 0
+        mag = effective_magnification(lens)
+        budget = resolve_precision_budget(params)
         precision_mm, basis = resolve_precision_mm(params)
         k = params.get('pixel_per_precision') or 3.0
 
@@ -301,19 +459,37 @@ class SelectionValidator:
             return
 
         obj_res_um = pixel_um / mag
-        pixel_precision_max_um = precision_mm * 1000 / k
+        # 有统一口径模型时直接取它的像素当量上限（已含 mode/pixel_factor），
+        # 不再用 precision_mm / k 二次换算，避免 /10 与 /3 叠加
+        if budget:
+            pixel_precision_max_um = budget['pixel_precision_max_um']
+        else:
+            pixel_precision_max_um = precision_mm * 1000 / k
         margin = pixel_precision_max_um / obj_res_um
 
+        if budget:
+            if budget['mode'] == 'system_budget':
+                short = (f"公差{budget['tolerance_band_mm']:g}mm"
+                         f"×分配{budget['allocation_ratio']:.0%}"
+                         f"={budget['allowed_error_mm'] * 1000:.0f}μm"
+                         f"÷{budget['pixel_factor']:g}像素")
+            elif budget['mode'] == 'direct_measurement':
+                short = f"公差带÷{budget.get('direct_factor', 10):g}"
+            else:
+                short = f"允许误差÷{budget['pixel_factor']:g}像素"
+        else:
+            short = f"精度{k}等分{basis}"
         if obj_res_um <= pixel_precision_max_um:
             result = CheckResult.PASS if margin >= 1.3 else CheckResult.WARNING
-            msg = (f"像素精度{obj_res_um:.2f}μm ≤ 上限{pixel_precision_max_um:.2f}μm "
-                   f"(精度{k}等分{basis})，余量{margin:.2f}x")
+            msg = (f"像素精度{obj_res_um:.2f}μm ≤ 上限{pixel_precision_max_um:.2f}μm"
+                   f"（{short}），余量{margin:.2f}x")
             sug = "" if margin >= 1.3 else "余量偏小，建议提高倍率或换更高分辨率相机"
             self.checks.append(CheckItem("精度链", result, msg, sug))
         else:
             self.checks.append(CheckItem(
                 "精度链", CheckResult.FAIL,
-                f"像素精度{obj_res_um:.2f}μm > 上限{pixel_precision_max_um:.2f}μm",
+                f"像素精度{obj_res_um:.2f}μm > 上限{pixel_precision_max_um:.2f}μm"
+                f"（{basis}）",
                 "需要提高镜头倍率或更换更高分辨率相机"))
 
     def _check_fov_coverage(self, camera: Dict, lens: Dict, params: Dict):
@@ -322,14 +498,26 @@ class SelectionValidator:
             self.checks.append(CheckItem("视野覆盖", CheckResult.WARNING,
                                          "未提供所需视野，跳过"))
             return
-        actual = self.calculator.actual_fov(camera, lens.get('magnification', 0) or 0)
+        actual = self.calculator.actual_fov(camera, effective_magnification(lens))
+        ratio = min(actual['width'] / fov['width'], actual['height'] / fov['height'])
         ok_w = actual['width'] >= fov['width'] * 0.98
         ok_h = actual['height'] >= fov['height'] * 0.98
         if ok_w and ok_h:
-            self.checks.append(CheckItem(
-                "视野覆盖", CheckResult.PASS,
-                f"实际视野{actual['width']:.1f}x{actual['height']:.1f}mm "
-                f"≥ 所需{fov['width']:.1f}x{fov['height']:.1f}mm"))
+            if ratio >= 1.0:
+                self.checks.append(CheckItem(
+                    "视野覆盖", CheckResult.PASS,
+                    f"实际视野{actual['width']:.1f}x{actual['height']:.1f}mm "
+                    f"≥ 所需{fov['width']:.1f}x{fov['height']:.1f}mm"
+                    f"（余量{(ratio - 1) * 100:.1f}%）"))
+            else:
+                # 落在 2% 容差内但没达到标称需求：工程上是零余量，必须提示
+                self.checks.append(CheckItem(
+                    "视野覆盖", CheckResult.WARNING,
+                    f"实际视野{actual['width']:.1f}x{actual['height']:.1f}mm "
+                    f"未达标称需求{fov['width']:.1f}x{fov['height']:.1f}mm"
+                    f"（差{(1 - ratio) * 100:.1f}%，仅靠 2% 容差通过）",
+                    "视野余量为 0，WD/倍率稍有偏差就盖不住；"
+                    "建议工作距离上调 20~30mm（倍率下降、视野变大）后重算"))
         else:
             self.checks.append(CheckItem(
                 "视野覆盖", CheckResult.FAIL,
@@ -344,7 +532,7 @@ class SelectionValidator:
             return
         k = params.get('pixel_per_precision') or 3.0
         window = self.calculator.magnification_window(camera, fov, precision_mm, k)
-        mag = lens.get('magnification', 0) or 0
+        mag = effective_magnification(lens)
         if not window.get('feasible'):
             self.checks.append(CheckItem("倍率窗口", CheckResult.FAIL,
                                          window.get('reason', '无解'),
@@ -353,12 +541,12 @@ class SelectionValidator:
         if window['mag_min'] * 0.98 <= mag <= window['mag_max'] * 1.02:
             self.checks.append(CheckItem(
                 "倍率窗口", CheckResult.PASS,
-                f"镜头倍率{mag}x在可行窗口[{window['mag_min']:.3f}, "
+                f"镜头倍率{mag:.3f}x在可行窗口[{window['mag_min']:.3f}, "
                 f"{window['mag_max']:.3f}]内"))
         else:
             self.checks.append(CheckItem(
                 "倍率窗口", CheckResult.FAIL,
-                f"镜头倍率{mag}x不在可行窗口[{window['mag_min']:.3f}, "
+                f"镜头倍率{mag:.3f}x不在可行窗口[{window['mag_min']:.3f}, "
                 f"{window['mag_max']:.3f}]内",
                 "窗口下限由精度决定，上限由视野决定"))
 
@@ -400,39 +588,196 @@ class SelectionValidator:
         if cycle_time is None:
             cycle_time = 3
         if fps > 0 and cycle_time > 0:
-            required_fps = 1 / cycle_time
-            margin = fps / required_fps
+            # 需求帧率 = 1/节拍；余量判据 1.5x（触发/曝光占空/通信抖动）
+            req_fps = 1.0 / cycle_time
+            margin = fps / req_fps
             if margin >= 1.5:
                 self.checks.append(CheckItem(
                     "帧率余量", CheckResult.PASS,
-                    f"{fps}fps ≥ 节拍要求{required_fps:.2f}fps，余量{margin:.1f}x"))
+                    f"{fps}fps ≥ 节拍要求{req_fps:.2f}fps，余量{margin:.1f}x"))
             elif margin >= 1.0:
                 self.checks.append(CheckItem(
                     "帧率余量", CheckResult.WARNING,
-                    f"{fps}fps 仅{margin:.1f}x于节拍要求{required_fps:.2f}fps",
+                    f"{fps}fps 仅{margin:.1f}x于节拍要求{req_fps:.2f}fps",
                     "余量不足，考虑触发/频闪或换高帧率机型"))
             else:
                 self.checks.append(CheckItem(
                     "帧率余量", CheckResult.FAIL,
-                    f"{fps}fps < 节拍要求{required_fps:.2f}fps",
+                    f"{fps}fps < 节拍要求{req_fps:.2f}fps",
                     "必须更换更高帧率相机"))
 
-        # 景深
-        dof_str = str(lens.get('depth_of_field', ''))
-        m = re.match(r'[±+-]?([\d.]+)mm', dof_str)
-        if m:
-            dof = float(m.group(1))
-            height_variation = params.get('part_height_variation_mm', None)
-            if height_variation:
-                if dof >= height_variation:
-                    self.checks.append(CheckItem(
-                        "景深余量", CheckResult.PASS,
-                        f"景深±{dof}mm ≥ 高度波动±{height_variation}mm"))
-                else:
-                    self.checks.append(CheckItem(
-                        "景深余量", CheckResult.WARNING,
-                        f"景深±{dof}mm < 高度波动±{height_variation}mm",
-                        "需要调焦机构或减小倍率"))
+    def _check_optics_quality(self, camera: Dict, lens: Dict, params: Dict):
+        """光学质量核验：景深 / 镜头解析力(MTF30) / 光圈衍射。
+
+        工控选型只算"分辨率够不够"会漏掉三类硬约束：
+          · 景深不够 → 工件高度波动就失焦（尤其微距/大倍率）；
+          · 镜头 MTF 低于相机奈奎斯特 → 高像素相机拿不到细节；
+          · 光圈收太小 → 艾里斑超过像元，衍射成瓶颈。
+        厂家给值优先；未给则按公式估算（标"估算"），完全无法估算才 INFO。
+        """
+        pixel_size = camera.get('pixel_size', 0) or 0
+        mag = lens.get('magnification_at_wd') or lens.get('magnification') or 0
+
+        # ---------- 景深 ----------
+        dof_vendor = parse_depth_of_field_half_mm(lens.get('depth_of_field'))
+        height_variation = params.get('part_height_variation_mm')
+        if dof_vendor is not None:
+            dof_half, dof_src = dof_vendor, '厂家标注'
+        else:
+            dof_half = estimate_object_dof_half_mm(
+                lens.get('f_number'), pixel_size, mag)
+            dof_src = '公式估算'
+
+        if dof_half is None:
+            self.checks.append(CheckItem(
+                "景深", CheckResult.INFO,
+                "镜头未给景深且缺 F 数/像元/倍率，无法估算景深",
+                "向厂商索取景深曲线或补全 f_number 后重算"))
+        elif height_variation is None:
+            f_no_txt = parse_min_f_number(lens.get('f_number'))
+            f_no_txt = f"F{f_no_txt:g}" if f_no_txt else "F?"
+            self.checks.append(CheckItem(
+                "景深", CheckResult.INFO,
+                f"景深 ±{dof_half:.3f}mm（{dof_src}，{f_no_txt}/"
+                f"β{float(mag):.3f}）；未提供工件高度波动，未做余量判定",
+                "交付前按实际工件高度波动确认；有波动时提供 "
+                "part_height_variation_mm 重算"))
+        else:
+            try:
+                hv = abs(float(height_variation))
+            except (TypeError, ValueError):
+                hv = 0
+            if dof_half >= hv:
+                self.checks.append(CheckItem(
+                    "景深", CheckResult.PASS,
+                    f"景深 ±{dof_half:.3f}mm（{dof_src}）≥ 高度波动 ±{hv:g}mm"))
+            else:
+                self.checks.append(CheckItem(
+                    "景深", CheckResult.FAIL,
+                    f"景深 ±{dof_half:.3f}mm（{dof_src}）< 高度波动 ±{hv:g}mm",
+                    "减小倍率/收小光圈增加景深，或加调焦/测高机构"))
+
+        # ---------- 镜头解析力 vs 相机奈奎斯特 ----------
+        nyq = nyquist_lpmm(pixel_size)
+        mtf = parse_mtf30_lpmm(lens.get('mtf30'))
+        if nyq is None:
+            pass
+        elif mtf is None:
+            self.checks.append(CheckItem(
+                "镜头解析力", CheckResult.INFO,
+                f"镜头未提供 MTF30，无法核验是否匹配相机奈奎斯特 {nyq:.0f}lp/mm",
+                "向厂商索取 MTF 曲线；换更高解析力镜头前先实测对比度"))
+        elif mtf >= nyq:
+            self.checks.append(CheckItem(
+                "镜头解析力", CheckResult.PASS,
+                f"MTF30 {mtf:g}lp/mm ≥ 相机奈奎斯特 {nyq:.0f}lp/mm"))
+        else:
+            self.checks.append(CheckItem(
+                "镜头解析力", CheckResult.WARNING,
+                f"MTF30 {mtf:g}lp/mm < 相机奈奎斯特 {nyq:.0f}lp/mm："
+                f"镜头成为分辨率瓶颈，高像素相机拿不到额外细节",
+                "换高解析力镜头，或降低相机像素/加大倍率匹配"))
+
+        # ---------- 光圈衍射 ----------
+        f_no = parse_min_f_number(lens.get('f_number'))
+        airy = airy_disk_um(f_no)
+        if airy is None or pixel_size <= 0:
+            pass
+        else:
+            ratio = airy / float(pixel_size)
+            if ratio <= 3.0:
+                self.checks.append(CheckItem(
+                    "光圈衍射", CheckResult.PASS,
+                    f"最大光圈 F{f_no:g} 艾里斑 {airy:.1f}μm = {ratio:.1f}×像元"
+                    f"（≤3×，衍射不构成瓶颈）"))
+            else:
+                self.checks.append(CheckItem(
+                    "光圈衍射", CheckResult.WARNING,
+                    f"最大光圈 F{f_no:g} 艾里斑 {airy:.1f}μm = {ratio:.1f}×像元"
+                    f"（>3×，衍射已成为分辨率瓶颈）",
+                    "开大光圈（减小 F 数）或换大靶元相机；收小光圈只会更差"))
+
+    def _check_interface_bandwidth(self, camera: Dict, params: Dict):
+        """接口带宽核验：需求帧率下的数据率必须 ≤ 接口有效带宽。
+
+        GigE 标称 1Gbps，实际有效约 110MB/s；5MP@24fps 就超了。
+        超带宽的后果是丢帧/降帧，相机标称帧率跑不到，节拍不达标。
+        """
+        req = required_fps(params)
+        if req is None:
+            self.checks.append(CheckItem(
+                "接口带宽", CheckResult.INFO,
+                "未提供节拍（cycle_time），无法核验需求帧率下的接口带宽",
+                "提供 cycle_time 后重算；满帧标称值不能直接当工作点"))
+            return
+
+        status = camera_interface_status(camera, req)
+        rate = status['data_rate_mbps']
+        bw = status['bandwidth_mbps']
+        if status['status'] == 'unknown':
+            self.checks.append(CheckItem(
+                "接口带宽", CheckResult.INFO,
+                f"接口 '{status['interface']}' 未知或参数不全，"
+                f"无法核验 {req:.2f}fps 下的数据率",
+                "确认相机接口类型（GigE/USB3/10GigE）后重算"))
+        elif status['status'] == 'over':
+            self.checks.append(CheckItem(
+                "接口带宽", CheckResult.FAIL,
+                f"{req:.2f}fps 数据率 {rate:.1f}MB/s > "
+                f"{INTERFACE_LABEL.get(status['interface'], status['interface'])}"
+                f" 有效带宽 {bw:.0f}MB/s（利用率 {status['utilization']*100:.0f}%）",
+                "降帧/开 ROI/换 10GigE 或 USB3 机型；标称帧率不等于可用帧率"))
+        elif status['status'] == 'warn':
+            self.checks.append(CheckItem(
+                "接口带宽", CheckResult.WARNING,
+                f"{req:.2f}fps 数据率 {rate:.1f}MB/s 占接口带宽 "
+                f"{bw:.0f}MB/s 的 {status['utilization']*100:.0f}%（>80%）",
+                "余量不足，建议开 ROI/降位深或换更高带宽接口"))
+        else:
+            self.checks.append(CheckItem(
+                "接口带宽", CheckResult.PASS,
+                f"{req:.2f}fps 数据率 {rate:.1f}MB/s / 带宽 {bw:.0f}MB/s"
+                f"（利用率 {status['utilization']*100:.0f}%）"))
+
+    def _check_shutter(self, camera: Dict, params: Dict):
+        """快门类型核验：运动/飞拍必须全局快门。
+
+        卷帘快门逐行曝光，工件运动会产生倾斜/果冻/拖影；静态工位可用。
+        """
+        shutter = str(camera.get('shutter') or '')
+        moving = is_moving_scene(params)
+        kind = shutter_kind(camera)
+        if kind == 'unknown':
+            self.checks.append(CheckItem(
+                "快门类型", CheckResult.WARNING,
+                f"相机未提供/无法识别快门类型（'{shutter}'），无法核验"
+                f"{'（本项目为运动/飞拍场景）' if moving else ''}",
+                "补全局快门(Global)/卷帘快门(Rolling)字段"))
+            return
+        is_global = kind == 'global'
+        is_rolling = kind == 'rolling'
+        if moving and is_rolling:
+            self.checks.append(CheckItem(
+                "快门类型", CheckResult.FAIL,
+                f"运动/飞拍场景使用卷帘快门（{shutter}）：运动工件会拖影/变形",
+                "必须换全局快门机型（Global Shutter）"))
+        elif moving and is_global:
+            self.checks.append(CheckItem(
+                "快门类型", CheckResult.PASS,
+                f"运动/飞拍场景使用全局快门（{shutter}）"))
+        elif is_global:
+            self.checks.append(CheckItem(
+                "快门类型", CheckResult.PASS,
+                f"全局快门（{shutter}），静态/运动场景均适用"))
+        elif is_rolling:
+            self.checks.append(CheckItem(
+                "快门类型", CheckResult.PASS,
+                f"卷帘快门（{shutter}），静态工位可用；若后续提速需复评"))
+        else:
+            self.checks.append(CheckItem(
+                "快门类型", CheckResult.WARNING,
+                f"快门类型 '{shutter}' 无法识别（既非全局也非卷帘）",
+                "按厂商规格书写明 Global/Rolling"))
 
     def _check_telecentric_necessity(self, lens: Dict, params: Dict):
         """远心必要性核验：测量场景必须远心（FAIL）；库内远心无匹配由选型层
@@ -497,7 +842,8 @@ class SelectionValidator:
         p = sum(1 for c in self.checks if c.result == CheckResult.PASS)
         w = sum(1 for c in self.checks if c.result == CheckResult.WARNING)
         f = sum(1 for c in self.checks if c.result == CheckResult.FAIL)
-        print(f"\n通过: {p}  警告: {w}  失败: {f}\n" + "-" * 70)
+        i = sum(1 for c in self.checks if c.result == CheckResult.INFO)
+        print(f"\n通过: {p}  警告: {w}  失败: {f}  待确认: {i}\n" + "-" * 70)
         for check in self.checks:
             print(f"{check.result.value} {check.name}: {check.message}")
             if check.suggestion:

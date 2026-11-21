@@ -2,6 +2,187 @@
 
 本 skill 的所有版本变动统一记录在此。格式参考 Keep a Changelog。
 
+## [Unreleased]（v1.14.0）
+
+### 新增+修复：对照工控机器视觉选型规范补齐硬约束（2026-11-21）
+
+> 触发：用户要求审查 skill 与工控行业选型规范是否有出入，并评估弱模型可用性。
+> 审查发现 7 处规范缺口，其中 4 处会导致交付错误（P0），本轮全部修复并补回归。
+
+#### P0：会导致交付错误的缺口
+
+- **飞拍光源恒为空（真 bug）**：`select_light_source(is_fly_shooting=True)`
+  用 `if not light.get('strobe')` 过滤，把"库内无 strobe 字段"当成"不支持频闪"；
+  12 条光源全无该字段 → 飞拍项目必然空池 + 核验 FAIL。
+  改为 **strobe 三态**：`true`=已核验支持（再比 `min_exposure_us`）；
+  `false`=明确不支持（硬排除）；缺字段/`null`=未核验（保留并 WARN，
+  要求供应商确认 μs 级频闪与最短脉宽）。核验对 `null` 给 WARNING 而非 FAIL，
+  避免把"不知道"判成"不支持"。
+- **接口带宽从不校核**：5MP×24.2fps 黑白在 GigE 上约 121MB/s，
+  已超 1Gbps 有效带宽（约 110MB/s），相机跑不到标称帧率。
+  新增 `camera_interface_status()`：按需求帧率（1.5/节拍）算
+  `W×H×位深/8×fps`，>80%=WARN、>100%=FAIL、未知接口=INFO。
+  选型链同步打印超带宽提示。
+- **快门类型不参与选型**：卷帘快门相机（MV-CS200/CS120）在运动/飞拍场景
+  会拖影/果冻。新增 `is_moving_scene()` + `shutter_kind()`：
+  选型链对运动场景**硬排除卷帘机型**；核验层卷帘+运动=FAIL、
+  静态场景卷帘=PASS（注明可后续提速复评）、缺字段=WARN。
+- **景深/MTF/衍射不参与核验**：旧实现只在 `part_height_variation_mm`
+  存在时解析厂家 `depth_of_field` 字符串，15 支镜头仅 8 支有该字段，
+  选型阶段完全不用。新增 `_check_optics_quality()`：
+  - 景深：厂家 `±X mm` 优先，无值按 `2·N·c·(1+β)/β²` 估算并标"估算"；
+    景深 < 高度波动=FAIL；未给高度波动=INFO 待确认；无法估算=INFO。
+  - 镜头解析力：MTF30 ≥ 相机奈奎斯特 `1000/(2×像元)`；低于=WARN，未给=INFO。
+  - 衍射：艾里斑 `2.44·λ·F#` ≤3×像元；超过=WARN（收小光圈只会更差）。
+  - 新增 `CheckResult.INFO`：只用于"厂家未给数据、无法判定"的诚实披露，
+    不计入 PASS/WARN/FAIL、不阻断交付，但报告可见（禁止沉默=假绿）。
+
+#### P1：选型链与核验链口径不一致
+
+- `camera_selector.select_cameras_for_fov()` / `lens_selector.select_lenses_for_camera()`
+  新增 `pixel_precision_max_mm` 入参，`vision_proposal_generator._select_candidates()`
+  把预算模型的像素当量上限原样下发。此前 `_match_lenses_for_camera` 仍用
+  `required_precision_mm / pixel_per_precision`，在 `direct_measurement` 模式下
+  会把"公差带÷10"再按 ÷3 算，选型松 3.3 倍。
+- `calculate_light_working_distance()` 的 `camera_wd` 参数此前收了却不用，
+  与 SKILL.md 声称的"光源 WD < 镜头 WD"不一致；现按 `max(20, 镜头WD-15)`
+  封顶并返回 `capped_by_camera` / `camera_wd_cap_mm`。
+- `_check_fly_shooting` 曝光时间优先用 `params['pixel_precision_max_mm']`，
+  不再从 allowed_error 二次除亚像素因子。
+- `tolerance_to_precision()` 标记废弃（两套口径无法表达，bilateral 语义与
+  预算模型矛盾），仅保留旧调用兼容，新代码禁止调用。
+
+#### P2：弱模型可用性
+
+- 新增 `--check-config <json>`：只校验参数（不选型/不生成PPT），几秒出结论，
+  退出码 0=合法 / 2=需修正。解决"跑 30 秒生成才发现口径填错"。
+- 新增 `--dry-run`：只跑选型+核验并保存 `selection_result.json`，不生成PPT；
+  `--config` / `--text` / `--wizard` 均支持，`--files` 链显式提示忽略。
+- `--help` epilog 重写为"三种入口 + 退出码表 + 硬规则"，`--version` 输出
+  `视觉硬件选型 skill v1.14.0`。
+- `config_template.json` 新增 `is_fly_shooting` / `conveyor_speed` /
+  `part_height_variation_mm` 三个字段及字段说明（此前弱模型不知道要填）。
+
+#### 文档与测试
+
+- `SKILL.md`：第3步加带宽/快门判据，第4步加光学质量三件套，第5步加频闪三态，
+  第6步核验表加 5 行；最短路径新增"第0步 配置自检"。
+- 新增 `test_industry_compliance.py`（28 条）：光学估算函数/带宽/快门/
+  频闪三态/选型链口径一致；全量 **211/211 通过**。
+- 本项目复跑：MV-CS050-10GM + MVL-MF7538M-ML + FL-R-7060-W 不变，
+  核验 28 PASS + 2 INFO（景深估算 ±0.168mm 未给高度波动、MF7538 无 MTF30），
+  0 WARN / 0 FAIL。
+
+## [v1.13.0]
+
+### 修复：精度口径被叠加，比行业常规严 3 倍（2026-11-21）
+
+- **发现**：客户给"贴合精度 ≤0.5mm"，脚本算成 `0.5 ÷ 10 ÷ 3 = 16.7μm/px`，
+  并把中间值 0.05mm 写成"设备精度"。核对基恩士官网、HSM University、
+  POMEAS TR-001 后确认：业界是**一步换算**，不是两段叠加——
+  - 基恩士：尺寸测量 `测量精度 = 10 × 像素精度`；外观 `检测精度 = 4 × 像素精度`；
+    另一处口径：公差判定阈值 = ±5 像素（总带宽 10 像素）
+  - HSM University：计量类 `像素当量 ≤ 公差带 1/10`
+  - POMEAS TR-001：检测 ≥3 像素/特征，测量 ≥5 像素/特征
+  - 旧实现把"公差带÷10"（视觉直测口径）和"允许误差÷3"（亚像素判据）
+    连用，等价 `公差÷30`，比行业常规严 3 倍；且"设备精度"命名会被读成整机精度。
+- **新增 `resolve_precision_budget()`**（`precision_calculator.py`）：
+  用 `precision_model.mode` 显式区分两种口径——
+  - `system_budget`：整机公差带 × `allocation_ratio`（1/10~1/3）
+    = 视觉允许误差，再 ÷ `pixel_factor`（默认 3）
+  - `direct_measurement`：公差带 ÷ `direct_factor`（测量 10 / 外观 4 / 定位 6）
+  另支持 `tolerance_type`（unilateral/bilateral/total，双向自动×2）、
+  `pixel_precision`（用户直给像素当量）、`precision_requirement`（已确认视觉误差）。
+- **选型链**：`_validate_params` 的 tolerance 分支改走统一预算，输出
+  `precision_basis_text`；`_calculate_field_of_view` 直接用预算的像素当量，
+  不再二次除；"像素上限异常宽松"警告只在尺寸测量场景触发。
+- **核验链**：新增"精度口径"检查（声明 model=PASS，默认 1/10 兜底=WARN）；
+  "精度链"改用预算的 `pixel_precision_max_um`，报告写明分配比例。
+- **本项目决策**：`precision_model = system_budget + positioning + unilateral
+  + allocation_ratio 0.2 + pixel_factor 3`
+  → 整机公差 0.5mm × 视觉 20% = 允许误差 100μm ÷ 3 = **33.3μm/px**
+  （原 16.7μm）。所需像素 24mm÷33.3μm = **720px**（原 1440px）；
+  MF7538 实际 10.73μm，余量 **3.1x**（原 1.55x）。相机选型结论不变。
+- **PPT**：第 7 页"① 精度换算"改为数据驱动，不再写死 ÷10÷3
+  （版面短式 `±0.5mm→带宽1mm×10%=100μm÷3=33.3μm/px`，完整推导进演讲者备注）；
+  第 6/7 页"相机精度/像素精度"统一改为"像素当量"（避免被读成精度指标）；
+  封面公差随 `tolerance_type` 显示 `±0.5 mm`；
+  第 9 页补注解：视觉测量链 RSS ±0.062mm 在允许误差 100μm 内（1.6x），
+  机器人重复定位/吸嘴属执行链，由整机公差剩余份额覆盖。
+  底部注说明"像素需求仅 720px，选 500 万像素是为孔边缘多像素覆盖与短曝光余量"。
+- **用例**：新增 14 条（预算模型 9 + 核验口径 3 + 模板防绕过 2），
+  全量 **183/183 通过**。
+
+## [Unreleased]（v1.12.2）
+
+### 新增+修复：工作距离成为选型硬约束、库外型号核查留档（2026-11-20）
+
+#### 第二轮：WD 决定倍率，单点倍率不能冒充全行程（同日补）
+
+- **发现**：调研 75mm 候选时核对海康官网，MF7538 给的是一张三点表
+  （250mm/0.46x、400mm/0.24x、550mm/0.16x），而库里 `magnification=0.333`
+  是薄透镜估算。按官方三点拟合 `1/β=(WD−h)/f`，WD300 实际约 **0.350x**，
+  视野 **24.1mm**——相对 24mm 需求余量≈0，而旧交付物写的是 25.4mm。
+  这说明"WD 进选型"只解决了"能否合焦"，没解决"合焦后倍率/视野是多少"。
+- **数据库**：新增 `wd_mag_table`（MF7538 三点、M7528-MP 五点含接圈态）
+  + `wd_mag_table_basis`；修正 MF7538 的 note（删除薄透镜推断句）。
+- **选型链**：新增 `magnification_at_wd()`，按 `1/β=(WD−h)/f` 对厂家表做
+  最小二乘拟合，表内插值、表外标记 extrapolated；无表才用薄透镜估算。
+  结果条目带 `magnification_at_wd` / `magnification_source`。
+- **核验链**：新增"倍率依据"检查（表插值=PASS，估算/单点/外推=WARN）；
+  精度链、视野覆盖、倍率窗口统一改用 `effective_magnification()`；
+  视野靠 2% 容差过线（未达标称值）改为 WARN 并给出"WD 上调 20~30mm"建议；
+  光源 WD 检查改用项目声明 WD（此前打印的是镜头标称值）。
+- **本项目决策**：设计 WD 300→**320mm**（β≈0.322x、视野 26.3×22.0mm、
+  余量 9.4%、像素精度 10.73μm、余量 1.55x）。WD300 属零余量，不交付。
+- **第二轮库外调研**（写入 `external_candidates`）：
+  - Kowa `LM75JC`：2/3"、75mm、F2.5~F22、MOD 1200mm、畸变 -0.1%；
+    官方接圈表 20mm→285mm/0.34x，WD300 插值约 0.326x/25.9mm → usable_with_risk；
+  - Kowa `LM75HC`：1"、5MP、F1.8~F16、MOD 1000mm、畸变 -0.2%；
+    官方接圈表 10mm→389mm/0.21x、20mm→251mm/0.34x，WD300 约 0.29x → usable_with_risk；
+  - Fujinon `HF75HA-1B`：MOD 1100mm、MOD 处仅 0.077x、无接圈表 → rejected。
+  - 结论：75mm 级 FA 镜头原生 MOD 普遍 0.5~1.2m，只有 MF7538（微距）与
+    M7528-MP 原生覆盖 300mm；Kowa 两只要加 13~18mm 接圈（厂家表支持）。
+- **用例**：新增 10 条（倍率表拟合 6 + 视野余量 3 + 数据完整性 1），
+  全量 **169/169 通过**。
+
+### 背景与第一轮修复
+
+- **触发**：用户质疑"MVEL-KF7528M-12MP 为什么不行"，并指出两处流程问题：
+  ①锁紧螺钉不是微距专属；②"库里没有"不能作为排除理由，必须去官网查。
+- **根因（比型号本身严重）**：
+  - `project_config.json` 没有 `working_distance` 字段，WD 从未进入配置；
+  - `select_lenses_for_camera` 没有 WD 参数，`_match_lenses_for_camera`
+    只比倍率/视野/靶面 → MOD=500mm 的镜头在 WD=300mm 项目里也能"中选"；
+  - `validate_selection` 同样不查 MOD → 两条链一起漏；
+  - 数据库没有 `mod`/`wd_range`，`distortion` 部分缺失，缺值时评分默认 1.0；
+  - `distortion` 键存在但值为 `null` 时 `None <= 0.05` 直接抛 TypeError。
+- **数据库 v1.1.0**：
+  - 15 支镜头全部补 `mod` / `wd_range` / `resolution_mp`，缺值显式 `null`；
+  - 新增 `M7528-MP`（Computar，2/3"，75mm，原生 MOD 300mm，畸变 0.4%）；
+  - 新增 `external_candidates` 留档：`MVL-KF7528M-12MP`（rejected，
+    MOD 500>300）、`M7528-MPW3`（rejected，停产且 MOD 400）；
+  - `_metadata.notes` 明确"禁止以库内无此型号代替官网核查结论"。
+- **选型链**：
+  - `lens_wd_status()` 单点判定（ok/too_close/too_far/unknown）；
+  - `select_lenses_for_camera(required_working_distance=...)` 传入 WD，
+    `_match_lenses_for_camera` 在倍率检查前硬过滤，并记录排除型号；
+  - 无匹配时输出 `[镜头无匹配·WD约束]` 根因，列出最接近的 3 款及能力区间；
+  - 结果条目带 `wd_status` / `wd_capability` / `wd_requirement`；
+  - `distortion`/`telecentricity` 为 `null` 时按中性 1.0 处理，不再崩溃。
+- **配置链**：`config_template.json` 新增 `working_distance` 字段与说明；
+  `vision_proposal_generator` 把 `params['working_distance']` 传入选型器。
+- **核验链**：`validate_selection._check_working_distance()` 复查同一口径，
+  超 MOD = FAIL；缺 `mod` = WARN；配置未声明 WD 时用镜头标称值兜底并降级 WARN。
+- **新增工具** `tools/lens_audit.py`：库内型号直接判定，库外型号必须补
+  `--mod/--mag/--distortion/--sensor-support` 才给结论；缺字段拒绝判定；
+  退出码 0/1/2 分别对应 usable / usable_with_risk / rejected。
+- **关键认知**：工作距离-倍率关系**不能用薄透镜公式跨型号推算**。
+  Computar M7528-MP 官方表 WD=300mm→0.214x，薄透镜估算却是 0.333x；
+  同标 75mm 的镜头主面位置不同，差 50%。必须用厂家 WD-倍率表。
+- **用例**：新增 15 条（WD 契约 7 + 核验 4 + 数据完整性 4），
+  全量 **159/159 通过**（16.5s）。
+
 ## [Unreleased]（v1.12.1）
 
 ### 修复：硬件页识别误伤目录页 / 计算页（2026-11-20）

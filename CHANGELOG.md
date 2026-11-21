@@ -3,6 +3,62 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-21（本次·视觉硬件选型 v1.14.0 对照行业规范补齐硬约束；视觉选型测试 211 用例）
+
+### 改动范围
+
+1. **视觉硬件选型**（v1.12.1 → v1.14.0，三个版本合并提交）：
+   - **v1.12.2 工作距离成硬约束**：`working_distance` 进配置模板；选型器按
+     `mod`/`wd_range` 硬过滤并输出 `[镜头无匹配·WD约束]` 根因；核验器复查同一口径；
+     新增 `magnification_at_wd()`（按厂家 `wd_mag_table` 拟合 `1/β=(WD-h)/f`，
+     表内插值/表外标注外推），视野必须基于需求 WD 处倍率；新增 `tools/lens_audit.py`
+     库外型号核查工具（缺官网字段拒绝判定）；数据库补 `mod`/`wd_range`/`resolution_mp`/
+     `wd_mag_table`，新增 M7528-MP，`external_candidates` 留档库外型号结论。
+   - **v1.13.0 精度口径去叠加**：新增 `resolve_precision_budget()` +
+     `precision_model.mode` 显式区分 `system_budget`（整机公差×分配比例÷3）与
+     `direct_measurement`（公差带÷10/4/6），修正旧实现"公差÷10÷3"比行业常规严 3 倍；
+     核验新增"精度口径"检查；PPT 精度页改数据驱动，不再写死 ÷10÷3。
+   - **v1.14.0 对照工控选型规范补 P0/P1/P2 缺口**：
+     - 飞拍光源恒为空修复：`strobe` 三态（true 已核验 / false 硬排除 / null 未核验保留+WARN）；
+     - 接口带宽校核：`camera_interface_status()` 按需求帧率算数据率，>80% WARN、>100% FAIL；
+     - 快门类型参与选型：运动/飞拍硬排除卷帘，核验层卷帘+运动=FAIL；
+     - 光学质量三件套：`_check_optics_quality()` 查景深（厂家值优先、公式估算标注）、
+       镜头 MTF30 vs 相机奈奎斯特、艾里斑衍射；新增 `CheckResult.INFO` 诚实披露
+       厂家未给数据的待确认项（不阻断交付、不假绿）；
+     - 选型/核验口径统一：相机/镜头选型接收 `pixel_precision_max_mm`，光源 WD 按
+       `max(20, 镜头WD-15)` 封顶，`tolerance_to_precision()` 标记废弃；
+     - 弱模型可用性：新增 `--check-config`（只校验参数，exit 0/2）与 `--dry-run`
+       （只选型+核验，不生成 PPT），`--help`/`--version` 重写；
+       `config_template.json` 补 `is_fly_shooting`/`conveyor_speed`/`part_height_variation_mm`；
+     - `SKILL.md` 补带宽/快门/光学质量/频闪三态判据，核验表扩到 15 行。
+2. **视觉选型测试**（v1.1.0 内补充，144 → 211 用例）：
+   - 新增 `test_industry_compliance.py`（8 条）：光学估算函数、带宽、快门、频闪三态、
+     选型链口径一致；
+   - `test_data_integrity.py` 补 WD/倍率表/库外候选完整性；
+   - `test_selection_core.py` 补精度预算模型与核验口径用例；
+   - `run_all.py`：`core` 层纳入新模块；**修复 Windows cp936 下子进程输出 GBK
+     导致 12 条中文断言假失败**（`PYTHONIOENCODING=utf-8` 注入，任何 shell 下结果一致）。
+3. **根文件**：
+   - `README.md`：测试基线 **144/144 → 211/211**（运行说明、Skill 一览、质量防线三处同步）；
+     视觉硬件选型/视觉选型测试能力描述补行业规范核验与自检入口。
+
+### 验证结论
+
+- **视觉选型测试**：全量 `run_all.py` **211/211 通过、0 失败、0 错误、0 跳过**
+  （本次实跑，17.7s，退出码 0）。
+- **本项目复跑**：MV-CS050-10GM + MVL-MF7538M-ML + FL-R-7060-W 选型结论不变；
+  核验 28 PASS + 2 INFO（景深估算、MF7538 无 MTF30），0 WARN / 0 FAIL。
+- **README**：`check_readme.py` 核验（见提交前结果）。
+- **README 更新判断**：需要并已更新——触发条件为"skill 能力边界、支持格式、
+  入口命令、测试规模变化"（新增 `--check-config`/`--dry-run`、行业规范核验、
+  用例 144→211）。
+
+### 建议 commit message
+
+```
+feat(视觉硬件选型,视觉选型测试): v1.14.0 对照行业规范补齐硬约束（频闪三态/接口带宽/快门/景深MTF衍射）+ 精度口径去叠加(v1.13.0) + WD硬约束与倍率表(v1.12.2)；test: 211用例（+行业规范8条，修复cp936假失败）；docs(README) 基线211
+```
+
 ## 2026-11-20（本次·视觉硬件选型 v1.12.1 硬件页识别 + 公差崩溃修复；视觉选型测试 144 用例）
 
 ### 改动范围

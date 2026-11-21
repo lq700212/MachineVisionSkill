@@ -41,12 +41,14 @@
 vision_proposal_generator.py  主流程编排：需求校验→选型→库保鲜(超龄自动官网refresh)→核验→PPT→自动验收→预览
 ├── parse_user_data.py        用户资料/需求文本参数提取（--files/--text 入口；detection_type测量场景识别）
 ├── precision_calculator.py   精度链计算：像素精度上限=精度/k；倍率窗口；无解诊断；
-│                             is_measurement_scene测量场景单点判定（选型分层与核验共用）
-├── camera_selector.py        相机选型（视野+精度双约束，需求侧推导）
+│                             is_measurement_scene测量场景单点判定（选型分层与核验共用）；
+│                             is_moving_scene/shutter_kind/接口带宽/景深/MTF/艾里斑估算
+├── camera_selector.py        相机选型（视野+精度双约束，需求侧推导；接收预算像素当量上限）
 ├── lens_selector.py          镜头联动匹配（倍率闭区间∩库内镜头）+ 测量场景远心优先分层
 │                             （远心层无匹配自动回退普通镜头，标记telecentric_fallback）+ 无匹配根因分类
-├── light_selector.py         光源选型（WD≤镜头WD-15 物理约束）
-├── validate_selection.py     9项选型核验（FAIL中止），含光源WD<镜头WD、远心回退风险WARNING
+├── light_selector.py         光源选型（WD≤镜头WD-15 物理约束；strobe 三态）
+├── validate_selection.py     13类选型核验（FAIL中止），含光源WD、远心回退、景深/MTF/衍射、
+│                             接口带宽、快门类型、飞拍频闪三态
 ├── generate_ppt.py           模板数据替换（触发词规则；WD显示优先wd_spec）
 ├── check_ppt_quality.py      PPT规则自查7项（历史缺陷全部机检化）
 ├── export_ppt_images.py      预览三件套（PNG/联系表/index.html；COM→LibreOffice降级）
@@ -72,6 +74,10 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 | detection_type / is_measurement_scene | 测量场景判定（单点函数：类型关键词/application/精度≤0.01mm） | 选型远心分层与核验判定必须共用同一函数，两链各写一套必漂移 |
 | telecentric_fallback | 测量场景远心无匹配回退普通镜头的标记 | 是权宜方案不是错误：核验WARNING提示透视误差，交用户拍板，不FAIL拦死 |
 | 库=官网缓存 | 选中超龄条目主流程自动官网refresh（无变化续期/有变化入库重跑选型） | 官网才是数据源；联网失败WARN降级用库内值，不阻断交付 |
+| strobe | 光源频闪能力三态：true=已核验支持 / false=明确不支持 / null=厂商资料未给、未核验 | 缺字段≠不支持！旧逻辑 `if not light.get('strobe')` 把未核验当不支持，飞拍查询恒空 |
+| 接口带宽 | 需求帧率下数据率 ≤ 接口有效带宽（GigE≈110MB/s、USB3≈350、10GigE≈1100） | max_fps 是标称上限，不是工作点；5MP@24fps 黑白在 GigE 上约 121MB/s，跑不到满帧 |
+| 快门类型 | 运动/飞拍必须全局快门；卷帘逐行曝光会拖影/果冻 | 静态工位卷帘可用，但提速后必须复评；缺字段=WARN 不得默认全局 |
+| CheckResult.INFO | 厂家未给数据、无法判定的诚实披露（不计入PASS/WARN/FAIL，不阻断交付） | 不能因为没有厂家数据就沉默（沉默=假绿），也不能把"不知道"判成"不合格" |
 
 ## 运行时工作区约定（开发测试时也要遵守）
 
@@ -119,3 +125,12 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 | 追光者正确型号 `FL-R-10045-W` 被质检判"旧型号残留" | `FL-R-` 既是模板旧型号前缀，也是追光者真实型号前缀，前缀匹配无法区分 | 选中型号白名单放行；旧型号/历史假型号仍拦截；新增 `test_ppt_quality_contract.py` 锁边界 |
 | 目录页 / 选型计算页被当成硬件展示页 | 目录里"硬件选型"是独立文本框（精确命中标题），计算页标题相同但无实物标注框 | 标题精确 + (标注框≥2 或 含硬件参数词) 才判硬件页；展示页专属检查（光源类型/两页一致/相机图）只对带标注框的页执行 |
 | `validate_selection` 在只填 `tolerance` 时 TypeError | `precision_requirement` 显式 null 时 `.get(k, 0)` 返回 None，`None <= 0` 直接崩 | `resolve_precision_mm()` 统一解析（优先设备精度，否则公差/10），四处共用；`--params` 用 selection 的 project_info 补齐视野 |
+| MOD=500mm 的镜头在 WD=300mm 项目里"中选" | WD 没进配置模板、没进选型参数、没进核验；`distortion` 缺失时评分默认 1.0、显式 null 时崩溃 | `working_distance` 进配置模板；`lens_wd_status()` 单点判定；选型/核验两链共用同一口径；数据库补 `mod`/`wd_range`/`resolution_mp`；null 安全处理 |
+| 客户型号 `MVL-KF7528M-12MP` 被"库里没有"排除；把锁紧螺钉说成微距专属 | 库被当成全集；凭印象给结构项定性，没查官网规格书 | 新增 `lens_audit.py` 库外核查工具 + `external_candidates` 留档；锁紧/接口/靶面等结构项一律以官网规格书为准，禁止凭印象断言 |
+| 交付 PPT 写"实际视野 25.4mm"（薄透镜估算）| 库里 `magnification` 是单点值/估算值，选型拿它当任意 WD 都成立；MF7538 官方三点表 WD300 实际约 0.350x → 视野 24.1mm，余量≈0 | 新增 `wd_mag_table` + `magnification_at_wd()`（1/β=(WD−h)/f 拟合）；核验加"倍率依据"；视野靠 2% 容差过线记 WARN；本项目设计 WD 300→320（视野 26.3mm，余量 9.4%）|
+| 精度链算成"公差÷10÷3"（0.5mm→16.7μm/px），并把中间值叫"设备精度" | 把"视觉直测公差带÷10"和"已分配误差÷3"当串联；行业是一步换算：基恩士 测量精度=10×像素精度、HSM 像素≤公差带1/10、POMEAS 测量≥5像素/特征 | 新增 `resolve_precision_budget()` + `precision_model.mode` 显式区分 system_budget/direct_measurement；核验加"精度口径"检查（默认1/10兜底=WARN）；本项目 0.5×20%÷3=33.3μm/px，PPT 精度文案改数据驱动 |
+| 飞拍项目光源查询恒为空、核验必 FAIL | 库内 12 条光源全无 `strobe` 字段，`if not light.get('strobe')` 把"未核验"当"不支持"，先过滤再选型 | strobe 三态（true/false/null）：只硬排除 false；null 保留并 WARN 要求供应商确认；选型主流程不再提前 `strobe_pool` 过滤 |
+| 5MP@24fps 相机在 GigE 上跑不到标称帧率 | 全 skill 无接口带宽校核，只查 `max_fps ≥ 1.5×节拍`；标称帧率≠工作帧率 | `camera_interface_status()` 按需求帧率算数据率；>80% WARN、>100% FAIL；选型/核验两链共用 |
+| 运动/飞拍场景选中卷帘快门相机 | 快门类型只打印不参与选型；卷帘逐行曝光会拖影/果冻 | `is_moving_scene()` + `shutter_kind()`；选型链硬排除卷帘，核验层卷帘+运动=FAIL |
+| 景深/解析力/衍射三项光学约束从未参与选型 | 景深只解析厂家字符串且需人工给高度波动；MTF 只打印；15 支镜头仅 8 支有景深字段 | `_check_optics_quality()`：厂家值优先、无值公式估算并标"估算"；无法判定记 INFO 而非沉默 |
+| 选型器精度判据比预算模型松 3.3 倍（direct_measurement） | `select_cameras_for_fov`/`_match_lenses_for_camera` 仍用 `allowed_error ÷ pixel_factor`，预算模型已算过该步 | 两函数新增 `pixel_precision_max_mm` 入参，主流程原样下发；单点口径收口到预算模型 |

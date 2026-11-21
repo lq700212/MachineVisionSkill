@@ -24,6 +24,11 @@ import sys
 import time
 import unittest
 
+# 根因：Windows 控制台默认 cp936，被测脚本 print 中文时 stdout 是 GBK，
+# 而用例按 UTF-8 解码子进程输出（断言中文关键字），导致 12 条断言假失败。
+# 统一给子进程注入 UTF-8 stdio，保证任何 shell/代码页下结果一致。
+os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import vt_common  # noqa: F401,E402 - 注入被测skill路径必须先于用例import
 
@@ -33,7 +38,8 @@ LAYERS = {
     'data': ['test_data_integrity.py'],
     'doc': ['test_doc_contract.py'],
     'core': ['test_selection_core.py', 'test_text_entry.py',
-             'test_channel3.py', 'test_image_fetch.py'],
+             'test_channel3.py', 'test_image_fetch.py',
+             'test_industry_compliance.py'],
     'ppt': ['test_ppt_quality_contract.py'],
     'workflow': ['test_workflow_contract.py', 'test_ppt_pipeline.py'],
 }

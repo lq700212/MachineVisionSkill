@@ -24,7 +24,11 @@ if not ensure_environment():
     sys.exit(1)
 
 from parse_user_data import UserDataParser
-from precision_calculator import PrecisionCalculator, is_measurement_scene
+from precision_calculator import (
+    PrecisionCalculator, is_measurement_scene, is_moving_scene, shutter_kind,
+    resolve_precision_budget, format_precision_basis,
+    required_fps, camera_interface_status,
+)
 from camera_selector import CameraSelector
 from lens_selector import LensSelector
 from generate_ppt import generate_ppt
@@ -210,7 +214,8 @@ class VisionProposalGenerator:
         return ppt_path
     
     def generate_from_text(self, text: str, output_dir: str = None,
-                           template_path: str = None) -> str:
+                           template_path: str = None,
+                           dry_run: bool = False) -> str:
         """
         从需求原始文字生成方案（弱模型从0入口：模型只读图/文档抄字，解析判断交给脚本）
 
@@ -218,9 +223,10 @@ class VisionProposalGenerator:
             text: 用户口述/文档/图纸中的原始文字（原样抄录，不要自己解读成参数）
             output_dir: 输出目录
             template_path: 模板PPT路径（可选，缺省扫描当前工作目录）
+            dry_run: True=只选型+核验，不生成PPT
 
         Returns:
-            生成的PPT文件路径；无模板时返回 'SELECTION_ONLY'
+            生成的PPT文件路径；无模板时返回 'SELECTION_ONLY'；dry_run 返回 'DRY_RUN'
         """
         print("=" * 60)
         print("视觉检测方案自动生成系统（需求文本模式）")
@@ -245,29 +251,37 @@ class VisionProposalGenerator:
         print(f"  解析出参数: {', '.join(sorted(parsed_data.keys()))}")
 
         # 走统一校验与生成链（缺必填项时 _validate_params 会给出可执行的填写指引）
-        return self.generate_from_config_data(parsed_data, output_dir, template_path)
+        return self.generate_from_config_data(parsed_data, output_dir, template_path,
+                                              dry_run=dry_run)
 
     def generate_from_config(self, config_path: str, output_dir: str = None,
-                             template_path: str = None) -> str:
+                             template_path: str = None,
+                             dry_run: bool = False) -> str:
         """
         从配置文件生成方案
 
         Args:
             config_path: 配置文件路径
             output_dir: 输出目录
+            template_path: 模板PPT路径
+            dry_run: True=只跑选型+核验并落盘 selection_result.json，
+                     不生成PPT（弱模型先用它确认口径/解是否存在）
 
         Returns:
-            生成的PPT文件路径
+            生成的PPT文件路径；dry_run 返回 'DRY_RUN'
         """
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
 
         # 将配置传递给generate_from_files（携带config目录供模板自动扫描）
-        return self.generate_from_config_data(config, output_dir, template_path,
-                                              config_dir=os.path.dirname(os.path.abspath(config_path)))
+        return self.generate_from_config_data(
+            config, output_dir, template_path,
+            config_dir=os.path.dirname(os.path.abspath(config_path)),
+            dry_run=dry_run)
     
     def generate_from_config_data(self, config: Dict, output_dir: str = None,
-                                  template_path: str = None, config_dir: str = None) -> str:
+                                  template_path: str = None, config_dir: str = None,
+                                  dry_run: bool = False) -> str:
         """
         从配置数据生成方案
 
@@ -397,19 +411,25 @@ class VisionProposalGenerator:
         print("\n[步骤3] 设计算法方案...")
         algorithm_design = self._design_algorithm(validated_params, selection_result)
         
-        # 生成PPT
-        print("\n[步骤4] 生成方案PPT...")
+        # 确定输出目录并保存选型结果（dry-run 也要落盘，便于复核）
         if output_dir is None:
             output_dir = os.path.join(os.path.dirname(__file__), '..', 'output')
-        
         os.makedirs(output_dir, exist_ok=True)
-        
         project_name = validated_params.get('project_name', '视觉检测项目')
+        self._save_selection_result(validated_params, selection_result, algorithm_design, output_dir)
+
+        # dry-run：选型+核验已完成并落盘，弱模型可先确认口径/解，再决定是否生成PPT
+        if dry_run:
+            print("\n[dry-run] 选型+核验已完成，selection_result.json 已保存；"
+                  "本次按 --dry-run 不生成PPT")
+            print("  下一步: 去掉 --dry-run 重跑同一命令即生成PPT")
+            return 'DRY_RUN'
+
+        # 生成PPT
+        print("\n[步骤4] 生成方案PPT...")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join(output_dir, f"{project_name}_{timestamp}.pptx")
-        
-        # 保存选型结果（无论是否有模板，selection_result.json 都要落盘）
-        self._save_selection_result(validated_params, selection_result, algorithm_design, output_dir)
+
         # 无模板：不在终端留错误，输出选型结果正常结束（用户放模板后重跑即可生成PPT）
         if not self.template_ppt:
             print("\n[提示] 未找到模板PPT（--template / config的template字段 / 工作目录均无），"
@@ -631,13 +651,20 @@ class VisionProposalGenerator:
         validated.pop('pixel_size', None)
         validated.pop('magnification', None)
 
+        # 工作距离（2026-11-20 事故）：WD 不参与选型时，MOD 不足的镜头会凭
+        # 倍率"中选"，装上去不合焦。未声明不拦死（有些项目无安装距离约束），
+        # 但必须在日志与核验报告里留痕，禁止静默通过。
+        if validated.get('working_distance') is None:
+            print("\n  [WD 未声明] config 没有 working_distance，镜头仅按倍率/视野匹配，"
+                  "无法保证现场合焦。交付前须补 working_distance 重跑。")
+
         # 精度口径决策（config_template 决策表）：
         # 1) pixel_precision（用户明说的像素级口径，mm/pixel）最优先——
-        #    等效设备精度 = pixel_precision × pixel_per_precision，下游链不变；
+        #    等效视觉允许误差 = pixel_precision × pixel_per_precision，下游链不变；
         #    与 precision_requirement 同时给属口径冲突，打印警告采用像素级口径
         #    （用户明说"像素精度"是更强的口径声明），并提示向用户确认。
         # 2) precision_requirement 与 tolerance 同时给时 precision_requirement 优先；
-        #    仅当无明确精度时才按公差/10反推。
+        #    仅当无明确精度时才按 precision_model 从公差换算（见 resolve_precision_budget）。
         if validated.get('pixel_precision') is not None:
             pp = float(validated['pixel_precision'])
             if pp <= 0:
@@ -651,19 +678,38 @@ class VisionProposalGenerator:
                       f"采用用户明说的像素级口径；如非用户本意请向用户确认")
             validated['precision_requirement'] = pp * k
             validated['precision_source'] = 'pixel_precision'
-            print(f"\n  [精度口径] 用户指定像素精度 {pp}mm/pixel（像素级口径）")
-            print(f"  等效设备精度 = {pp} × 亚像素因子{k} = {pp*k:.4f}mm（下游按设备精度链计算）")
+            print(f"\n  [精度口径] 用户指定像素当量 {pp}mm/pixel（像素级口径）")
+            print(f"  等效视觉允许误差 = {pp} × 亚像素因子{k} = {pp*k:.4f}mm（下游按允许误差链计算）")
         elif validated.get('precision_requirement') is not None:
             if validated.get('tolerance') is not None:
                 print(f"  [精度口径] precision_requirement 优先（口径决策表），"
                       f"忽略 tolerance={validated['tolerance']}")
         elif validated.get('tolerance') is not None:
             tolerance = validated['tolerance']
-            print(f"\n  [精度计算] 根据公差反推检测精度")
-            precision_result = self.calculator.recommend_precision_from_tolerance(tolerance)
-            validated['precision_requirement'] = precision_result['required_precision_mm']
-            validated['precision_calculation'] = precision_result
-            print(f"  公差 ±{tolerance}mm → 精度 {precision_result['required_precision_mm']:.3f}mm")
+            budget = resolve_precision_budget(validated)
+            if not budget:
+                raise ValueError(
+                    f"【精度口径错误】tolerance={tolerance} 无法换算像素当量，"
+                    "检查 tolerance_type / allocation_ratio / pixel_factor")
+            validated['precision_requirement'] = budget['allowed_error_mm']
+            validated['precision_budget'] = budget
+            validated['precision_basis_text'] = budget['basis_text']
+            print(f"\n  [精度口径] {budget['mode_label']}：{budget['basis_text']}")
+            for note in budget.get('assumptions') or []:
+                print(f"    · {note}")
+            if budget.get('is_assumption'):
+                print("  [口径提示] precision_model 未声明，按整机分配 1/10 兜底；"
+                      "交付前须与客户确认该数字是整机结果公差还是视觉指标")
+
+        # 统一精度口径（2026-11-21）：三个输入分支最终都落到同一预算结构，
+        # 供核验器/PPT 复用，避免各处再按 /10 或 /3 二次换算
+        if 'precision_budget' not in validated:
+            budget = resolve_precision_budget(validated)
+            if budget:
+                validated['precision_budget'] = budget
+                validated['precision_basis_text'] = budget['basis_text']
+            else:
+                print("\n  [精度口径缺失] 无 tolerance / precision_requirement / pixel_precision")
 
         # 视野计算 + 需求分析（所需像素等）
         validated = self._calculate_field_of_view(validated)
@@ -746,11 +792,16 @@ class VisionProposalGenerator:
             raise ValueError("【内部错误】无尺寸字段却进入视野计算，请检查 _validate_params")
         
         # 计算所需像素（需求侧推导：视野 / 像素精度上限，与硬件无关）
-        # 像素精度上限 = 检测精度 / 亚像素因子（默认3，单特征3像素起）
+        # 精度口径统一走 resolve_precision_budget：mode 决定是"整机分配"还是
+        # "视觉直测"，不再把 /10 与 /3 叠加
         fov = params['field_of_view']
         pixel_per_precision = params.get('pixel_per_precision', 3.0)
-        pixel_precision_max_mm = self.calculator.required_object_resolution(
-            params['precision_requirement'], pixel_per_precision)
+        budget = params.get('precision_budget') or resolve_precision_budget(params)
+        if budget:
+            pixel_precision_max_mm = budget['pixel_precision_max_mm']
+        else:
+            pixel_precision_max_mm = self.calculator.required_object_resolution(
+                params['precision_requirement'], pixel_per_precision)
         params['pixel_per_precision'] = pixel_per_precision
         params['pixel_precision_max_mm'] = pixel_precision_max_mm
         params['required_pixels'] = self.calculator.required_pixels(
@@ -758,17 +809,23 @@ class VisionProposalGenerator:
 
         print(f"\n  [需求分析]")
         print(f"  所需视野: {fov['width']:.1f} x {fov['height']:.1f} mm")
-        print(f"  检测精度: {params['precision_requirement']*1000:.1f} μm "
-              f"(像素精度上限 ≤ {pixel_precision_max_mm*1000:.1f} μm，"
-              f"亚像素因子{pixel_per_precision})")
+        if budget:
+            print(f"  精度口径: {budget['mode_label']}｜{budget['basis_text']}")
+            print(f"  视觉允许误差: {budget['allowed_error_mm']*1000:.1f} μm"
+                  f"（像素精度上限 ≤ {pixel_precision_max_mm*1000:.1f} μm/pixel）")
+        else:
+            print(f"  检测精度: {params['precision_requirement']*1000:.1f} μm "
+                  f"(像素精度上限 ≤ {pixel_precision_max_mm*1000:.1f} μm，"
+                  f"亚像素因子{pixel_per_precision})")
         print(f"  所需像素: {params['required_pixels']['x']} x "
               f"{params['required_pixels']['y']} = "
               f"{params['required_pixels']['total_mp']:.1f} MP")
-        if pixel_precision_max_mm > 0.02:
-            print(f"  ⚠️ 像素精度上限 {pixel_precision_max_mm*1000:.1f} μm/pixel 异常宽松"
-                  f"（尺寸测量常见 5~15 μm/pixel）")
-            print(f"     注意口径：设备精度(总误差mm)÷亚像素因子=像素精度上限，"
-                  f"两者相差{pixel_per_precision}倍，勿混淆")
+        # 只有尺寸测量才拿 5~15μm 的行业典型值做对照；定位/贴合的
+        # 像素当量本来就该宽（允许误差大），不能误报"异常宽松"
+        if (pixel_precision_max_mm > 0.02 and budget
+                and budget.get('application') == 'measurement'):
+            print(f"  ⚠️ 像素精度上限 {pixel_precision_max_mm*1000:.1f} μm/pixel "
+                  f"偏大（尺寸测量常见 5~15 μm/pixel），核对公差口径")
 
         return params
     
@@ -1040,6 +1097,9 @@ class VisionProposalGenerator:
             fov=fov,
             required_precision_mm=precision,
             pixel_per_precision=pixel_per_precision,
+            # 预算模型的像素当量上限必须原样下发；否则 direct_measurement
+            # 会把"公差带÷10"再按 ÷3 算，选型与核验两链口径不一致
+            pixel_precision_max_mm=params.get('pixel_precision_max_mm'),
             interface=params.get('interface'),
             min_fps=min_fps,
             top_n=3
@@ -1048,6 +1108,42 @@ class VisionProposalGenerator:
         if not cameras:
             print("  错误: 未找到满足视野+精度约束的相机")
             return []
+
+        # 运动/飞拍场景：卷帘快门硬排除（逐行曝光→倾斜/果冻/拖影）。
+        # 放在选型链而不是只放核验：核验 FAIL 时相机已经进 PPT 了。
+        if is_moving_scene(params):
+            kept, dropped = [], []
+            for cam in cameras:
+                if shutter_kind(cam) == 'rolling':
+                    dropped.append(cam.get('model', ''))
+                else:
+                    kept.append(cam)
+            if dropped:
+                print(f"  [快门] 运动/飞拍场景排除卷帘快门机型: {', '.join(dropped)}")
+            cameras = kept
+            if not cameras:
+                print("  错误: 运动/飞拍场景下库内无全局快门机型满足视野+精度约束"
+                      "（卷帘快门会拖影，不能用于飞拍）")
+                return []
+
+        # 接口带宽提示：按需求帧率（1.5/节拍）核算，不用 max_fps 冒充工作点
+        req_fps = required_fps(params)
+        if req_fps:
+            over_cams = []
+            for cam in cameras:
+                bw = camera_interface_status(cam, req_fps)
+                if bw['status'] == 'over':
+                    over_cams.append(cam)
+                    print(f"  [接口] ⚠ {cam.get('model')} 在 {req_fps:.2f}fps 下"
+                          f"数据率 {bw['data_rate_mbps']:.0f}MB/s 超接口带宽"
+                          f"（核验将 FAIL，可降帧/ROI/换接口）")
+                elif bw['status'] == 'warn':
+                    print(f"  [接口] ⚠ {cam.get('model')} 带宽利用率"
+                          f"{bw['utilization']*100:.0f}%（>80%，余量不足）")
+            # 超带宽相机排到最后：优先选能跑满需求帧率的机型；
+            # 全超时保留（核验FAIL会拦住交付，不能静默换掉用户的接口约束）
+            if over_cams and len(over_cams) < len(cameras):
+                cameras = [c for c in cameras if c not in over_cams] + over_cams
 
         # 为每个相机匹配镜头（倍率窗口联动）
         for i, camera in enumerate(cameras):
@@ -1063,9 +1159,12 @@ class VisionProposalGenerator:
                 fov=fov,
                 required_precision_mm=precision,
                 pixel_per_precision=pixel_per_precision,
+                pixel_precision_max_mm=params.get('pixel_precision_max_mm'),
                 # 尺寸测量场景远心优先（库内远心无匹配自动回退普通镜头）；
                 # 判定条件单点在 is_measurement_scene，与核验共用防两链漂移
                 prefer_telecentric=is_measurement_scene(params),
+                # 工作距离是硬约束：MOD 不足的镜头再"匹配"也合不了焦
+                required_working_distance=params.get('working_distance'),
                 top_n=2
             )
 
@@ -1287,12 +1386,15 @@ class VisionProposalGenerator:
         # OPT 官网无此命名，假型号一路进 PPT。库空时只能如实返回"未匹配"。
         pool = load_light_database()
         if params.get('is_fly_shooting'):
-            strobe_pool = [l for l in pool if l.get('strobe')]
-            if strobe_pool:
-                print("  [光源] 飞拍场景：优先频闪光源")
-                pool = strobe_pool
+            known_support = [l for l in pool if l.get('strobe') is True]
+            if known_support:
+                print("  [光源] 飞拍场景：优先已核验频闪光源")
+                pool = known_support
             else:
-                print("  [光源] ⚠ 飞拍场景但库内无频闪光源，按普通光源选型（核验将FAIL，须扩库）")
+                # 未核验 ≠ 不支持：保留未核验光源并显式告警，交核验 WARN。
+                # 旧逻辑在这里就按 strobe 过滤，库内无 strobe 字段时直接空池。
+                print("  [光源] ⚠ 飞拍场景但库内无已核验频闪光源：按未核验光源选型"
+                      "（核验将 WARN，须向供应商确认 μs 级频闪能力后补库）")
         is_fly = bool(params.get('is_fly_shooting'))
         # 品牌优先级：默认追光者→孚根→OPT→CCS，逐层降级
         preferred_brands = params.get('light_brand_priority') or \
@@ -1318,8 +1420,9 @@ class VisionProposalGenerator:
                 'light_angle': angle_rule['preferred'],
                 'outer_diameter': None, 'inner_diameter': None,
                 'inner_diameter_verified': False,
-                'strobe': False, 'min_exposure_us': 0,
-                'max_exposure_us': float('inf'),
+                # None = 频闪能力未知（不得写成 False 冒充"明确不支持"）
+                'strobe': None, 'min_exposure_us': None,
+                'max_exposure_us': None,
                 'needs_expansion': True,
                 'angle_reason': angle_rule['reason'],
                 'expansion_note': (f'需外径≥{fov_diagonal * 1.1:.0f}mm、'
@@ -1348,10 +1451,13 @@ class VisionProposalGenerator:
             'verification_url': best.get('verification_url', ''),
             'needs_expansion': False,
             'angle_reason': angle_rule['reason'],
-            # 频闪三字段必须透传：缺失时核验拿不到 strobe 标记，飞拍误判FAIL
-            'strobe': bool(best.get('strobe', False)),
-            'min_exposure_us': best.get('min_exposure_us', 0),
-            'max_exposure_us': best.get('max_exposure_us', float('inf')),
+            # 频闪三字段必须透传三态：None=未核验（核验 WARN），
+            # 不得用 bool() 把"未知"压成 False 冒充"明确不支持"
+            'strobe': best.get('strobe'),
+            'strobe_unverified': best.get('strobe_unverified',
+                                          best.get('strobe') is None),
+            'min_exposure_us': best.get('min_exposure_us'),
+            'max_exposure_us': best.get('max_exposure_us'),
             'calculation': result['formula'],
         }
     
@@ -1515,9 +1621,17 @@ class VisionProposalGenerator:
                 'precision_requirement': params.get('precision_requirement'),
                 'precision_basis_confirmed': bool(
                     params.get('precision_basis_confirmed')),
+                'precision_model': params.get('precision_model'),
+                'precision_budget': params.get('precision_budget'),
+                'precision_basis_text': params.get('precision_basis_text'),
                 'tolerance': params.get('tolerance'),
+                'tolerance_band_mm': (params.get('precision_budget') or {}).get(
+                    'tolerance_band_mm'),
+                'allowed_error_mm': (params.get('precision_budget') or {}).get(
+                    'allowed_error_mm'),
                 'cycle_time': params.get('cycle_time'),
                 'field_of_view': params.get('field_of_view'),
+                'working_distance': params.get('working_distance'),
                 'fov_margin': params.get('fov_margin'),
                 'pixel_per_precision': params.get('pixel_per_precision'),
                 'pixel_precision_max_mm': params.get('pixel_precision_max_mm'),
@@ -1550,30 +1664,81 @@ class VisionProposalGenerator:
         return result_path
 
 
+def check_config_only(config_path: str) -> int:
+    """只校验配置参数（不选型、不生成PPT），几秒内给出可执行结论。
+
+    弱模型最容易死在"参数填错→跑30秒生成→才发现口径不对"。
+    先用 --check-config 拿即时反馈，确认后再跑完整流程。
+    """
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"[配置校验] 读取失败: {e}")
+        return 2
+
+    print("=" * 60)
+    print("配置校验（只校验参数，不选型/不生成PPT）")
+    print("=" * 60)
+    generator = VisionProposalGenerator()
+    generator.auto_mode = True
+    try:
+        params = generator._validate_params(config)
+    except ValueError as e:
+        print(f"\n{e}")
+        print("\n[配置校验] ✗ 未通过：按上面指引修正后重跑")
+        return 2
+
+    budget = params.get('precision_budget') or {}
+    fov = params.get('field_of_view') or {}
+    print("\n" + "-" * 60)
+    print("[配置校验] ✓ 参数合法")
+    print(f"  精度口径: {params.get('precision_basis_text') or '未声明'}")
+    print(f"  像素当量上限: "
+          f"{float(params.get('pixel_precision_max_mm') or 0) * 1000:.2f} μm/px")
+    print(f"  视野: {fov.get('width')} × {fov.get('height')} mm")
+    print(f"  工作距离: {params.get('working_distance')} mm")
+    print(f"  亚像素因子: {params.get('pixel_per_precision')}")
+    if budget.get('is_assumption'):
+        print("  [警告] precision_model 未声明，按兜底口径计算；"
+              "交付前必须向用户确认公差语义")
+    print("-" * 60)
+    print("下一步: 用 --config 跑完整选型；想先看能不能选出来就加 --dry-run")
+    return 0
+
+
 def main():
     """命令行入口"""
     parser = argparse.ArgumentParser(
-        description='视觉检测方案自动生成系统',
+        description='视觉检测方案自动生成系统（选型 → 核验 → PPT）',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用示例:
-  # 从用户文件生成方案（使用模板）
-  python vision_proposal_generator.py --files data/spec.pdf data/image.jpg --template PCB有无检测方案.pptx
-  
-  # 从用户文件生成方案（不使用模板）
-  python vision_proposal_generator.py --files data/spec.pdf data/image.jpg
-  
-  # 从配置文件生成方案
-  python vision_proposal_generator.py --config project_config.json
-  
-  # 使用向导模式（交互式输入）
-  python vision_proposal_generator.py --wizard
+三种入口（按手上资料选一个）:
+  A. 有需求文字/图纸数字 → --config（推荐，参数可复核）
+     先校验: python vision_proposal_generator.py --check-config project_config.json
+     再选型: python vision_proposal_generator.py --config project_config.json --auto --output output
+  B. 只有一段口述需求 → --text "检测20x16区域圆孔，公差±0.5mm，节拍1s"
+  C. 有图纸/文档/图片 → --files 图纸.pdf 工件.jpg --auto
+
+退出码（脚本/弱模型按这个判断，不要靠猜输出）:
+  0 = 成功（PPT已过规则自查；或 --dry-run/--check-config 通过）
+  1 = 选型无解 / 核验FAIL / PPT生成失败（看上方[FAIL]与缺口报告）
+  2 = 参数/口径错误（按提示修正后重跑，禁止改口径凑解）
+
+硬规则:
+  · 型号参数只能来自官网/官方规格书，查不到写 null 或扩库，禁止编造
+  · 交付PPT必须 check_ppt_quality FAIL=0 且 WARN=0；禁止 --no_verify
+  · 公差口径不确定就问用户，禁止自行加 precision_basis_confirmed 绕过
         """
     )
-    
+
     parser.add_argument('--files', nargs='+', help='用户提供的文件路径（图片、文档等）')
     parser.add_argument('--config', type=str, help='配置文件路径（JSON格式）')
     parser.add_argument('--text', type=str, help='需求原始文字（从0入口：把图纸/文档/口述中的数字信息原样抄录给脚本解析）')
+    parser.add_argument('--check-config', metavar='JSON',
+                        help='只校验配置参数（不选型/不生成PPT），几秒内给出结论')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='只跑选型+核验并保存 selection_result.json，不生成PPT')
     parser.add_argument('--wizard', action='store_true', help='使用向导模式（交互式输入）')
     parser.add_argument('--template', type=str, help='模板PPT路径（用于继承母版样式）')
     parser.add_argument('--output', type=str, help='输出目录')
@@ -1583,8 +1748,13 @@ def main():
                         help='模板中要替换的硬件选型页序号（1=第1个硬件页，2=第2个；缺省全部替换）')
     parser.add_argument('--no_verify', action='store_true',
                         help='跳过生成后自动验收（缺省自动跑规则自查+导出页面图）')
+    parser.add_argument('--version', action='version',
+                        version='视觉硬件选型 skill v1.14.0')
 
     args = parser.parse_args()
+
+    if args.check_config:
+        sys.exit(check_config_only(args.check_config))
 
     generator = VisionProposalGenerator()
     generator.auto_mode = args.auto or not sys.stdin.isatty()
@@ -1595,13 +1765,18 @@ def main():
         result = None
         if args.files:
             # 从用户文件生成
+            if args.dry_run:
+                print("[提示] --files 链不支持 --dry-run（文件解析后直接进入生成），"
+                      "本次忽略该开关；想先验参请用 --config + --dry-run")
             result = generator.generate_from_files(args.files, args.output, args.template)
         elif args.text:
             # 从需求文本生成（弱模型从0入口）
-            result = generator.generate_from_text(args.text, args.output, args.template)
+            result = generator.generate_from_text(
+                args.text, args.output, args.template, dry_run=args.dry_run)
         elif args.config:
             # 从配置文件生成
-            result = generator.generate_from_config(args.config, args.output, args.template)
+            result = generator.generate_from_config(
+                args.config, args.output, args.template, dry_run=args.dry_run)
         elif args.wizard:
             # 向导模式
             from config_wizard import ConfigWizard
@@ -1613,7 +1788,8 @@ def main():
             generator.save_config(config)
 
             # 生成方案
-            result = generator.generate_from_config(config_path, args.output)
+            result = generator.generate_from_config(config_path, args.output,
+                                                    dry_run=args.dry_run)
         else:
             # 默认：检查是否有用户资料
             print("请提供用户资料文件或使用向导模式")
@@ -1627,6 +1803,9 @@ def main():
 
     if result == 'SELECTION_ONLY':
         print("\n本次运行结束：已输出选型方案结果（未找到模板PPT，未生成PPT文件）")
+
+    if result == 'DRY_RUN':
+        print("\n本次运行结束：dry-run 只输出选型结果，未生成PPT")
 
     if result is None:
         # 根因注释：选型无解/核验FAIL 时各链返回 None，此前 main 仍 exit 0，

@@ -1,9 +1,9 @@
 {
   "_metadata": {
     "description": "机器视觉硬件参数数据库",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "last_updated": "2026-11-20",
-    "notes": "所有型号必须能在对应品牌官网查证，禁止编造型号；光源条目必须含 angle/outer_diameter，内径与WD范围缺失时须显式留 null 并注明待核验",
+    "notes": "所有型号必须能在对应品牌官网查证，禁止编造型号；光源条目必须含 angle/outer_diameter。镜头必须含 mod（最近摄距）、wd_range（可用工作距离范围）、distortion（可为 null 但键必须存在）；mod/wd_range/畸变未知时显式 null 并注明待核验。库外型号核查结果记入 external_candidates，禁止以\"库内无此型号\"代替官网核查结论。 非远心镜头若厂家给 WD-倍率表，必须记入 wd_mag_table；单点 magnification 不能覆盖全部 WD。",
     "verification_urls": {
       "海康威视": "https://www.hikrobotics.com/cn/machinevision/product/detail",
       "视清科技": "https://coolens.cn/product/",
@@ -270,7 +270,15 @@
           "source": "https://www.hikrobotics.com/cn/Api/Foreground/Vision/VisionProductIntroduction?id=12857",
           "note": "productName原文：16mm，F2.4，1.2\"，2500万分辨率，C接口镜头；特性含低畸变/高周边光亮比；productTrends=已发布；offeringName=KF-P系列镜头"
         }
-      ]
+      ],
+      "distortion": 0.07,
+      "mod": 100,
+      "wd_range": [
+        100,
+        null
+      ],
+      "resolution_mp": 25,
+      "wd_basis": "厂商 MOD / 工作距离规格"
     },
     {
       "brand": "视清科技",
@@ -299,7 +307,14 @@
           "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
         }
       ],
-      "wd_spec": "110±2"
+      "wd_spec": "110±2",
+      "mod": 110,
+      "wd_range": [
+        110,
+        110
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -332,7 +347,14 @@
           "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
         }
       ],
-      "wd_spec": "110±2"
+      "wd_spec": "110±2",
+      "mod": 110,
+      "wd_range": [
+        110,
+        110
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -361,7 +383,14 @@
           "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
         }
       ],
-      "wd_spec": "110±2"
+      "wd_spec": "110±2",
+      "mod": 110,
+      "wd_range": [
+        110,
+        110
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -395,7 +424,14 @@
           "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
         }
       ],
-      "wd_spec": "110±2"
+      "wd_spec": "110±2",
+      "mod": 110,
+      "wd_range": [
+        110,
+        110
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -428,7 +464,14 @@
           "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
         }
       ],
-      "wd_spec": "110±2"
+      "wd_spec": "110±2",
+      "mod": 110,
+      "wd_range": [
+        110,
+        110
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -457,7 +500,14 @@
           "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
         }
       ],
-      "wd_spec": "110±2"
+      "wd_spec": "110±2",
+      "mod": 110,
+      "wd_range": [
+        110,
+        110
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -486,7 +536,14 @@
           "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
         }
       ],
-      "wd_spec": "110±2"
+      "wd_spec": "110±2",
+      "mod": 110,
+      "wd_range": [
+        110,
+        110
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -515,7 +572,14 @@
           "note": "WWK系列总表核对：WD=110±2、倍率一致，与库相符；补wd_spec公差"
         }
       ],
-      "wd_spec": "110±2"
+      "wd_spec": "110±2",
+      "mod": 110,
+      "wd_range": [
+        110,
+        110
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -543,7 +607,14 @@
           "note": "WWH系列在售列表无此型号（疑似下架/订制款）；WD=110按同系列在售款WWH05-110CT/AT=110±2旁证保留；verified回退待人工确认"
         }
       ],
-      "wd_spec": "110±2"
+      "wd_spec": "110±2",
+      "mod": 110,
+      "wd_range": [
+        110,
+        110
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -592,7 +663,15 @@
       "f_number": 6.5,
       "updated_at": "2026-08-30T19:31:14.519345",
       "wd_spec": "158±3",
-      "verified_at": "2026-08-30T19:33:13.348869"
+      "verified_at": "2026-08-30T19:33:13.348869",
+      "distortion": null,
+      "mod": 158,
+      "wd_range": [
+        158,
+        158
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -653,7 +732,15 @@
         }
       ],
       "f_number": 6.5,
-      "wd_spec": "138±3"
+      "wd_spec": "138±3",
+      "distortion": null,
+      "mod": 138,
+      "wd_range": [
+        138,
+        138
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "视清科技",
@@ -703,7 +790,15 @@
         }
       ],
       "updated_at": "2026-08-29T22:13:27.350158",
-      "wd_spec": "110±2"
+      "wd_spec": "110±2",
+      "distortion": null,
+      "mod": 110,
+      "wd_range": [
+        110,
+        110
+      ],
+      "resolution_mp": null,
+      "wd_basis": "远心镜头定工作距离设计，wd_range 为标称值"
     },
     {
       "brand": "海康威视",
@@ -724,13 +819,100 @@
         "工作距离250~550mm可调",
         "2/3\"像面，C接口"
       ],
-      "note": "官网原文：75mm，F3.8，2/3\"，C接口，微距镜头（250mm(0.46X)-550mm(0.16X)）；工作距离范围250~400~550mm；视场角D(11.01mm):6.48° H(8.45mm):4.97° V(7.07mm):4.16°。库内magnification/WD为本方案设计工作点：WD=300mm时β≈75/(300-75)=0.333x，FOV约25.4×21.3mm（按官网视场角算约26.0×21.8mm）",
+      "note": "官网原文：75mm，F3.8，2/3\"，C接口，微距镜头（250mm(0.46X)-550mm(0.16X)）；工作距离范围250~400~550mm；视场角D(11.01mm):6.48° H(8.45mm):4.97° V(7.07mm):4.16°。。【2026-11-20 修正】官方给的是三点：250mm/0.46x、400mm/0.24x、550mm/0.16x，不是 WD300=0.333x（薄透镜估算）。按三点拟合 1/β=(WD-h)/f，WD300 实际约 0.350x，视野约 24.1x20.1mm，相对 24x19.2mm 需求余量≈0；WD320 约 0.322x/视野 26.3x22.0mm，WD330 约 0.308x/视野 27.4x22.9mm。设计工作点应留 ≥8% 视野余量。",
       "verified": true,
       "verification_url": "https://www.hikrobotics.com/cn/machinevision/productdetail/?id=11588",
       "source": "browser_page",
       "verification_note": "2026-11-20 官网详情页逐项核对：型号/焦距/F数/像面/接口/工作距离/视场角/畸变均一致",
       "auto_imported": true,
-      "created_at": "2026-11-20T14:11:01.794476"
+      "created_at": "2026-11-20T14:11:01.794476",
+      "mod": 250,
+      "wd_range": [
+        250,
+        550
+      ],
+      "resolution_mp": null,
+      "wd_basis": "厂商 MOD / 工作距离规格",
+      "wd_mag_table": [
+        [
+          250,
+          0.46
+        ],
+        [
+          400,
+          0.24
+        ],
+        [
+          550,
+          0.16
+        ]
+      ],
+      "wd_mag_table_basis": "海康官网：放大倍率范围 0.46x~0.24x~0.16x，工作距离范围 250~400~550mm。注意：库内原 magnification=0.333 是薄透镜估算，不是官方 WD300 实测值；按官方三点拟合 WD300 约 0.350x（视野 24.1mm，接近 24mm 下限，余量≈0）",
+      "magnification_note": "单点 magnification=0.333 仅作无 WD 时的兜底；有 WD 时必须用 wd_mag_table 拟合值"
+    },
+    {
+      "brand": "Computar",
+      "series": "MP Series",
+      "model": "M7528-MP",
+      "type": "FA镜头",
+      "magnification": 0.214,
+      "magnification_basis": "官方 WD-倍率表：WD=300mm → 0.214x（非薄透镜估算）",
+      "working_distance": 300,
+      "wd_range": [
+        300,
+        null
+      ],
+      "mod": 300,
+      "focal_length": 75,
+      "supported_sensor_size": "2/3\"",
+      "supported_sensor_diameter": 11.0,
+      "mount": "C-Mount",
+      "f_number": "F2.8 ~ F16",
+      "distortion": 0.4,
+      "distortion_basis": "2/3\" y=5.5mm 处 -0.4%（全视场），本项目只用中心区域，实际更小",
+      "resolution_mp": 1.5,
+      "has_coaxial_light": false,
+      "features": [
+        "75mm",
+        "2/3\"",
+        "超低畸变",
+        "聚焦/光圈锁紧螺钉",
+        "原生 MOD 300mm"
+      ],
+      "note": "Computar MP 系列。官方 WD-倍率表：WD300→0.214x（视野41.3×30.9mm），WD250→0.251x（需5mm接圈）。原生 300mm 可用，无需接圈。注意：标称 1.5MP，配 5MP 相机须实测中心 MTF；畸变 0.4% 为微距的 20 倍。",
+      "verified": true,
+      "verification_url": "https://www.computar-global.com/product/mp2/",
+      "source_product_id": "M7528-MP",
+      "history": [
+        {
+          "date": "2026-11-20",
+          "action": "库外核查后新增",
+          "note": "用户质疑\"普通75mm是否可行\"，官网核查确认 MOD=300mm 原生支持"
+        }
+      ],
+      "wd_mag_table": [
+        [
+          300,
+          0.214
+        ],
+        [
+          250,
+          0.251
+        ],
+        [
+          200,
+          0.304
+        ],
+        [
+          150,
+          0.384
+        ],
+        [
+          100,
+          0.522
+        ]
+      ],
+      "wd_mag_table_basis": "Computar 官方 WD-倍率表：300mm/0.214x；250mm/0.251x（5mm接圈）、200mm/0.304x（7mm）、150mm/0.384x（13mm）、100mm/0.522x（23mm）。250mm 及更近均为加接圈状态"
     }
   ],
   "light_sources": [
@@ -1133,6 +1315,131 @@
       ],
       "verified": true,
       "verification_url": "https://www.thk.com/products/gsh30.html"
+    }
+  ],
+  "external_candidates": [
+    {
+      "model": "MVL-KF7528M-12MP",
+      "brand": "海康威视",
+      "checked_at": "2026-11-20",
+      "focal_length": 75,
+      "mod": 500,
+      "distortion": 0.75,
+      "supported_sensor_size": "1\"",
+      "resolution_mp": 12,
+      "mount": "C-Mount",
+      "verdict": "rejected",
+      "reason": "MOD=500mm > 项目 WD=300mm。原生行程内 m=0.176x、像素精度 19.5μm，超 16.7μm 上限；加 12mm 接圈可到 300mm，但属超规格使用，且畸变 0.75% 为微距 0.02% 的 37 倍",
+      "verification_url": "https://www.hikrobotics.com/cn/machinevision/visionproduct/?id=49&typeId=40"
+    },
+    {
+      "model": "M7528-MPW3",
+      "brand": "Computar",
+      "checked_at": "2026-11-20",
+      "focal_length": 75,
+      "mod": 400,
+      "distortion": 0.33,
+      "supported_sensor_size": "2/3\"",
+      "resolution_mp": 6,
+      "mount": "C-Mount",
+      "verdict": "rejected",
+      "reason": "MOD=400mm > 300mm，需约 3~5mm 接圈；官网标注 DISCONTINUED（停产），不进入新项目选型",
+      "verification_url": "https://www.computar.com/products/m7528-mpw3"
+    },
+    {
+      "model": "LM75JC",
+      "brand": "Kowa",
+      "checked_at": "2026-11-20",
+      "focal_length": 75,
+      "mod": 1200,
+      "distortion": 0.1,
+      "supported_sensor_size": "2/3\"",
+      "resolution_mp": 2,
+      "mount": "C-Mount",
+      "wd_mag_table": [
+        [
+          1200,
+          0.07
+        ],
+        [
+          1010,
+          0.08
+        ],
+        [
+          630,
+          0.13
+        ],
+        [
+          440,
+          0.2
+        ],
+        [
+          285,
+          0.34
+        ]
+      ],
+      "wd_mag_table_basis": "官方 close-up ring 表（1/5/10/20mm），后四点为加接圈后的 WD/倍率",
+      "verdict": "usable_with_risk",
+      "reason": "原生 MOD 1200mm 不满足 WD=300；官方接圈表 20mm→285mm/0.34x，按表插值 WD300 约 0.326x、视野 25.9mm（满足 24mm）、畸变 -0.1%（24mm 视场约 0.012mm）。风险：需约 18mm 接圈（超原生对焦行程，厂家表支持）；标称 2MP/100lp/mm，配 5MP 相机须实测边缘 MTF",
+      "verification_url": "https://www.kowa-lenses.com/LM75JC1MS-2-3-75mm-2MP-C-Mount-Lens/12039"
+    },
+    {
+      "model": "LM75HC",
+      "brand": "Kowa",
+      "checked_at": "2026-11-20",
+      "focal_length": 75,
+      "mod": 1000,
+      "distortion": 0.2,
+      "supported_sensor_size": "1\"",
+      "resolution_mp": 5,
+      "mount": "C-Mount",
+      "wd_mag_table": [
+        [
+          1000,
+          0.078
+        ],
+        [
+          858,
+          0.091
+        ],
+        [
+          553,
+          0.14
+        ],
+        [
+          389,
+          0.21
+        ],
+        [
+          251,
+          0.34
+        ]
+      ],
+      "wd_mag_table_basis": "官方 close-up ring 表（1/5/10/20mm），后四点为加接圈后的 WD/倍率",
+      "verdict": "usable_with_risk",
+      "reason": "原生 MOD 1000mm；官方接圈表 10mm→389mm/0.21x、20mm→251mm/0.34x，按表插值 WD300 约 0.29x、视野 28.7mm、畸变 -0.2%、5MP/120lp/mm。风险：需约 13mm 接圈；1\" 靶面 Φ49×57/195g，体积重量最大，价格最高",
+      "verification_url": "https://www.kowa-lenses.com/LM75HC-1-75mm-5MP-C-Mount-Lens/11044"
+    },
+    {
+      "model": "HF75HA-1B",
+      "brand": "Fujinon",
+      "checked_at": "2026-11-20",
+      "focal_length": 75,
+      "mod": 1100,
+      "distortion": 0.36,
+      "supported_sensor_size": "2/3\"",
+      "resolution_mp": 1.5,
+      "mount": "C-Mount",
+      "wd_mag_table": [
+        [
+          1100,
+          0.077
+        ]
+      ],
+      "wd_mag_table_basis": "官方规格书：WD ∞~1100mm，MOD 处 0.077x",
+      "verdict": "rejected",
+      "reason": "MOD 1100mm（∞~1.1m），MOD 处倍率仅 0.077x；要达 WD300/0.3x 需约 28mm 接圈，官网无接圈表、不支持，且 1.5MP/6.2μm 像元，属明显超规格",
+      "verification_url": "https://www.fujifilm.com/us/en/business/optical-devices/mvlens/hf-ha-1s-series"
     }
   ]
 }

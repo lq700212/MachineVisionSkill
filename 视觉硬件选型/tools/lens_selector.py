@@ -10,6 +10,120 @@ import os
 from typing import Dict, List, Optional, Tuple
 from precision_calculator import PrecisionCalculator
 
+
+def lens_wd_status(lens: Dict, wd_required_mm: Optional[float]) -> Tuple[str, Optional[Tuple]]:
+    """判定镜头能否在项目要求的工作距离成像。
+
+    根因：此前选型只看倍率/视野/靶面，从未校验工作距离，导致 MOD=500mm 的
+    镜头也能在 WD=300mm 的项目里"中选"——型号匹配是假象，装上去根本不合焦。
+    WD 是硬约束，必须参与过滤。
+
+    Returns:
+        (status, detail)
+        status: ok / too_close / too_far / unknown
+        detail: (min_wd, max_wd) 或 (mod, None)
+    """
+    if wd_required_mm is None:
+        return 'unknown', None
+
+    wd_range = lens.get('wd_range')
+    if wd_range:
+        lo = wd_range[0] if len(wd_range) > 0 else None
+        hi = wd_range[1] if len(wd_range) > 1 else None
+        if lo is None and hi is None:
+            return 'unknown', None
+        if lo is not None and wd_required_mm < lo * 0.98:
+            return 'too_close', (lo, hi)
+        if hi is not None and wd_required_mm > hi * 1.02:
+            return 'too_far', (lo, hi)
+        return 'ok', (lo, hi)
+
+    mod = lens.get('mod')
+    if mod:
+        if wd_required_mm < mod * 0.98:
+            return 'too_close', (mod, None)
+        return 'ok', (mod, None)
+
+    return 'unknown', None
+
+
+def format_wd_requirement(detail: Optional[Tuple]) -> str:
+    """把 (min, max) 格式化成可读区间，供日志/报告使用。"""
+    if not detail:
+        return '未核验'
+    lo, hi = detail
+    if lo is not None and hi is not None and lo == hi:
+        return f'定工作距离 {lo:g}mm'
+    if lo is not None and hi is not None:
+        return f'{lo:g}~{hi:g}mm'
+    if lo is not None:
+        return f'≥{lo:g}mm'
+    if hi is not None:
+        return f'≤{hi:g}mm'
+    return '未核验'
+
+
+def _fit_wd_mag(lens: Dict):
+    """用厂家 WD-倍率表拟合 β = 1/(a·WD + b)。
+
+    物理依据：定焦镜头调焦满足 1/β = (WD - h)/f，即 1/β 随 WD 线性变化。
+    表内含接圈状态时 h 整体平移，同表内仍自洽，可用于表内插值。
+    """
+    pts = [(float(w), float(m)) for w, m in (lens.get('wd_mag_table') or [])
+           if w and m]
+    if len(pts) < 2:
+        return None
+    n = len(pts)
+    sx = sum(p[0] for p in pts)
+    sy = sum(1.0 / p[1] for p in pts)
+    sxx = sum(p[0] ** 2 for p in pts)
+    sxy = sum(p[0] / p[1] for p in pts)
+    den = n * sxx - sx * sx
+    if abs(den) < 1e-9:
+        return None
+    a = (n * sxy - sx * sy) / den
+    b = (sy - a * sx) / n
+    if a <= 0:
+        return None
+    return a, b
+
+
+def magnification_at_wd(lens: Dict,
+                        wd_required_mm: Optional[float]) -> Tuple[Optional[float], str]:
+    """取镜头在指定工作距离的实际倍率，返回 (倍率, 依据)。
+
+    根因（2026-11-20）：库里的 ``magnification`` 只是某个 WD 下的单点值
+    （MF7538 的 0.333x 甚至是薄透镜估算）。选型拿它当任意 WD 都成立，
+    WD=300 与 WD=500 用同一个倍率算视野，交付的"实际视野"可能是错的。
+
+    依据优先级：厂家 WD-倍率表拟合 > 单点表值 > 薄透镜估算 > 库内单点值。
+    """
+    if not wd_required_mm:
+        return lens.get('magnification'), 'single_point'
+
+    wd = float(wd_required_mm)
+    fit = _fit_wd_mag(lens)
+    if fit:
+        a, b = fit
+        denom = a * wd + b
+        if denom > 1e-6:
+            table_wds = [float(w) for w, _ in lens['wd_mag_table'] if w]
+            lo, hi = min(table_wds), max(table_wds)
+            source = ('wd_mag_table_interp' if lo <= wd <= hi
+                      else 'wd_mag_table_extrapolated')
+            return 1.0 / denom, source
+
+    table = lens.get('wd_mag_table') or []
+    if len(table) == 1 and table[0][1]:
+        return float(table[0][1]), 'wd_mag_table_single_point'
+
+    f = lens.get('focal_length')
+    if f and wd > float(f) * 1.05:
+        return float(f) / (wd - float(f)), 'thin_lens_estimate'
+
+    return lens.get('magnification'), 'single_point'
+
+
 class LensSelector:
     """镜头选型器"""
     
@@ -78,10 +192,12 @@ class LensSelector:
                                  fov: Dict,
                                  required_precision_mm: float,
                                  pixel_per_precision: float = 3.0,
+                                 pixel_precision_max_mm: float = None,
                                  lens_type: str = None,
                                  brand: str = None,
                                  need_coaxial_light: bool = None,
                                  prefer_telecentric: bool = False,
+                                 required_working_distance: float = None,
                                  top_n: int = 3) -> List[Dict]:
         """
         为指定相机匹配镜头（视野-精度双约束联动，取代固定倍率假设）
@@ -106,7 +222,8 @@ class LensSelector:
             # 远心无匹配时硬卡类型只会无解死局 → 分层回退普通镜头并打标记，
             # 风险提示交给 validate_selection 的远心必要性核验（WARNING）
             window = self.calculator.magnification_window(
-                camera, fov, required_precision_mm, pixel_per_precision)
+                camera, fov, required_precision_mm, pixel_per_precision,
+                pixel_precision_max_mm=pixel_precision_max_mm)
             if not window.get('feasible'):
                 # 窗口无解与镜头类型无关，分层回退无意义，直接按无解处理
                 print(f"  [镜头] 该相机无解: {window.get('reason', '')}")
@@ -127,15 +244,18 @@ class LensSelector:
                       f"（核验将提示确认透视误差风险）")
                 fallback = self._match_lenses_for_camera(
                     camera, fov, required_precision_mm, pixel_per_precision,
+                    pixel_precision_max_mm=pixel_precision_max_mm,
                     brand=brand, need_coaxial_light=need_coaxial_light,
-                    telecentric_only=False, top_n=top_n, window=window)
+                    telecentric_only=False, top_n=top_n, window=window,
+                    required_working_distance=required_working_distance)
                 for lens in fallback:
                     lens['telecentric_fallback'] = True
                 return fallback
             telecentric = self._match_lenses_for_camera(
                 camera, fov, required_precision_mm, pixel_per_precision,
                 brand=brand, need_coaxial_light=need_coaxial_light,
-                telecentric_only=True, top_n=top_n, window=window)
+                telecentric_only=True, top_n=top_n, window=window,
+                required_working_distance=required_working_distance)
             if telecentric:
                 print(f"  [镜头] 测量场景远心优先：命中 {len(telecentric)} 款远心镜头")
                 for lens in telecentric:
@@ -146,26 +266,31 @@ class LensSelector:
             fallback = self._match_lenses_for_camera(
                 camera, fov, required_precision_mm, pixel_per_precision,
                 brand=brand, need_coaxial_light=need_coaxial_light,
-                telecentric_only=False, top_n=top_n, window=window)
+                telecentric_only=False, top_n=top_n, window=window,
+                required_working_distance=required_working_distance)
             for lens in fallback:
                 lens['telecentric_fallback'] = True
             return fallback
 
         return self._match_lenses_for_camera(
             camera, fov, required_precision_mm, pixel_per_precision,
+            pixel_precision_max_mm=pixel_precision_max_mm,
             lens_type=lens_type, brand=brand, need_coaxial_light=need_coaxial_light,
-            telecentric_only=False, top_n=top_n)
+            telecentric_only=False, top_n=top_n,
+            required_working_distance=required_working_distance)
 
     def _match_lenses_for_camera(self,
                                  camera: Dict,
                                  fov: Dict,
                                  required_precision_mm: float,
                                  pixel_per_precision: float = 3.0,
+                                 pixel_precision_max_mm: float = None,
                                  lens_type: str = None,
                                  brand: str = None,
                                  need_coaxial_light: bool = None,
                                  telecentric_only: bool = False,
                                  window: Dict = None,
+                                 required_working_distance: float = None,
                                  top_n: int = 3) -> List[Dict]:
         """单层镜头匹配：倍率窗口∩库内镜头 + 逐项验证 + 评分排序。
 
@@ -176,7 +301,8 @@ class LensSelector:
         """
         if window is None:
             window = self.calculator.magnification_window(
-                camera, fov, required_precision_mm, pixel_per_precision)
+                camera, fov, required_precision_mm, pixel_per_precision,
+                pixel_precision_max_mm=pixel_precision_max_mm)
         if not window.get('feasible'):
             print(f"  [镜头] 该相机无解: {window.get('reason', '')}")
             return []
@@ -193,6 +319,8 @@ class LensSelector:
         pixel_precision_max = window['pixel_precision_max_mm'] * 1000  # μm
 
         suitable = []
+        wd_rejected = []    # (model, status, detail) 供无匹配时定位根因
+        wd_unverified = []  # 有 WD 需求但镜头缺 mod/wd_range
         for lens in self.lenses:
             magnification = lens.get('magnification')
             if not magnification or magnification <= 0:
@@ -209,6 +337,21 @@ class LensSelector:
                bool(lens.get('has_coaxial_light', False)) != need_coaxial_light:
                 continue
 
+            # 工作距离硬约束：WD 不符必须排除。根因：旧逻辑只看倍率/视野，
+            # MOD=500mm 的镜头会在 WD=300mm 的项目里"中选"，装上去不合焦。
+            wd_status, wd_detail = lens_wd_status(lens, required_working_distance)
+            if wd_status in ('too_close', 'too_far'):
+                wd_rejected.append((lens.get('model', ''), wd_status, wd_detail))
+                continue
+            if wd_status == 'unknown':
+                wd_unverified.append(lens.get('model', ''))
+
+            # 工作距离决定实际倍率：不能用单点倍率冒充全行程
+            magnification, mag_source = magnification_at_wd(
+                lens, required_working_distance)
+            if not magnification or magnification <= 0:
+                continue
+
             # 倍率必须在窗口内（留2%容差）
             if not (mag_min * 0.98 <= magnification <= mag_max * 1.02):
                 continue
@@ -223,11 +366,13 @@ class LensSelector:
             mount_match = (not camera_mount) or (not lens.get('mount', '')) or \
                           (camera_mount == lens.get('mount', ''))
 
-            # 精度链验证
+            # 精度链验证：目标值必须用倍率窗口算出的像素当量上限。
+            # 根因（2026-11-21）：此处曾写 required_precision_mm / pixel_per_precision，
+            # 在 direct_measurement 模式下把"公差带÷10"又按 ÷3 算，判据松 3.3 倍，
+            # 与核验链口径不一致。
             object_res = self.calculator.calculate_object_resolution(pixel_size, magnification)
-            is_ok, safety = self.calculator.verify_precision(object_res,
-                                                             required_precision_mm / pixel_per_precision)
-            # 注：verify基于"像素精度≤精度/k"的目标值
+            is_ok, safety = self.calculator.verify_precision(
+                object_res, pixel_precision_max / 1000.0)
 
             # 实际视野验证
             actual = self.calculator.actual_fov(camera, magnification)
@@ -244,22 +389,40 @@ class LensSelector:
             pos = (magnification - mag_min) / span  # 0~1
             score += int(60 * min(pos, 1.0) + 30)  # 30~90
             # 远心度
-            telecentricity = lens.get('telecentricity', 1.0)
+            telecentricity = lens.get('telecentricity')
+            if telecentricity is None:
+                telecentricity = 1.0
             if telecentricity <= 0.05:
                 score += 10
             elif telecentricity <= 0.1:
                 score += 5
-            # 畸变
-            distortion = lens.get('distortion', 1.0)
+            # 畸变：键存在但值为 None 表示"未核验"，按中性处理，不能当 0 加分
+            distortion = lens.get('distortion')
+            if distortion is None:
+                distortion = 1.0
             if distortion <= 0.05:
                 score += 10
             elif distortion <= 0.1:
                 score += 5
             if mount_match:
                 score += 5
+            # 工作距离贴合：原生支持的镜头优先于需接圈/未核验的
+            if wd_status == 'ok':
+                score += 5
 
             info = lens.copy()
             info.update({
+                # 交付口径：magnification / working_distance 一律用"需求 WD 处"的
+                # 实际值，避免下游（PPT 生成、第三方脚本）读到库内单点值。
+                # 原库值保留在 *_nominal 字段供追溯（2026-11-20 事故）。
+                'magnification': magnification,
+                'magnification_nominal': lens.get('magnification'),
+                'magnification_at_wd': magnification,
+                'magnification_source': mag_source,
+                'working_distance': (required_working_distance
+                                     if required_working_distance is not None
+                                     else lens.get('working_distance')),
+                'working_distance_nominal': lens.get('working_distance'),
                 'object_resolution': object_res,
                 'safety_factor': safety,
                 'actual_fov': actual,
@@ -267,18 +430,34 @@ class LensSelector:
                 'fov_satisfied': fov_ok,
                 'mount_match': mount_match,
                 'mag_window': {'min': mag_min, 'max': mag_max},
+                'wd_status': wd_status,
+                'wd_requirement': required_working_distance,
+                'wd_capability': wd_detail,
                 'recommend_score': score,
                 'validated': True,
             })
             suitable.append(info)
 
         if not suitable:
+            wd_is_root_cause = bool(wd_rejected and required_working_distance is not None)
+            if wd_is_root_cause:
+                # 按与需求的接近程度排序，给出最接近的 3 款，方便判断该接圈还是改 WD
+                closest = sorted(
+                    wd_rejected,
+                    key=lambda x: abs((x[2][0] if x[2] and x[2][0] else 0) - required_working_distance)
+                )[:3]
+                detail = '、'.join(f"{m}({format_wd_requirement(d)})" for m, _, d in closest)
+                print(f"    [镜头无匹配·WD约束] {len(wd_rejected)} 款因工作距离不符被排除："
+                      f"需求 {required_working_distance:g}mm；最接近 {detail} "
+                      f"→ 需接圈/扩库，或与客户确认 WD 可否调整")
             # 根因分类：窗口与库内镜头倍率的关系决定下一步动作，避免盲目调参
             pool = [l for l in self.lenses
                     if l.get('magnification') and l['magnification'] > 0 and
                     (not telecentric_only or '远心' in str(l.get('type', '')))]
             mags = sorted(l['magnification'] for l in pool)
-            if mags and mag_max < mags[0] * 1.02:
+            if wd_is_root_cause:
+                pass  # WD 已给出可执行根因，不再叠加倍率诊断
+            elif mags and mag_max < mags[0] * 1.02:
                 print(f"    [镜头无匹配·根因] 窗口上限 {mag_max:.3f}x 低于库内{scope}最低倍率 "
                       f"{mags[0]}x → 该相机靶面太小盖不住视野，换更大靶面/更高分辨率相机"
                       f"（不是调镜头）")
@@ -415,7 +594,9 @@ class LensSelector:
                         score += 0    # 高倍率成本高、景深小
                     
                     # 远心度评分
-                    telecentricity = lens.get('telecentricity', 1.0)
+                    telecentricity = lens.get('telecentricity')
+                    if telecentricity is None:
+                        telecentricity = 1.0
                     if telecentricity <= 0.05:
                         score += 10   # 高精度
                     elif telecentricity <= 0.1:
