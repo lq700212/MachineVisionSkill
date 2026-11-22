@@ -85,7 +85,7 @@ mklink /J "C:\Users\Administrator\.agents\skills" "C:\Users\Administrator\.confi
 | [readme](readme/) | `readme` | 项目 README 标准生成流程：事实摸底→图片盘点→截图决策树→骨架落稿→八项卫生核验，图文并茂为默认形态 | [SKILL.md](readme/SKILL.md) |
 | [viewturbo-checkin](viewturbo-checkin/) | `viewturbo-checkin` | ViewTurbo 每日签到领流量（真实账号文件永不入库，只提交 example 模板） | [SKILL.md](viewturbo-checkin/SKILL.md) |
 | [scanner-config](scanner-config/) | `scanner-config` | 扫码枪 Eport-E10 串口联网模块网络配置与排障：改 IP/8899 端口、连接超时/169.254.x.x 诊断、恢复出厂重建，附 ScannerTool.ps1 | [SKILL.md](scanner-config/SKILL.md) |
-| [ui-mockup-studio](ui-mockup-studio/) | `ui-mockup-studio` | UI 设计稿工作台 + 界面简化标准：基于 galaxy 组件库出 4-5 套可点击单文件 HTML 方案（主界面/子页/弹窗/跳转图/动效），内置 WinForms/WPF 双栈映射与信息预算 | [SKILL.md](ui-mockup-studio/SKILL.md) |
+| [ui-mockup-studio](ui-mockup-studio/) | `ui-mockup-studio` | UI 设计稿工作台 + 界面简化标准：基于 galaxy 组件库出 4-5 套可点击单文件 HTML 方案（主界面/子页/弹窗/跳转图/动效），内置 WinForms/WPF 双栈映射与信息预算；v1.4.0 新增品牌图标生成（SVG 多款方案→预览选款→svg2res.py 一键转 PNG 阶梯+ICO 项目资源） | [SKILL.md](ui-mockup-studio/SKILL.md) |
 
 > 各 skill 的版本与变化记录见其目录内的 `CHANGELOG.md`。
 

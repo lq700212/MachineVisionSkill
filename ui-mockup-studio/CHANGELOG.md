@@ -2,6 +2,50 @@
 
 `ui-mockup-studio` skill 的所有版本变动统一记录在此。格式参考 Keep a Changelog。
 
+## [1.4.0] - 2026-11-22
+
+### 背景
+
+用户提出：出界面设计稿时希望**软件图标一并产出**，且资源直接生成"项目拿去就能用"
+的图片格式（多尺寸 PNG + app.ico），能脚本化的全部脚本化。此前图标设计没有任何
+工具与规范支撑（AIris 六款图标为首次实战，过程中手算几何两度翻车返工）。
+
+### 新增
+
+- **步骤 7.5 品牌图标生成**（SKILL.md 工作流）：设计稿交付时顺带询问要不要出图标；
+  4-6 款 SVG（底板渐变取选中方案 Token 色、白色符号、evenodd 挖洞透底）→ 预览选款
+  → 一键转项目资源。触发词加入 description（"设计软件图标 / 出 logo / 设计 app icon"）。
+- **`scripts/svg2res.py`**（图标一键转资源）：
+  - `preview`：扫 SVG 目录生成选款预览页（浅/深底 × 48/32/20 阶梯，语义自动取
+    SVG 头注释 `<!-- -->`，不重复维护说明文案）；
+  - `convert` / `convert-dir`：SVG → PNG 阶梯 512/256/128/64/48/32/24/20/16 +
+    7 帧 ICO（16~256，app.ico/favicon.ico 直接可用）。
+  - 渲染链路：Edge headless 只渲一张 512 高清（`--window-size=128,128
+    --force-device-scale-factor=4`，其余尺寸 PIL LANCZOS 缩，比逐尺寸截图快一个数量级）
+    + PIL 打包 ICO。实踩沉淀进脚本头注释与 playbook：Edge 截图必须带 `--user-data-dir`
+    否则不落盘；`--default-background-color=00000000` 保透明底。
+- **`references/logo-playbook.md`**：图标设计手册（三步流程 / 同源口径 / 几何红线 /
+  小尺寸纪律 / 转资源接入 / 工具链实现说明）。
+
+### 变更
+
+- SKILL.md：目录树补 `svg2res.py` 与 `logo-playbook.md`；第 5 节速查补图标命令组。
+- （同轮补强，AIris 用户选款换标回刷）playbook 第 4 节升级为**「换图标 = 换全」三面清单**：
+  exe 内嵌 ApplicationIcon ≠ 运行窗口 Window.Icon（后者需 `<Resource Include>`，缺了运行时
+  加载失败）≠ 界面品牌位（通用占位字符必须一并换同源矢量）——各面验证方法（ExtractAssociatedIcon
+  提取断言 / 启动截图任务栏帧 / 品牌位目检）、快捷方式顺手建、图标缓存重建坑、
+  ChromeDialogWindow 弹窗走 TitleIconChar 无需逐个设图标；SKILL.md 步骤 7.5 第 3 步同步指向。
+
+### 首刷实战回刷（AIris 六款，2026-11-22）
+
+- **意外联想返工**：6 重放射对称 + 直线弦的光圈画出"雪花 ❄ 感"（返工改扇形快门叶片）；
+  三瓣太瘦 + 瓣间点缀画出"风车感"（返工改饱满水滴瓣、去花蕊点）——两条都写进 playbook
+  几何红线（预览截图目检是手算几何的唯一可靠验收）。
+- **evenodd 挖洞透底板**：瞳孔/眼白要露渐变底板时必须 fill-rule="evenodd" 双轮廓同 path，
+  禁止叠"近似底色"圆（渐变上必露馅）。
+- **小尺寸纪律**（128 viewBox 口径）：主线条 stroke ≥ 6、四角括号角长 ≥ 16、
+  中心挖孔 ≥ 13、元素留白 ≥ 5、20px 档必须仍可辨识。
+
 ## [1.3.0] - 2026-11-18
 
 ### 背景

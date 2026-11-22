@@ -3,6 +3,45 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-22（本次·ui-mockup-studio v1.4.0 新增品牌图标生成 + svg2res.py 一键转资源）
+
+### 改动范围
+
+1. **ui-mockup-studio**（v1.3.0 → v1.4.0）：
+   - **新增步骤 7.5 品牌图标生成**：设计稿交付时顺带询问要不要出图标；4-6 款 SVG
+     （128 viewBox 手算几何，底板渐变取选中方案 Token 色、白色符号、evenodd 挖洞透底）
+     → `preview` 预览选款（浅/深底 × 48/32/20 阶梯截图目检）→ `convert` 一键转项目资源；
+     触发词加入 description（"设计软件图标 / 出 logo / 设计 app icon"）。
+   - **新增 `scripts/svg2res.py`**：`preview` 扫 SVG 目录生成选款预览页（语义自动取
+     SVG 头注释，不重复维护文案）；`convert`/`convert-dir` 出 PNG 阶梯
+     512/256/128/64/48/32/24/20/16 + 7 帧 ICO（16~256）。渲染链路：Edge headless 只渲
+     一张 512 高清（`--force-device-scale-factor=4` + 必带 `--user-data-dir` +
+     `--default-background-color=00000000` 保透明底），其余尺寸 PIL LANCZOS 缩。
+   - **新增 `references/logo-playbook.md`**：图标设计手册（三步流程 / 同源口径 /
+     几何红线 / 小尺寸纪律 stroke≥6·中心孔≥13·20px 可辨识 / 转资源接入）。
+   - **换图标 = 换全三面清单**（AIris 实战回刷）：exe 内嵌 ApplicationIcon ≠ 运行窗口
+     Window.Icon（需 `<Resource Include>` 否则运行时加载失败）≠ 界面品牌位，各面验证
+     方法（ExtractAssociatedIcon 断言 / 启动截图任务栏帧 / 品牌位目检）写进 playbook；
+     首刷翻车教训（直线弦光圈雪花感、瘦花瓣风车感）沉淀为几何红线。
+2. **根文件**：
+   - `README.md`：Skill 一览表中 ui-mockup-studio 能力描述补"品牌图标生成 + svg2res.py
+     一键转资源"。
+
+### 验证结论
+
+- `svg2res.py`：`py_compile` 通过，`--help` 三子命令正常输出。
+- SKILL.md frontmatter `name` 未动（仍是 ASCII slug），无热更新风险。
+- **README 更新判断**：需要并已更新——触发条件为"skill 能力边界、入口命令变化"
+  （新增图标生成环节与 svg2res.py 命令组，Skill 一览描述同步）。
+- **README 卫生核验**：`check_readme.py` 见提交前结果。
+- ui-mockup-studio 无独立测试套件（`check_mockup.py` 针对产出 mockup，本次未生成新稿）。
+
+### 建议 commit message
+
+```
+feat(ui-mockup-studio): v1.4.0 新增品牌图标生成环节（步骤7.5 + logo-playbook + svg2res.py 一键转 PNG阶梯+ICO）；换图标=换全三面清单；README 同步能力描述
+```
+
 ## 2026-11-21（本次·视觉硬件选型 v1.14.0 对照行业规范补齐硬约束；视觉选型测试 211 用例）
 
 ### 改动范围

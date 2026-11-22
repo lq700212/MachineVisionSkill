@@ -8,6 +8,7 @@ description: >
   galaxy → WPF 两套落地映射（从当前方案 Token 实时生成代码）。
   当用户说"做 UI 设计稿 / 出界面设计方案 / 画原型 / 出 mockup / 界面美化方案 /
   做几版 UI 给我选 / 重新设计界面 / 设计系统 / 出高保真效果图 / 页面跳转关系 / 弹窗设计"，
+  或"设计软件图标 / 出 logo / 设计 app icon / 应用图标出几版 / 图标转项目资源"，
   或"界面太复杂 / 简化页面 / 看着乱 / 降低学习成本 / 能合并就合并 / 按钮太多 /
   配置项太多 / 简单好上手"，或要新建/优化配置窗、表单页、设置页，以及界面改动完成后的
   截图目检收尾时使用。适用于任何项目的 UI 设计、美化与简化任务。
@@ -108,14 +109,16 @@ description: >
 │   ├── resolve_galaxy.py         定位 galaxy；找不到就 git clone 到 D:\galaxy；写缓存
 │   ├── galaxy_search.py          按 tags 检索组件 / 看源码 / 随机抽样 / 列分类
 │   ├── new_mockup.py             从模板生成设计稿到项目 Docs（支持 --stack）
-│   └── check_mockup.py           交付前 33 项核验（结构/跳转/编码/离线/两栈/卡片体系/文字色继承/减法预算/方案差异度 C23~C26）
+│   ├── check_mockup.py           交付前 33 项核验（结构/跳转/编码/离线/两栈/卡片体系/文字色继承/减法预算/方案差异度 C23~C26）
+│   └── svg2res.py                图标 SVG → 项目资源：preview 生成选款预览页 / convert 出 PNG 阶梯 512~16 + 多帧 ICO
 ├── templates/
 │   └── mockup_base.html          工作台模板（5 方案 9 基因 Token + 5 种壳构图 + 4 视图 + 3 示例页 + 3 弹窗 + 双栈映射）
 └── references/
     ├── design-playbook.md        设计方法与"干净整洁"的硬指标（写页面前必读）
     ├── simplify-playbook.md      简化现有界面的完整标准（原 ui-simplify 并入）
     ├── mockup-spec.md            data-* 速查 + 页面/弹窗代码片段 + 完整度清单 + 预算自检
-    └── galaxy-map.md             galaxy 分类地图 + 检索词 + WinForms/WPF 两套映射代码
+    ├── galaxy-map.md             galaxy 分类地图 + 检索词 + WinForms/WPF 两套映射代码
+    └── logo-playbook.md          软件图标设计手册（口径/几何红线/小尺寸纪律/转资源接入）
 ```
 
 脚本一律用 `python` 运行（Windows 上 `python` 已是 3.x）。路径含中文时，
@@ -350,6 +353,27 @@ URL 参数直达（模板内置）：`?page=` `?view=stage|overview|flow|spec`
 一套非默认方案（浅色）。看什么：元素有没有被裁、文字有没有溢出、缩略图是否完整、
 连线是否穿过节点、浅色下有没有写死深色、弹窗有没有被撑变形、**主操作是否唯一**。
 
+### 步骤 7.5：品牌图标生成（App Icon / Logo）
+
+设计稿交付时**顺带问一句要不要出软件图标**；用户单独说"设计图标 / 出 logo / app icon"
+也直接走本步。细则见 `references/logo-playbook.md`，骨架流程：
+
+1. **设计 4-6 款 SVG**（128 viewBox，手算几何）：底板渐变圆角方取**选中方案的 Token
+   色系**（图标与界面同源，一眼认亲）、白色符号保证小尺寸对比、透底一律 evenodd 挖洞
+   （禁止叠"近似底色"圆，渐变底上必露馅）；**方案语义写在每款 SVG 的头注释里**
+   （预览页自动引用，不重复维护）；
+2. **预览选款**：`svg2res.py preview` 生成预览页（浅/深底 × 48/32/20 阶梯）→
+   **必须截图目检后才给用户选**——手算几何的翻车只有眼睛能抓（首刷实锤：直线弦光圈
+   画出雪花 ❄ 感、瘦花瓣画出风车感，均在预览截图里返工）；
+3. **转项目资源并换全**：`svg2res.py convert` 出 PNG 512~16 阶梯 + 7 帧 ICO（16~256）；
+   **换图标 = 换全三面**（① exe 内嵌 ApplicationIcon / ② 运行窗口 Window.Icon——需
+   Resource Include 否则运行时加载失败 / ③ 界面品牌位同步换掉通用占位符）——逐项清单
+   与验证方法见 `references/logo-playbook.md` 第 4 节，缺面 = 用户还得提醒"任务栏图标
+   怎么还是旧的"（2026-11-22 AIris 换标定版清单）。
+
+红线：图标渐变色只来自该套方案 Token 色（禁写死方案外色值）；小尺寸纪律
+（128 viewBox 口径：主线条 stroke ≥ 6、中心孔 ≥ 13、元素留白 ≥ 5、20px 仍可辨识）。
+
 ### 步骤 8：收尾
 
 - 交付说明里写清：文件路径、方案清单（每套一句话）、页面/弹窗数量、**假设与未覆盖项**、
@@ -406,6 +430,11 @@ python "$S\new_mockup.py" --root . --project "项目名" --out "Docs\ui_design_m
 
 # 4) 核验
 python "$S\check_mockup.py" "Docs\ui_design_mockups.html" --min-pages 8 --min-dialogs 5
+
+# 5) 图标方案预览 + 转项目资源（细则见 references/logo-playbook.md）
+python "$S\svg2res.py" preview "Docs\branding" --out preview.html --title "XX 图标方案"
+python "$S\svg2res.py" convert "Docs\branding\logo-x.svg" "Docs\branding\icons\logo-x"
+python "$S\svg2res.py" convert-dir "Docs\branding" "Docs\branding\icons"
 ```
 
 ---
@@ -526,6 +555,12 @@ python "$S\check_mockup.py" "Docs\ui_design_mockups.html" --min-pages 8 --min-di
 
 ## 9. 版本
 
+- V1.4.0（2026-11-22）：**新增品牌图标生成环节**（步骤 7.5 + `references/logo-playbook.md`）
+  与一键转资源脚本 `scripts/svg2res.py`：`preview` 扫 SVG 目录自动生成选款预览页
+  （语义取自 SVG 头注释，浅/深底 × 48/32/20 阶梯）；`convert` Edge headless 渲 512 高清
+  （必须带 --user-data-dir，透明底）+ PIL 缩 PNG 阶梯 512~16 + 打包 7 帧 ICO。
+  首刷 AIris 六款实战回刷：直线弦光圈雪花感/瘦花瓣风车感返工教训、evenodd 挖洞透底板、
+  小尺寸纪律（stroke≥6/中心孔≥13/20px 可辨识）沉淀进 playbook。
 - V1.3.0（2026-11-18）：**方案差异度大改**（反同质化）。差异轴从"密度/圆角/主色/留白"
   四维扩为 **9 基因**（色相/明暗/圆角/密度/质感/字体/强调/壳构图/动效性格）：
   模板新增 `--font`（B 等线、D 等宽混排）与 `--dur-*`/`--ease-*` 动效性格 Token，
