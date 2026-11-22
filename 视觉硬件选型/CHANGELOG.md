@@ -2,7 +2,42 @@
 
 本 skill 的所有版本变动统一记录在此。格式参考 Keep a Changelog。
 
-## [Unreleased]（v1.14.0）
+## [v1.15.0]（2026-11-22）
+
+### 修复：精度口径语义与行业对齐（用户拍板规则）
+
+> 触发：用户指出"客户说测量精度 0.5mm，就用 0.5mm 算；说 ±0.5mm 才用 ±0.5 算"，
+> 并质疑"÷3 再叠加 10% 分配"是否比行业常规严。
+
+#### 语义修正（会导致口径错 2~20 倍）
+
+- **"测量精度 X"直接算**：`precision_requirement: X` + `precision_basis: "measurement_accuracy"`，
+  像素当量 = X ÷ 3，**不再乘整机分配比例**。旧实现把它当整机公差按 1/10 再 ÷3，
+  0.5mm 被算成 16.7μm/px，比客户本意严 10 倍。
+- **"±X"带宽翻倍**：文本入口命中 `±` 时自动写 `tolerance_type: "bilateral"`（带宽 2X）。
+  旧实现只填 `tolerance`，默认 unilateral 把带宽少算一半。
+- **precision_requirement 绝对优先**：即使 config 声明了 `precision_model`，只要
+  `precision_requirement` 存在就不再走 tolerance 分配。修复旧逻辑在 model 已声明时
+  让 tolerance 压过 precision_requirement（日志说"精度优先"、预算却按公差算）的双链分裂。
+- **防呆放行**：`precision_basis=measurement_accuracy` 的 0.5mm 不再被"疑似公差"拦截；
+  只说"精度 0.5mm"（无限定词）仍 exit 2 要求用户确认。
+
+#### 行业口径对齐
+
+- **默认分配比例 1/10 → 3/10**：视觉占整机公差 1/3，再 ÷3 像素，等效"整机公差 ÷ 9"，
+  与基恩士/HSM 的"像素当量 = 公差带 ÷ 10"同一量级。旧默认 ÷30 比行业严 3 倍，
+  会把相机/镜头选贵一个档。
+- `--check-config`、核验报告、config 模板、wizard 文案同步改为 30%。
+- 新增 `precision_basis` 字段：`measurement_accuracy`（客户明确测量/检测精度）/
+  `drawing_tolerance`（图纸公差备注）/ `null`（未说明，触发人工确认）。
+
+#### 回归
+
+- 新增 7 条：测量精度不分配、±公差带宽翻倍、precision_requirement 优先于已声明 model、
+  防呆放行/拦截、默认 30% 口径、workflow exit code 放行。
+- 全量 **218/218 通过**。
+
+## [v1.14.0]（2026-11-21）
 
 ### 新增+修复：对照工控机器视觉选型规范补齐硬约束（2026-11-21）
 

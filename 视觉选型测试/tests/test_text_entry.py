@@ -30,6 +30,38 @@ class TestTextParsing(unittest.TestCase):
         self.assertIsNotNone(d.get('tolerance'),
                              msg=f'公差未解析出: {d}')
 
+    def test_measurement_accuracy_marks_basis(self):
+        """2026-11-22 口径：客户说"测量精度0.5mm" → 0.5 就是视觉指标，
+        必须标 measurement_accuracy（直接÷3），不得再按整机公差分配。
+        与"±0.5mm"（带宽1.0mm）严格区分。"""
+        d = self.parser._extract_params_from_text(
+            '客户测量精度0.5mm，检测区域20x16mm，节拍1s')
+        self.assertAlmostEqual(d.get('precision_requirement'), 0.5, places=6,
+                               msg=f'测量精度未解析出: {d}')
+        self.assertEqual(d.get('precision_basis'), 'measurement_accuracy',
+                         msg=f'测量精度必须标记 basis，否则会被当公差拦截: {d}')
+        self.assertNotIn('tolerance', d,
+                         msg=f'纯测量精度文本不应产出 tolerance: {d}')
+
+    def test_bilateral_tolerance_bands_double(self):
+        """2026-11-22 口径：文本"±0.5mm"必须标 bilateral（带宽=2×0.5=1.0），
+        不能按 unilateral 只算 0.5mm。"""
+        d = self.parser._extract_params_from_text(
+            '工件公差±0.5mm，检测区域20x16mm')
+        self.assertAlmostEqual(d.get('tolerance'), 0.5, places=6,
+                               msg=f'公差未解析出: {d}')
+        self.assertEqual(d.get('tolerance_type'), 'bilateral',
+                         msg=f'±X 必须标双向公差，否则带宽少一半: {d}')
+
+    def test_ambiguous_precision_has_no_basis(self):
+        """模糊的"精度0.5mm"不设 basis → 保留人工确认（防呆不放行）"""
+        d = self.parser._extract_params_from_text(
+            '精度0.5mm，检测区域20x16mm')
+        self.assertAlmostEqual(d.get('precision_requirement'), 0.5, places=6,
+                               msg=f'精度未解析出: {d}')
+        self.assertNotEqual(d.get('precision_basis'), 'measurement_accuracy',
+                            msg=f'未说明是测量精度时不得自动放行: {d}')
+
     def test_parse_no_numbers_returns_empty(self):
         """注入: 无数字信息的文本 → 不产出任何数值口径参数（不猜数字）；
         定性字段（如检测项目"外观检测"）允许提取"""

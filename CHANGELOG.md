@@ -3,6 +3,43 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-22（本次·视觉硬件选型 v1.15.0 精度口径语义修正；视觉选型测试 218 用例）
+
+### 改动范围
+
+1. **视觉硬件选型**（v1.14.0 → v1.15.0）：
+   - **"测量精度 X"不再当整机公差分摊**：新增 `precision_basis=measurement_accuracy`，
+     像素当量 = X ÷ 3；旧实现按 1/10 再 ÷3，0.5mm 被算成 16.7μm/px，比客户本意严 10 倍；
+   - **"±X"带宽翻倍**：文本入口命中 `±` 自动写 `tolerance_type=bilateral`（带宽 2X），
+     修复只填 `tolerance` 导致默认 unilateral 少算一半；
+   - **precision_requirement 绝对优先**：即使 config 声明 `precision_model`，只要给了
+     `precision_requirement` 就不再走 tolerance 分配，修复双链口径分裂；
+   - **防呆放行/拦截**：明确"测量精度/检测精度"放行；只说"精度 0.5mm"仍 exit 2 要用户确认；
+   - **默认分配 1/10 → 3/10**：视觉占整机 1/3 再 ÷3 ≈ 公差÷9，与基恩士/HSM 的 ÷10 同量级；
+     `--check-config`、核验报告、config 模板、wizard 文案同步改 30%；
+   - 版本号 `--version` → v1.15.0；`AGENTS.md` 故障模式表补 3 条本次教训。
+2. **视觉选型测试**（v1.1.1 → v1.1.2）：新增 7 条精度口径语义用例（测量精度不分配、
+   ±公差带宽翻倍、precision_requirement 优先于已声明 model、防呆放行/拦截、默认 30%
+   口径、workflow exit code 放行），全量 **211 → 218**。
+3. **根文件**：
+   - `README.md`：测试基线 **211 → 218**（运行说明、Skill 一览、质量防线三处同步），
+     Skill 一览补"测量精度与公差口径语义"。
+
+### 验证结论
+
+- **视觉选型测试**：全量 `run_all.py` **218/218 通过**，失败 0、错误 0、跳过 0（29.9s，退出码 0）。
+- 本项目复跑：MV-CS050-10GM + MVL-MF7538M-ML + FL-R-7060-W 结论不变，核验 28 PASS +
+  2 INFO，0 WARN / 0 FAIL（精度口径按项目配置不变）。
+- **README 更新判断**：需要并已更新——触发条件为"skill 能力边界、入口命令、测试规模变化"
+  （新增 `precision_basis` 字段语义、默认分配比例 30%、用例 211 → 218）。
+- **README 卫生核验**：`check_readme.py` 见提交前结果。
+
+### 建议 commit message
+
+```
+fix(视觉硬件选型): v1.15.0 精度口径按用户语义修正（测量精度直接÷3不再分摊 / ±公差带宽翻倍 / precision_requirement绝对优先 / 默认分配1/10→3/10对齐行业）；test: 218用例（+7口径语义）；docs(README) 基线218
+```
+
 ## 2026-11-22（本次·ui-mockup-studio v1.4.0 新增品牌图标生成 + svg2res.py 一键转资源）
 
 ### 改动范围

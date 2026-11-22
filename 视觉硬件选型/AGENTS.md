@@ -134,3 +134,6 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 | 运动/飞拍场景选中卷帘快门相机 | 快门类型只打印不参与选型；卷帘逐行曝光会拖影/果冻 | `is_moving_scene()` + `shutter_kind()`；选型链硬排除卷帘，核验层卷帘+运动=FAIL |
 | 景深/解析力/衍射三项光学约束从未参与选型 | 景深只解析厂家字符串且需人工给高度波动；MTF 只打印；15 支镜头仅 8 支有景深字段 | `_check_optics_quality()`：厂家值优先、无值公式估算并标"估算"；无法判定记 INFO 而非沉默 |
 | 选型器精度判据比预算模型松 3.3 倍（direct_measurement） | `select_cameras_for_fov`/`_match_lenses_for_camera` 仍用 `allowed_error ÷ pixel_factor`，预算模型已算过该步 | 两函数新增 `pixel_precision_max_mm` 入参，主流程原样下发；单点口径收口到预算模型 |
+| "测量精度 0.5mm"被当整机公差再分 10%（实算 16.7μm/px，客户本意只需÷3=166.7） | 混淆"视觉指标"与"整机公差"：测量精度是视觉系统要保证的数字，不能再分配；旧防呆只认 `precision_requirement≥0.2` 就拦截，把合法指标也拦死 | 新增 `precision_basis=measurement_accuracy` 放行；文本入口识别"测量精度/检测精度/设备精度/重复精度"；`precision_requirement` 绝对优先于 `tolerance`（即使声明 model）；只写"精度0.5"仍 exit 2 问用户 |
+| 文本"±0.5mm"解析后带宽只有 0.5mm（少一半） | `_extract_tolerance` 只填 `tolerance`，没填 `tolerance_type`，默认 unilateral 把双向公差当单向 | 命中 `±` 自动写 `tolerance_type=bilateral`（带宽2X）；config 模板/wizard 同步要求声明 |
+| 默认分配 1/10 再÷3=公差÷30，比行业严 3 倍 | 行业常规是视觉占 1/3（×3像素≈÷9~10），旧默认把"保守"叠成了双重折扣 | `DEFAULT_PRECISION_MODEL.allocation_ratio` 0.1→0.3；核验/模板/wizard 文案统一 30%；config 显式 0.1~0.2 保留为严格档 |

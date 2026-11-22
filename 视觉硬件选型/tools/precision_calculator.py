@@ -173,7 +173,11 @@ DEFAULT_PRECISION_MODEL = {
     'mode': 'system_budget',
     'application': 'positioning',
     'tolerance_type': 'unilateral',
-    'allocation_ratio': 0.1,
+    # 行业口径对齐（2026-11-22）：整机公差分配给视觉的常见比例是 1/3，
+    # 叠加上亚像素判据 pixel_factor=3 后等效"整机公差 ÷ 9"，与基恩士/HSM
+    # 的"像素当量 = 公差带 ÷ 10"基本一致。旧默认 0.1 再 ÷3 等于 ÷30，
+    # 比行业常规严 3 倍（会把相机/镜头选贵一个档）。
+    'allocation_ratio': 0.3,
     'pixel_factor': 3.0,
 }
 
@@ -218,9 +222,10 @@ def resolve_precision_budget(params: Dict) -> Optional[Dict]:
 
     输入优先级（从强到弱）：
       1. ``pixel_precision``：用户直接给像素当量（mm/pixel），最明确；
-      2. ``precision_model`` + ``tolerance``：按声明的模型从整机公差分配；
-      3. ``precision_requirement``：已确认的视觉允许误差；
-      4. ``tolerance`` + 默认模型：未声明模型时按整机分配 1/10（保守兜底）。
+      2. ``precision_requirement``：客户/合同明确给出的测量或检测精度，
+         直接作为视觉指标（÷亚像素因子），不再按整机公差分配；
+      3. ``precision_model`` + ``tolerance``：声明了整机公差分配模型；
+      4. ``tolerance`` + 默认模型：未声明模型时按行业常规 30% 分配（兜底）。
 
     返回 ``None`` 表示精度口径完全缺失（调用方应判 FAIL/提示补参数）。
     """
@@ -268,8 +273,11 @@ def resolve_precision_budget(params: Dict) -> Optional[Dict]:
     tolerance = _as_float(params.get('tolerance'))
 
     # --- 2/4. 从整机公差分配 ---
-    if tolerance and tolerance > 0 and (model_declared or
-                                        not _as_float(params.get('precision_requirement'))):
+    # 2026-11-22 口径修正：precision_requirement 是"视觉/测量精度"这种最明确的
+    # 指标，必须绝对优先于 tolerance。旧逻辑在 precision_model 已声明时让
+    # tolerance 反过来压过 precision_requirement，导致 config 同时写两者时
+    # 日志说"精度优先"、预算却按公差算，选型链与核验链口径分裂。
+    if tolerance and tolerance > 0 and not _as_float(params.get('precision_requirement')):
         if tolerance_type == 'bilateral':
             band = tolerance * 2.0
             band_text = f"±{tolerance:g}mm（带宽 {band:g}mm）"
@@ -343,10 +351,16 @@ def resolve_precision_budget(params: Dict) -> Optional[Dict]:
             'basis_text': basis,
         }
 
-    # --- 3. 已确认的视觉允许误差 ---
+    # --- 3. 已确认的视觉允许误差 / 客户测量精度 ---
     precision = _as_float(params.get('precision_requirement'))
     if precision and precision > 0:
         pixel_max = precision / pixel_factor
+        # 2026-11-22：客户说"测量精度/检测精度 X"时，X 就是视觉系统要保证的
+        # 指标，直接 ÷ 亚像素因子，不再乘分配比例（旧实现把它当整机公差
+        # 再分 1/10，导致 0.5mm 被算成 16.7μm/px，严了 10 倍）。
+        source_is_measurement = str(
+            params.get('precision_basis') or '') == 'measurement_accuracy'
+        source_label = '客户测量精度' if source_is_measurement else '视觉允许误差'
         return {
             'mode': 'explicit_precision',
             'mode_label': PRECISION_MODE_LABEL['explicit_precision'],
@@ -360,9 +374,13 @@ def resolve_precision_budget(params: Dict) -> Optional[Dict]:
             'pixel_factor': pixel_factor,
             'pixel_precision_max_mm': pixel_max,
             'pixel_precision_max_um': pixel_max * 1000,
-            'assumptions': [f'视觉允许误差 {precision:g}mm 已确认，未再分摊'],
+            'assumptions': [
+                (f'{source_label} {precision:g}mm 直接作为视觉指标，未再分摊'
+                 if source_is_measurement
+                 else f'视觉允许误差 {precision:g}mm 已确认，未再分摊'),
+            ],
             'is_assumption': False,
-            'basis_text': (f"视觉允许误差 {precision * 1000:.0f}μm"
+            'basis_text': (f"{source_label} {precision * 1000:.0f}μm"
                            f" ÷ {pixel_factor:g} = {pixel_max * 1000:.1f}μm/px"),
         }
 

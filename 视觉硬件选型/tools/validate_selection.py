@@ -431,7 +431,7 @@ class SelectionValidator:
             if budget.get('is_assumption'):
                 self.checks.append(CheckItem(
                     "精度口径", CheckResult.WARNING, detail,
-                    "分配比例用的是默认 1/10（未声明 precision_model）；"
+                    "分配比例用的是默认 30%（未声明 precision_model）；"
                     "请与客户确认该数字是整机结果公差还是视觉指标后写进 config"))
             else:
                 self.checks.append(CheckItem("精度口径", CheckResult.PASS, detail))

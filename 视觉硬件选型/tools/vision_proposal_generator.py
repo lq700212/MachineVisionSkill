@@ -507,18 +507,18 @@ class VisionProposalGenerator:
                 raise ValueError(
                     "【缺少精度口径】config 里 precision_requirement / tolerance / pixel_precision 均为空。\n"
                     "  修正方法（三选一，写入 project_config.json 后重跑）：\n"
-                    "    1) \"precision_requirement\": 0.03   ← 用户/合同给的设备检测精度(mm)\n"
-                    "    2) \"tolerance\": 0.25               ← 图纸公差(±0.25mm)，系统按公差/10反推\n"
-                    "    3) \"pixel_precision\": 0.01           ← 用户明说的像素精度(mm/pixel)，系统×亚像素因子换算\n"
+                    "    1) \"precision_requirement\": 0.03  ← 客户/合同给的视觉测量或检测精度(mm)\n"
+                    "    2) \"tolerance\": 0.25             ← 图纸公差（±0.25 填 0.25，并把 tolerance_type 设为 bilateral）\n"
+                    "    3) \"pixel_precision\": 0.01          ← 用户明说的像素精度(mm/pixel)，系统×亚像素因子换算\n"
                     "  注意：不要自己发明口径，不确定时向用户确认。")
             else:
                 print("\n" + "=" * 60)
                 print("【必须】需要提供精度信息")
                 print("=" * 60)
                 print("请选择输入方式：")
-                print("  1. 直接输入精度（如 0.012mm）")
-                print("  2. 输入公差（系统自动反推精度，精度=公差×1/10）")
-                print("  示例：公差±0.25mm → 精度=0.25×1/10=0.025mm")
+                print("  1. 直接输入精度（测量/检测精度，如 0.012mm）")
+                print("  2. 输入图纸公差（±X 形式，系统按整机分配比例换算）")
+                print("  示例：公差±0.25mm → 带宽 0.5mm × 视觉分配 30% ÷ 3 像素 ≈ 0.05mm/px")
 
                 while True:
                     choice = input("\n请选择 (1/2): ").strip()
@@ -553,7 +553,16 @@ class VisionProposalGenerator:
         # 低配方案。必须由用户确认口径（改填 tolerance 或显式确认非公差）才继续。
         _prec = validated.get('precision_requirement')
         _prec_confirmed = bool(validated.get('precision_basis_confirmed'))
-        if _prec is not None and not has_tolerance and not _prec_confirmed:
+        _prec_basis = str(validated.get('precision_basis') or '')
+        # 2026-11-22：客户明确说"测量精度/检测精度 0.5mm"时，0.5mm 就是视觉
+        # 指标，直接 ÷ 亚像素因子；不能再当成装配公差拦截。只有模糊的
+        # "精度 0.5mm"才保留复核（问用户是图纸公差还是检测精度）。
+        _explicit_visual = _prec_basis == 'measurement_accuracy'
+        if _explicit_visual and _prec is not None:
+            print(f"\n  [精度口径] 用户明确给出测量精度 {float(_prec):g}mm，"
+                  "按视觉指标直接计算（÷亚像素因子），不再做整机公差分配")
+        if (_prec is not None and not has_tolerance and not _prec_confirmed
+                and not _explicit_visual):
             try:
                 _prec_val = float(_prec)
             except (TypeError, ValueError):
@@ -564,16 +573,17 @@ class VisionProposalGenerator:
             if _prec_val >= 0.2 and (_positioning or not _dt):
                 _msg = (
                     "\n  [口径复核·已中止] precision_requirement ="
-                    f" {_prec_val:g}mm 偏大，更像装配公差而非设备检测精度。\n"
-                    "    这条口径会把精度链放松 10 倍（相机严重低配），"
-                    "必须先向用户确认：\n"
+                    f" {_prec_val:g}mm 偏大，且未说明是测量精度还是图纸公差。\n"
+                    "    填错会把精度链放松数倍（相机低配），必须先向用户确认：\n"
                     "    问法：“您说的精度/偏差 X mm，是图纸公差(±X)，"
-                    "还是视觉系统要达到的检测精度？”\n"
+                    "还是视觉系统要达到的测量/检测精度？”\n"
                     "    用户答“公差/偏差”→ 改用 \"tolerance\": "
-                    f"{_prec_val:g}（系统按/10反推 {_prec_val / 10:g}mm）；\n"
-                    "    用户明确答“就是设备检测精度，不是公差”→ 在 config 加 "
-                    "\"precision_basis_confirmed\": true 后重跑。\n"
-                    "    禁止自行添加该确认字段来绕过本检查（等于发明口径）。"
+                    f"{_prec_val:g}，并把 tolerance_type 设为 bilateral（±X）"
+                    "或 total（已给总带宽）；\n"
+                    "    用户明确答“就是测量/检测精度，不是公差”→ 在 config 加 "
+                    "\"precision_basis\": \"measurement_accuracy\" 后重跑"
+                    "（或把原话“测量精度 X mm”交给 --text 入口）。\n"
+                    "    禁止自行添加确认字段来绕过本检查（等于发明口径）。"
                 )
                 if self.auto_mode:
                     raise ValueError(_msg)
@@ -698,8 +708,9 @@ class VisionProposalGenerator:
             for note in budget.get('assumptions') or []:
                 print(f"    · {note}")
             if budget.get('is_assumption'):
-                print("  [口径提示] precision_model 未声明，按整机分配 1/10 兜底；"
-                      "交付前须与客户确认该数字是整机结果公差还是视觉指标")
+                print("  [口径提示] precision_model 未声明，按行业常规视觉分配 30% 兜底"
+                      "（等效整机公差 ÷ 9~10）；交付前须与客户确认该数字是整机结果公差"
+                      "还是视觉指标")
 
         # 统一精度口径（2026-11-21）：三个输入分支最终都落到同一预算结构，
         # 供核验器/PPT 复用，避免各处再按 /10 或 /3 二次换算
@@ -1619,6 +1630,7 @@ class VisionProposalGenerator:
                 'created_at': datetime.now().isoformat(),
                 'detection_type': params.get('detection_type'),
                 'precision_requirement': params.get('precision_requirement'),
+                'precision_basis': params.get('precision_basis'),
                 'precision_basis_confirmed': bool(
                     params.get('precision_basis_confirmed')),
                 'precision_model': params.get('precision_model'),
@@ -1749,7 +1761,7 @@ def main():
     parser.add_argument('--no_verify', action='store_true',
                         help='跳过生成后自动验收（缺省自动跑规则自查+导出页面图）')
     parser.add_argument('--version', action='version',
-                        version='视觉硬件选型 skill v1.14.0')
+                        version='视觉硬件选型 skill v1.15.0')
 
     args = parser.parse_args()
 

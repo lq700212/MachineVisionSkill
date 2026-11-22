@@ -46,10 +46,13 @@ class TestPrecisionPriority(unittest.TestCase):
                                msg='precision_requirement被tolerance覆盖=口径漂移bug复发')
 
     def test_tolerance_only_backfill(self):
-        """回归: 只给公差时按公差/10反推精度"""
+        """只给公差时按默认整机分配（0.25×30%=0.075mm 视觉允许误差）"""
         v = self.gen._validate_params(dict(self.base, tolerance=0.25))
-        self.assertAlmostEqual(v['precision_requirement'], 0.025, places=6,
-                               msg='仅tolerance时应反推0.025')
+        self.assertAlmostEqual(v['precision_requirement'], 0.075, places=6,
+                               msg='仅tolerance时应按 30% 分配得 0.075mm')
+        self.assertAlmostEqual(
+            v['precision_budget']['pixel_precision_max_mm'], 0.025, places=6,
+            msg='像素当量上限应为 0.075÷3=0.025mm')
 
     def test_missing_precision_raises_with_guide(self):
         """注入: 两口径全空 → 非交互环境报可执行指引而非卡死/静默默认"""
@@ -742,9 +745,23 @@ class TestPrecisionUnitHeuristic(unittest.TestCase):
         msg = str(cm.exception)
         self.assertIn('口径复核', msg)
         self.assertIn('tolerance', msg)
-        self.assertIn('0.05', msg, msg='应提示按公差/10 反推 0.05mm')
-        self.assertIn('precision_basis_confirmed', msg,
-                      msg='必须给出"确为设备精度"的显式确认出口')
+        self.assertIn('bilateral', msg,
+                      msg='应提示 ±X 用 bilateral（带宽×2）')
+        self.assertIn('measurement_accuracy', msg,
+                      msg='必须给出"确为测量精度"的显式声明出口')
+
+    def test_measurement_accuracy_basis_passes(self):
+        """2026-11-22：客户明确说"测量精度0.5mm" → 0.5 就是视觉指标，放行。
+
+        这与"模糊的精度0.5mm"不同：后者仍要拦截问用户。
+        """
+        out = self._validate_capture(
+            {'precision_requirement': 0.5,
+             'precision_basis': 'measurement_accuracy',
+             'detection_type': '定位引导',
+             'field_of_view': {'width': 24, 'height': 19.2}, 'cycle_time': 1})
+        self.assertNotIn('已中止', out)
+        self.assertIn('测量精度', out)
 
     def test_confirmed_precision_passes(self):
         """用户拍板确为设备精度后，显式确认字段可放行"""
@@ -1043,11 +1060,46 @@ class TestPrecisionBudget(unittest.TestCase):
         self.assertEqual(b['mode'], 'explicit_precision')
         self.assertAlmostEqual(b['pixel_precision_max_um'], 10.0)
 
-    def test_tolerance_only_defaults_to_budget_1_10(self):
+    def test_measurement_accuracy_not_allocated(self):
+        """2026-11-22：客户测量精度 0.5mm 直接÷3=166.7μm/px。
+
+        行业里"测量精度"是视觉系统指标，不再乘整机分配比例；
+        旧实现按整机公差 1/10 再÷3 会算成 16.7μm/px，严 10 倍。
+        """
+        b = self.resolve({'precision_requirement': 0.5,
+                          'precision_basis': 'measurement_accuracy'})
+        self.assertEqual(b['mode'], 'explicit_precision')
+        self.assertAlmostEqual(b['allowed_error_mm'], 0.5)
+        self.assertAlmostEqual(b['pixel_precision_max_um'], 166.67, delta=0.1)
+        self.assertIn('客户测量精度', b['basis_text'])
+
+    def test_precision_requirement_beats_tolerance_with_model(self):
+        """回归：即使 precision_model 已声明，precision_requirement 也优先。
+
+        旧实现 model_declared=True 时让 tolerance 压过 precision_requirement，
+        日志说"精度优先"、预算却按公差算，选型链与核验链口径分裂。
+        """
+        b = self.resolve({
+            'precision_requirement': 0.5,
+            'precision_basis': 'measurement_accuracy',
+            'tolerance': 0.05,
+            'precision_model': {'mode': 'system_budget',
+                                'tolerance_type': 'bilateral',
+                                'allocation_ratio': 0.3, 'pixel_factor': 3.0}})
+        self.assertEqual(b['mode'], 'explicit_precision')
+        self.assertAlmostEqual(b['allowed_error_mm'], 0.5)
+        self.assertAlmostEqual(b['pixel_precision_max_um'], 166.67, delta=0.1)
+
+    def test_tolerance_only_defaults_to_industry_budget(self):
+        """未声明模型时按行业常规 30% 分配：0.5×0.3÷3=50μm，等效公差÷10。
+
+        2026-11-22 前默认 1/10 再÷3=16.7μm（公差÷30），比基恩士/HSM
+        的"像素当量=公差带÷10"严 3 倍，属于过度保守。
+        """
         b = self.resolve({'tolerance': 0.5})
         self.assertEqual(b['mode'], 'system_budget')
         self.assertTrue(b['is_assumption'], '未声明模型必须标记为假设')
-        self.assertAlmostEqual(b['pixel_precision_max_um'], 16.67, delta=0.1)
+        self.assertAlmostEqual(b['pixel_precision_max_um'], 50.0, delta=0.1)
 
     def test_all_missing_returns_none(self):
         self.assertIsNone(self.resolve({}))
@@ -1086,8 +1138,8 @@ class TestValidatePrecisionBasis(unittest.TestCase):
         basis = next(c for c in checks if c.name == '精度口径')
         self.assertEqual(basis.result.value, '[WARN]',
                          '未声明 precision_model 时分配比例只是假设，必须 WARN')
-        self.assertIn('10%', basis.message,
-                      '未声明模型时应按默认 1/10 分配并在报告中标出')
+        self.assertIn('30%', basis.message,
+                      '未声明模型时应按行业常规 30% 分配并在报告中标出')
 
     def test_precision_chain_uses_budget(self):
         checks = self._checks({'precision_model': {

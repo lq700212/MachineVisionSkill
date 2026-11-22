@@ -237,11 +237,20 @@ class UserDataParser:
         precision = self._extract_precision(text)
         if precision:
             params['precision_requirement'] = precision
+            # 2026-11-22：明确写"测量精度/检测精度/设备精度"的，是视觉系统要
+            # 保证的指标，直接 ÷ 亚像素因子，不再按整机公差分配；模糊的
+            # "精度 X"不设 basis，由 _validate_params 拦截并要求用户确认。
+            if self._is_measurement_accuracy_text(text):
+                params['precision_basis'] = 'measurement_accuracy'
 
-        # 提取图纸公差（±X，如 38.50±0.25；无明确精度时按公差/10反推）
+        # 提取图纸公差（±X，如 38.50±0.25；走整机分配模型换算）
         tolerance = self._extract_tolerance(text)
         if tolerance is not None:
             params['tolerance'] = tolerance
+            # ±X 是双向公差，带宽必须是 2X。不声明 tolerance_type 时
+            # resolve_precision_budget 会按 unilateral 只算 X，正好少一半。
+            params['tolerance_type'] = 'bilateral'
+            params.setdefault('precision_basis', 'drawing_tolerance')
 
         # 提取节拍要求
         cycle_time = self._extract_cycle_time(text)
@@ -305,8 +314,18 @@ class UserDataParser:
                 return '尺寸测量'
         return None
 
+    def _is_measurement_accuracy_text(self, text: str) -> bool:
+        """文本是否明确把精度定义为视觉/测量指标（而非图纸公差）。
+
+        只有带这些前缀/关键词的精度才允许跳过"公差 vs 检测精度"复核；
+        光写"精度 0.5mm"仍视为模糊口径，会触发用户确认。
+        """
+        keywords = ('测量精度', '检测精度', '设备精度', '重复精度',
+                    '定位精度', '测量重复性', '视觉精度')
+        return any(k in text for k in keywords)
+
     def _extract_tolerance(self, text: str) -> Optional[float]:
-        """提取图纸公差（±X 形式，如 38.50±0.25 / ±0.25mm；系统按公差/10反推精度）"""
+        """提取图纸公差（±X 形式，如 38.50±0.25 / ±0.25mm；按整机分配模型换算）"""
         match = re.search(r'±\s*([0-9]+(?:\.[0-9]+)?)', text)
         if match:
             value = float(match.group(1))

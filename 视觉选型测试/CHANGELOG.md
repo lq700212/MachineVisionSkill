@@ -1,5 +1,18 @@
 # 视觉选型测试 - 变更记录
 
+## [v1.1.2]（2026-11-22）
+### 新增：精度口径语义回归（被测 skill v1.15.0，2026-11-22）
+- **背景**：被测 skill 修正精度口径语义——"测量精度 X"直接÷亚像素因子（不再按整机公差
+  分摊）、"±X"带宽翻倍、`precision_requirement` 绝对优先于 `tolerance`、默认分配 1/10→3/10。
+- **新增 7 条**：
+  - `test_selection_core.py`：测量精度不分配（0.5mm→166.7μm/px）、precision_requirement
+    优先于已声明 model、默认 30% 分配（0.5mm→50μm，等效公差÷10）、核验报告显示 30%、
+    tolerance-only 回填 0.075mm；
+  - `test_text_entry.py`："测量精度0.5mm"自动标 `measurement_accuracy`、"±0.5mm"自动标
+    `bilateral`（带宽 1.0mm）、模糊"精度0.5mm"不设 basis 保留人工确认；
+  - `test_workflow_contract.py`：`precision_basis=measurement_accuracy` 端到端 exit 0。
+- **验证**：全量 **218/218 通过**，失败 0、错误 0、跳过 0（29.9s，退出码 0）。
+
 ## Unreleased（v1.1.1）
 
 ### 新增：行业规范回归 + 跨 shell 编码稳定（2026-11-21）

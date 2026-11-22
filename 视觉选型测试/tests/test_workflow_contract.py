@@ -86,7 +86,22 @@ class TestExitCodes(unittest.TestCase):
             log = (p.stdout or '') + (p.stderr or '')
             self.assertEqual(p.returncode, 2, log[-800:])
             self.assertIn('口径复核', log)
-            self.assertIn('precision_basis_confirmed', log)
+            self.assertIn('measurement_accuracy', log)
+        finally:
+            vt_common.rmtree(tmp)
+
+    def test_measurement_accuracy_exit0(self):
+        """客户明确说"测量精度0.5mm" → basis=measurement_accuracy 直接放行"""
+        tmp = vt_common.temp_dir('vt_wf4b_')
+        try:
+            cfg = os.path.join(tmp, 'project_config.json')
+            out = os.path.join(tmp, 'output')
+            write_cfg(cfg, {'precision_requirement': 0.5,
+                            'precision_basis': 'measurement_accuracy',
+                            'detection_type': '定位引导'})
+            p = run_gen(cfg, out)
+            self.assertEqual(p.returncode, 0,
+                             ((p.stdout or '') + (p.stderr or ''))[-800:])
         finally:
             vt_common.rmtree(tmp)
 

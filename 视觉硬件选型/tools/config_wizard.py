@@ -61,9 +61,9 @@ class ConfigWizard:
         
         # 精度/公差输入（二选一）
         print("\n精度要求（输入精度或公差，二选一）:")
-        print("  方式1: 直接输入精度，如 0.012mm")
-        print("  方式2: 输入公差，系统自动反推精度（精度=公差×1/10）")
-        print("  示例: 公差±0.25mm → 精度=0.25×1/10=0.025mm")
+        print("  方式1: 直接输入测量/检测精度，如 0.012mm（直接÷亚像素因子）")
+        print("  方式2: 输入图纸公差 ±X，系统按整机分配比例换算")
+        print("  示例: 公差±0.25mm → 带宽0.5mm × 视觉分配30% ÷ 3像素 ≈ 0.05mm/px")
         
         precision_input = input("\n请输入精度(mm)或公差(mm) [0.012]: ").strip()
         
@@ -77,11 +77,12 @@ class ConfigWizard:
                 choice = input("  请选择 (1/2) [1]: ").strip()
                 
                 if choice == '2':
-                    # 输入的是公差，自动反推精度
+                    # 输入的是公差（±X），自动按整机分配模型换算
                     self.config['tolerance'] = value
+                    self.config['tolerance_type'] = 'bilateral'
                     # 精度会在vision_proposal_generator中自动计算
-                    print(f"  已输入公差: ±{value}mm")
-                    print(f"  系统将自动反推精度: {value}×1/10={value*0.1}mm")
+                    print(f"  已输入公差: ±{value}mm（带宽 {value * 2:g}mm）")
+                    print(f"  系统将按视觉分配 30% ÷ 3 像素换算像素当量上限")
                 else:
                     # 输入的是精度，直接使用
                     self.config['precision_requirement'] = value

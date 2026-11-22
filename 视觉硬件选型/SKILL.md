@@ -21,41 +21,61 @@ description: "机器视觉硬件选型专家，根据检测需求自动完成工
 
 ## 选型方法论（已固化到脚本，AI无需重新推导）
 
-### 第1步 需求归一化
+### 第1步 需求归一化（口径先分清，再谈算法）
+
+**第一件事：分清客户给的是"测量精度"还是"公差"。两者不是一回事，禁止互相顶替。**
+
+| 客户原话 | 含义 | 填哪个字段 | 换算 |
+|---------|------|-----------|------|
+| "测量精度/检测精度 0.5mm" | 视觉系统要保证的指标 | `precision_requirement: 0.5` + `precision_basis: "measurement_accuracy"` | 0.5 ÷ 3 = 166.7μm/px（**不再分摊**） |
+| "±0.5mm"（图纸公差） | 双向公差，带宽 2×0.5=1.0mm | `tolerance: 0.5` + `tolerance_type: "bilateral"` | 1.0 × 30% ÷ 3 = 100μm/px |
+| "公差带 0.5mm"（已给总带宽） | 单向总带宽 0.5mm | `tolerance: 0.5` + `tolerance_type: "total"` | 0.5 × 30% ÷ 3 = 50μm/px |
+| "像素精度 0.01mm/pixel" | 直接指定像素当量 | `pixel_precision: 0.01` | 直接采用 |
+| 只说"精度 0.5mm"（无限定词） | **口径不明** | 先问用户，禁止猜 | 脚本 exit 2 并给原话问法 |
+
+> 口诀：**"测量精度 X" = 用 X 直接算；"±X" = 带宽 2X 再分配。**
+> 客户说"测量精度 0.5mm"却按 ±0.5 算，带宽多一倍、再乘分配比例，最后严约 20 倍。
+
+**分配比例默认 30%（行业常规）**：视觉占整机公差 1/3，再除以 3 像素亚像素判据，
+等效"整机公差 ÷ 9"，与基恩士/HSM 的"像素当量 = 公差带 ÷ 10"同一量级。
+旧默认 10% 再 ÷3 = ÷30，比行业严 3 倍，会把相机选贵一个档。
+
 | 输入 | 公式 | 示例 |
 |------|------|------|
-| 公差 → 视觉允许误差 | **按 precision_model 分配**（默认整机分配 1/10） | 0.5mm × 1/5 → 0.1mm |
+| 测量/检测精度 → 像素当量 | **精度 ÷ pixel_factor** | 0.5 ÷ 3 → 166.7μm/px |
+| 公差 → 视觉允许误差 | **公差带 × allocation_ratio（默认 0.3）** | ±0.5 → 带宽1.0 × 30% = 300μm |
 | 视觉直测 → 像素当量 | **公差带 ÷ 10**（测量）/ 4（外观）/ 6（定位） | 0.5 ÷ 10 → 50μm/px |
 | 工件尺寸/检测区域 → 视野 | **视野 = 尺寸 × 余量(1.2或1.5)** | 50x30 ×1.2 → 60x36mm |
 | 直接给视野 | 不加余量 | fov:60x40 → 60x40mm |
 
-#### ⚠️ 两套精度口径不可叠加（2026-11-21 修正）
-
-业界有两种"公差→像素当量"算法，前提不同，**禁止连用**：
+#### ⚠️ 三套精度口径不可叠加（2026-11-22 修正）
 
 | 口径 | 公式 | 何时用 | 依据 |
 |------|------|--------|------|
-| **A 视觉直测** | 像素当量 = 公差带 ÷ K（测量 10 / 外观 4 / 定位 6） | 视觉直接测这个尺寸，合同精度就是视觉指标 | 基恩士：尺寸测量 测量精度=10×像素精度；HSM：像素≤公差带1/10 |
-| **B 整机分配** | 视觉允许误差 = 整机公差带 × 分配比例(1/10~1/3)；像素当量 = 允许误差 ÷ 3 | 0.5mm 是整机贴合/装配结果，视觉只是链路一环 | 误差预算 + 亚像素判据（边缘定位≈1/3 像素） |
+| **A 客户测量精度** | 像素当量 = 精度 ÷ 3 | 客户明确说"测量精度/检测精度 X" | 3~5 像素亚像素判据 |
+| **B 整机公差分配** | 像素当量 = 公差带 × 分配比例(默认30%) ÷ 3 | 客户给的是整机贴合/装配公差（±X） | 误差预算（视觉占1/3）+ 亚像素判据 |
+| **C 视觉直测** | 像素当量 = 公差带 ÷ K（测量10/外观4/定位6） | 视觉独占整个公差带（合同精度即视觉指标） | 基恩士/HSM |
 
-旧版把 A 的 ÷10 和 B 的 ÷3 连着用，等价于 `公差÷30`，比行业常规严 3 倍，
-还把中间值叫"设备精度"（实际是"视觉允许误差"）。现由 `precision_model` 显式选择：
+A 与 B 的区别只在"这个数字是谁的指标"：A 的数字本来就是视觉的，不能再分配；
+B 的数字是整机的，必须先分给视觉。禁止把 B 的 ÷3 再叠到 C 的 ÷10 上
+（旧版 `公差÷30` 的 bug，比行业严 3 倍）。现由 `precision_model` 显式选择：
 
 ```json
 "precision_model": {
   "mode": "system_budget",          // 或 direct_measurement
   "application": "positioning",     // positioning / measurement / defect
-  "tolerance_type": "unilateral",   // unilateral=给定值即带宽；bilateral=±值带宽×2
-  "allocation_ratio": 0.2,          // 视觉占比，客户确认后填；默认 0.1
+  "tolerance_type": "bilateral",    // unilateral=给定值即带宽；bilateral=±值带宽×2；total=已给总带宽
+  "allocation_ratio": 0.3,          // 视觉占比，行业常规 1/3；保守项目 0.1~0.2
   "pixel_factor": 3.0
 }
 ```
 
 判别口诀：**公差是"产品允许差多少"，精度是"视觉要测多准"**。
-把 0.5mm 公差误填成 `precision_requirement`（视觉指标）会让精度链松 10 倍；
-把整机公差当"视觉直测公差"又会严 3 倍——两条路都不对，必须声明口径。
-脚本对 `precision_requirement ≥0.2mm` 且定位/贴装类会**直接中止(exit 2)**
-并给出确认问法；用户确认"是视觉精度、不是公差"后填 `precision_basis_confirmed: true` 才继续。
+客户说"测量精度 0.5mm"就填 `precision_requirement=0.5` + `precision_basis=measurement_accuracy`，
+直接 ÷3；客户说"±0.5mm"就填 `tolerance=0.5` + `tolerance_type=bilateral`，带宽 2×0.5。
+脚本对"未声明 `precision_basis`、`precision_requirement ≥0.2mm` 且定位/贴装"的项目
+会**直接中止(exit 2)**并给出原话问法；用户明确回答"就是测量/检测精度"后
+填 `precision_basis: "measurement_accuracy"` 才继续。
 
 ### 第2步 分辨率需求（需求侧推导，与硬件无关）
 ```
@@ -241,8 +261,8 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 - `[无解诊断]` / `✅ 标准口径有解` → 按 ⛔ 防死循环铁律处理
 - **`output\_rejected\` 里的任何文件都不是交付物**：禁止改名、复制回 `output\` 或写进汇报
 - **禁止加 `--no_verify`**：跳过验收 ≠ 通过，只用于人工排障，产物不得交付
-- **禁止自行填 `precision_basis_confirmed: true`**：该字段只能由用户明确回答
-  “是设备检测精度、不是公差”后填写。模型自己加 = 发明口径
+- **禁止自行填 `precision_basis: "measurement_accuracy"`**：该字段只能由用户明确回答
+  “是测量/检测精度、不是公差”后填写。模型自己加 = 发明口径
 - **禁止读取 `output\ppt_review\` 里的图片**（slide_N.png/overview.png）——那是给用户
   看的预览；质量把关靠规则自查（纯文本机检），模型读图浪费大量 token 且不需要
 
@@ -261,8 +281,8 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
    并向用户说明需扩库或送样打光验证，**不得兜底填一个型号**
 5. **禁止用 `--no_verify` 交付**；**禁止把 `output\_rejected\` 里的文件改名/复制当成果**
    ——那是被规则自查判 FAIL 的产物，只作排障留证
-6. **禁止自行填 `precision_basis_confirmed: true`**。脚本因"精度口径偏大"中止(exit 2)时，
-   只能把确认问题转问用户；用户明确说"是设备检测精度、不是公差"后才可填
+6. **禁止自行填 `precision_basis: "measurement_accuracy"`**。脚本因"精度口径偏大"中止(exit 2)时，
+   只能把确认问题转问用户；用户明确说"是测量/检测精度、不是公差"后才可填
 7. 标准任务只读本节（最短路径三步）；本文件其余内容（使用方式/扩库/排障）按需查阅
 
 ### 新项目从0：需求登记（唯一需要AI理解的环节）
@@ -275,9 +295,9 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 2. **config 模式**：复制 skill 目录的 `config_template.json` 为工作区 `project_config.json`，
    把 null 换成真实值。**先跑 `--check-config` 自检**（几秒出结论，见最短路径第0步），
    通过后再生成。字段说明与**口径决策表**都写在模板内：
-    - 精度口径三选一：用户明说"像素精度X mm/pixel" → `pixel_precision`（mm/pixel，脚本×亚像素因子自动换算）；合同/用户明确视觉精度 → `precision_requirement`；只有图纸公差 → `tolerance` + `precision_model`（声明 mode/分配比例，脚本据此换算）。**不确定就问用户，不要发明口径**
+    - 精度口径四选一：用户明说"像素精度X mm/pixel" → `pixel_precision`（mm/pixel，脚本×亚像素因子自动换算）；明确说"测量精度/检测精度 X mm" → `precision_requirement: X` + `precision_basis: "measurement_accuracy"`（数字直接÷3，不再分配）；"±X mm"图纸公差 → `tolerance: X` + `tolerance_type: "bilateral"` + `precision_model`（带宽2X再按分配比例换算）；只说"精度X"没说限定词 → **先问用户**。**不确定就问用户，不要发明口径**
     - **口径第4种：用户拍板指定相机（客户无精度要求）** → 用 `pixel_precision` 反推：基准=视野长边÷相机水平像素，再放宽使余量比>1.3（相机评分进"最佳区间"，--auto 自然选中指定相机，精度链余量也达标）。例：指定2000万（5472宽）+视野128 → 基准0.0234，取0.031
-    - **单位铁律**：`precision_requirement` 的单位是毫米（视觉允许误差，不是整机精度），不是像素精度(mm/pixel)！像素当量上限 = precision_requirement ÷ pixel_per_precision（0.03÷3=0.01mm/pixel）。用户说"精度0.03"默认指视觉允许误差；用户明说"像素精度是X mm/pixel"时填 `pixel_precision` 字段，**禁止塞进 precision_requirement**（会被再÷3，差3倍导致无解）
+    - **单位铁律**：`precision_requirement` 的单位是毫米（视觉测量/检测精度），不是像素精度(mm/pixel)！像素当量上限 = precision_requirement ÷ pixel_per_precision（0.5÷3=0.167mm/pixel）。用户明说"像素精度是X mm/pixel"时填 `pixel_precision` 字段，**禁止塞进 precision_requirement**（会被再÷3，差3倍导致无解）
    - 尺寸三选一：`detection_area`（检测区域，推荐）> `part_size`（整体外形）> `field_of_view`（最终视野）
    - 光源（可选）：`light_brand_priority` 指定品牌优先级（默认追光者>孚根>OPT>CCS）；
      `light_angle` 强制角度。**必须问清检测任务是“定位/测量/孔中心”还是“查划痕/凹凸/字符”**——
