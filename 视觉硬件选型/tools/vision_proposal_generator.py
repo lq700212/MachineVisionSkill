@@ -1761,7 +1761,7 @@ def main():
     parser.add_argument('--no_verify', action='store_true',
                         help='跳过生成后自动验收（缺省自动跑规则自查+导出页面图）')
     parser.add_argument('--version', action='version',
-                        version='视觉硬件选型 skill v1.15.0')
+                        version='视觉硬件选型 skill v1.15.3')
 
     args = parser.parse_args()
 

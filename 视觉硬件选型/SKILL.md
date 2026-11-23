@@ -365,6 +365,14 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
   前缀匹配无法区分 → 现按"本次选中型号"白名单放行，旧型号/历史假型号仍拦截
 - WD数值替换变长会在窄框断行（"51.1m/m"）→ 已对标注框关自动换行
 - 长描述塞短标注框会溢出叠压 → 已规范为短类型词
+- **示意图标注线与实体脱节**（2026-11-23 客户退回）：`320mm` 端点写死 1.72/4.67，
+  而相机顶实际 1.40、工件面 4.55（上端悬空、下端扎进工件）；`220mm` 只有竖线没刻度
+  → 画法收敛到 skill 模块 `tools/ppt_diagram.py`（传 shape 自动读边界）+ `check_ppt_quality` C8 机检；
+  **只改项目里的 build_ppt.py 无效**——换工作区会重写脚本，必须模块化才不复现
+- **工作距离起点取错**（2026-11-23 第二次客户退回）：`320mm` 虽贴到了实体，但起点是相机顶面，
+  把机身高度算进了 WD；客户指出 WD = 镜头前端面 → 检测面
+  → 新增 `add_wd_dim()` 固定 `optic.bottom → target.top`（C8 只能查"贴没贴实体"，
+  查不出"贴错实体"，WD 语义必须靠专用 API 保证）
 - 以上全部可通过 check_ppt_quality 的注入测试复现检出
 
 ## 使用方式
@@ -503,6 +511,66 @@ python tools/generate_ppt.py --template 模板.pptx --output 输出.pptx \
 3. **保留全部样式**：只改文字与图片，绝不写入阴影/发光等任何效果
 4. 视野数值使用相机+镜头闭环计算的实际视野，与像素精度自洽
 5. 已知限制：模板"方案设计"页（多视角混排描述）不做替换，避免跨视角误改
+
+### 示意图尺寸标注（2026-11-23 客户退回事故｜**必须用 skill 模块**）
+
+> 事故复盘：只在项目 `build_ppt.py` 里把坐标"变量化"**不够**——换工作区会
+> 重新生成脚本，手写坐标的毛病会原样复现。正确画法必须由 skill 提供，项目只 import。
+
+**硬规则：新建/重写 `build_ppt.py` 画示意图时，必须用 skill 模块
+`ppt_diagram.add_wd_dim` / `add_dim_v`，禁止在项目里自写标注函数，
+禁止手写标注线坐标。**
+
+### 物理语义（2026-11-23 第二次客户退回）
+
+**工作距离 WD = 光学件前端面 → 被检测表面**，相机机身高度不计入。
+
+| 标注 | 起点 | 终点 | 错误画法 |
+|---|---|---|---|
+| 镜头工作距离（320mm） | **镜头底面**（前端面） | 工件表面 | ❌ 相机顶面（多算机身） |
+| 光源工作距离（220mm） | **光源底面**（发光面） | 工件表面 | ❌ 光源顶面 |
+
+示意图里相机、镜头必须是两个独立实体；只画一个"相机块"就没法标 WD。
+
+```python
+import os, sys
+SKILL_TOOLS = r'C:\Users\Administrator\.config\opencode\skills\视觉硬件选型\tools'
+sys.path.insert(0, SKILL_TOOLS)
+from ppt_diagram import add_wd_dim, self_check
+
+cam   = add_box(s, ...)   # 项目的 add_box 必须 return shape
+lens  = add_box(s, ...)   # 镜头单独一块，不能和相机合并
+light = add_box(s, ...)
+work  = add_box(s, ...)
+
+# 320mm：镜头前端面 → 工件表面（add_wd_dim 强制取 lens.bottom → work.top）
+add_wd_dim(s, 0.80, f'{LENS_WD:.0f}mm', optic=lens, target=work, color=GRAY)
+# 220mm：光源发光面 → 工件表面
+add_wd_dim(s, 1.30, f'{LIGHT_WD:.0f}mm', optic=light, target=work,
+           text_side='right', color=GRAY)
+
+issues = self_check(s)          # 构建期自检，别等客户发现
+if issues:
+    raise SystemExit('尺寸标注不合格: ' + '; '.join(issues))
+```
+
+模块负责的四件事（对应 C8 判据）：
+
+1. **端点 = 实体边界**：传 shape 时读 `top/height` 自动算，物理上写不出错；
+   传数值时必须是实体派生变量（`LENS_BOT`/`WORK_TOP`），不许写字面量
+2. **WD 语义内置**：`add_wd_dim` 固定取 `optic.bottom → target.top`，
+   调用方无法把相机顶面当起点（要标非 WD 的高度才用 `add_dim_v`）
+3. **两端刻度横线**：默认全长 0.20in，杜绝"一条光秃竖线"（旧版 220mm 就漏了）
+4. **尺寸界线**：从刻度水平伸到实体边缘外侧 0.03in；`ext_dir` 支持 left/right/both
+
+防呆：`top` 落在 `bottom` 下方时抛 `ValueError`，画不出倒置/零高度标注；
+实体变量漏赋值（`None`）同样立即报错。
+
+兜底：`check_ppt_quality` **C8** 对成品再查一遍——纯数字 mm 文本附近有竖直标注线
+时，两端须有刻度且与实体上/下边界对齐（±0.08in）；无竖线视为普通数据标注跳过
+（不误伤硬件页的 `WD 320mm`）。WARN 文案会直接提示改用 `add_dim_v` 重绘。
+**注意 C8 只能查"贴没贴到实体"，查不出"贴错实体"**（如标到相机顶面）——
+WD 的物理语义靠 `add_wd_dim` 保证，不要绕过。
 
 ## 相机产品图与效果预览（fetch_product_image.py）
 

@@ -17,6 +17,8 @@
   C5 数值合理性复算 实际视野≥需求视野、物方分辨率≤像素精度上限、倍率在窗口内
   C6 阴影效果检查   任一页XML含effectLst/outerShdw即FAIL（曾被动过阴影）
   C7 相机图替换     硬件页右上半区应存在产品图
+  C8 尺寸标注对齐   纯数字 mm 标注（如 320mm）必须有竖直标注线 + 两端刻度，
+                    且端点与实体形状上/下边界对齐（示意图标注脱节是常见事故）
 
 用法：
   python check_ppt_quality.py --pptx 方案.pptx --selection output/selection_result.json
@@ -34,6 +36,7 @@ import sys
 import zipfile
 
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.util import Emu
 
 PT_PER_MM = 2.83465
@@ -367,6 +370,70 @@ def check_camera_image(hw_slides, slide_width_emu, slide_height_emu):
     return issues
 
 
+DIM_TEXT_RE = re.compile(r'^\d+(?:\.\d+)?\s*mm$')
+
+
+def check_dimension_annotations(slides):
+    """C8: 尺寸标注对齐检查（2026-11-23 事故固化）。
+
+    示意图里的 "320mm/220mm" 纯数字标注必须满足：
+      1. 附近有竖直标注线（无竖线视为普通数据标注，跳过不报）；
+      2. 竖线两端各有刻度横线；
+      3. 两端 y 与某个实体形状（自选图形/图片）的上/下边界对齐（±0.08in）。
+    任一不满足 → WARN。模板替换型 PPT 没有纯数字 mm 文本，不会触发。
+    """
+    EMU = 914400.0
+    issues = []
+    for idx, slide in enumerate(slides, 1):
+        lines, boxes, dim_texts = [], [], []
+        for sp in slide.shapes:
+            w, h = sp.width or 0, sp.height or 0
+            if sp.shape_type == MSO_SHAPE_TYPE.LINE or (
+                    min(w, h) < 0.02 * EMU and max(w, h) > 0.1 * EMU):
+                lines.append(sp)
+            elif sp.has_text_frame and DIM_TEXT_RE.match(sp.text_frame.text.strip()):
+                dim_texts.append(sp)
+            elif sp.shape_type in (MSO_SHAPE_TYPE.AUTO_SHAPE, MSO_SHAPE_TYPE.PICTURE):
+                boxes.append(sp)
+        for sp in dim_texts:
+            label = sp.text_frame.text.strip()
+            cx = (sp.left or 0) + (sp.width or 0) / 2
+            cy = (sp.top or 0) + (sp.height or 0) / 2
+            cand = []
+            for ln in lines:
+                lw, lh = ln.width or 0, ln.height or 0
+                if lh <= lw:
+                    continue
+                if abs((ln.left + lw / 2) - cx) > 0.95 * EMU:
+                    continue
+                if abs((ln.top + lh / 2) - cy) > 0.7 * EMU:
+                    continue
+                cand.append(ln)
+            if not cand:
+                # 无竖线 = 普通数据标注（如硬件页的 WD 320mm），不是示意图尺寸线
+                continue
+            v = min(cand, key=lambda ln: abs((ln.left + ln.width / 2) - cx))
+            for yy in (v.top, v.top + v.height):
+                y_in = float(yy) / EMU
+                has_tick = any(
+                    abs((h2.top + h2.height / 2) - yy) < 0.06 * EMU
+                    and h2.width > h2.height and h2.width > 0.12 * EMU
+                    for h2 in lines)
+                if not has_tick:
+                    issues.append(
+                        f"[WARN] 第{idx}页 {label} 端点缺刻度横线（y≈{y_in:.2f}in），"
+                        f"请用 ppt_diagram.add_dim_v 重绘")
+                aligned = any(
+                    abs(b.top - yy) < 0.08 * EMU
+                    or abs(b.top + b.height - yy) < 0.08 * EMU
+                    for b in boxes)
+                if not aligned:
+                    issues.append(
+                        f"[WARN] 第{idx}页 {label} 端点未对齐实体边界（y≈{y_in:.2f}in），"
+                        f"端点须取自实体边界（ppt_diagram.add_dim_v 传 shape）")
+    return issues
+
+
 def main():
     parser = argparse.ArgumentParser(description='生成PPT规则自查（视觉验收经验固化）')
     parser.add_argument('--pptx', required=True, help='生成的PPTX路径')
@@ -421,6 +488,8 @@ def main():
     results += [('FAIL' if not m.startswith('[WARN]') else 'WARN', m) for m in c6]
     c7 = check_camera_image(show_slides, sw, sh) if show_slides else []
     results += [('WARN', m) for m in c7]
+    c8 = check_dimension_annotations(prs.slides)
+    results += [('WARN', m) for m in c8]
 
     n_fail = sum(1 for lv, _ in results if lv == 'FAIL')
     n_warn = sum(1 for lv, _ in results if lv == 'WARN')
@@ -437,7 +506,7 @@ def main():
             lines.append(f"[{lv}] {m}")
     else:
         lines.append("全部检查项通过：无旧型号残留、光源类型两页一致、两页参数一致、"
-                     "无文本溢出风险、数值复算正确、无阴影、相机图已替换")
+                     "无文本溢出风险、数值复算正确、无阴影、相机图已替换、尺寸标注对齐")
     lines.append("-" * 66)
     lines.append("故障处理对照：")
     lines.append("  旧型号残留  → 该文本未被替换规则命中，检查generate_ppt触发词")
