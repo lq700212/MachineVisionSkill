@@ -3,6 +3,48 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-25（本次·readme v1.3.0 多端项目支持）
+
+### 改动范围
+
+1. **readme**（v1.2.0 → v1.3.0，来自 Sinan 双端项目"手机端一张图都没有"的实战缺陷）：
+   - **SKILL.md 新增 1.1「先数清有几个端」**：顶层目录 / 各端工程文件 / AGENTS 路由表 /
+     CI job 四个判定信号；产出端清单矩阵；1 端走单端骨架，≥2 端走多端骨架；
+     **有界面的端必须有界面图**，无界面的端用架构图/接口示例代图。
+   - **新增 4.2「多端骨架」**：系统全景端清单 → 按端分节（定位 + 独有能力 + 该端
+     快速开始）→ 共享能力单节；端名全文统一、功能按端归属；手机竖图用
+     `<p align="center">` + `<img width="220~280">`，不与桌面横图同表。
+   - **新增 3.2「移动端截图」与 5.2「移动端截图纪律」**：AVD 无头模拟器 +
+     `adb install` / `exec-out screencap` / `input tap|text`；真机状态栏脱敏；
+     无模拟器时用 Flutter golden test 真实渲染兜底；设计稿截图只能标"界面设计稿"；
+     iOS 仅 macOS 可截，不许用 Android 图冒充。
+   - **新增多端图片目录规范**：`docs/images/<end>/`（desktop / mobile / web / shared）。
+   - **check_readme.py 八项→十项**：新增 `--ends desktop,mobile,...`（每个端必须有对应
+     H2/H3 小节 + 至少 1 张图，缺一项 NG；不传时自动探测 ≥2 端降为 WARN）；
+     图片归属三口径（`docs/images/<end>/` 目录 / `<end>_`、`m_`、`d_` 文件名前缀 /
+     该端小节内图片）；**修复只认 Markdown 图片语法**（`<img src>` 现也参与落盘检查
+     与分端统计）；修复 ERR 级未计入 NG 的结论统计。
+   - **img_inventory.py**：排除移动端宿主壳资源目录 `res/`（Android mipmap）与
+     `Assets.xcassets/`（iOS AppIcon/LaunchImage），大小写不敏感。
+2. **根文档**：`README.md` Skill 一览的 readme 行同步新能力（数端 → 分端截图 →
+   十项核验 `--ends`）。
+
+### 验证结论
+
+- 本仓库自检：`check_readme.py .` → **NG=0 WARN=0 / RESULT: OK**；
+  `img_inventory.py .`（跳过 19 个本地安装不入库目录）→ **RESULT: OK**。
+- 实战基线：Sinan 双端项目按新流程重写 README（两端一览 + 桌面/手机分节 + 手机端
+  7 张 AVD 实拍），`check_readme.py . --ends desktop,mobile` → NG=0 WARN=0，
+  桌面 15 图 / 手机 7 图；`img_inventory.py`（`--skip-dir _build --skip-dir branding`）→ OK。
+- **README 更新判断**：需要并已更新——readme skill 的能力边界变化（八项→十项、
+  `--ends` 入口、多端支持），已同步根 README「Skill 一览」。
+
+### 建议 commit message
+
+```
+feat(readme): v1.3.0 多端项目支持（先数端→分端骨架→移动端截图路径→check --ends 分端核验）；check_readme 八项→十项并认 <img src>；img_inventory 排除移动端资源目录；README 同步 readme 一览
+```
+
 ## 2026-11-23（本次·视觉硬件选型 v1.15.1~v1.15.3 示意图标注修复 + 视觉选型测试 233 用例）
 
 ### 改动范围

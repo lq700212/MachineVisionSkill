@@ -82,7 +82,7 @@ mklink /J "C:\Users\Administrator\.agents\skills" "C:\Users\Administrator\.confi
 | [盖章专员](盖章专员/) | `seal-stamp-agent` | PDF 合同自动盖章：自动匹配现有印章的大小与位置；支持文本版/扫描件 PDF、图片（拍照件）、Excel 工作簿四类输入 | [SKILL.md](盖章专员/SKILL.md) |
 | [培训文档生成](培训文档生成/) | `training-doc-generator` | 工业上位机三份制培训文档：自动截图 → 操作员/客户技术工艺/内部版三份生成 | [SKILL.md](培训文档生成/SKILL.md) |
 | [软件卸载清理](软件卸载清理/) | `software-uninstall-cleaner` | 通用软件彻底卸载与残留清理：进程→卸载→服务→目录/注册表/快捷方式 | [SKILL.md](软件卸载清理/SKILL.md) |
-| [readme](readme/) | `readme` | 项目 README 标准生成流程：事实摸底→图片盘点→截图决策树→骨架落稿→八项卫生核验，图文并茂为默认形态 | [SKILL.md](readme/SKILL.md) |
+| [readme](readme/) | `readme` | 项目 README 标准生成流程：先数清有几个端→事实摸底（抄文件禁编造）→图片盘点→分端截图决策树（桌面静默/手机模拟器+adb/Web headless/无界面用架构图）→单端或多端骨架→十项卫生核验（`--ends` 分端锁 NG），图文并茂为默认形态 | [SKILL.md](readme/SKILL.md) |
 | [viewturbo-checkin](viewturbo-checkin/) | `viewturbo-checkin` | ViewTurbo 每日签到领流量（真实账号文件永不入库，只提交 example 模板） | [SKILL.md](viewturbo-checkin/SKILL.md) |
 | [scanner-config](scanner-config/) | `scanner-config` | 扫码枪 Eport-E10 串口联网模块网络配置与排障：改 IP/8899 端口、连接超时/169.254.x.x 诊断、恢复出厂重建，附 ScannerTool.ps1 | [SKILL.md](scanner-config/SKILL.md) |
 | [ui-mockup-studio](ui-mockup-studio/) | `ui-mockup-studio` | UI 设计稿工作台 + 界面简化标准：基于 galaxy 组件库出 4-5 套可点击单文件 HTML 方案（主界面/子页/弹窗/跳转图/动效），内置 WinForms/WPF 双栈映射与信息预算；v1.4.0 新增品牌图标生成（SVG 多款方案→预览选款→svg2res.py 一键转 PNG 阶梯+ICO 项目资源） | [SKILL.md](ui-mockup-studio/SKILL.md) |

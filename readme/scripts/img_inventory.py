@@ -39,13 +39,18 @@ IMG_HTML_RX = re.compile(r"<img[^>]+src=[\"']([^\"']+)[\"']", re.I)
 # 语言无关混扫安全：遇到新类型噪音目录就往这里加）
 # resources/Resources：GUI 程序资源目录族（.NET/WPF/Android 的 exe 图标等），
 # 文档配图不往这里放——AgingTestSystem 实测 app.png 常驻误报 ORPHAN
+# res / assets.xcassets：移动端宿主壳的应用图标资源（Android mipmap、iOS
+# AppIcon/LaunchImage），V1.3.0 在多端项目实测被误报成 30+ 张孤儿图
 EXCLUDE_DIRS = {
     ".git", ".vs", ".idea", ".codegraph",
     "bin", "obj", "build", "dist", "target", "out",
     "node_modules", "vendor", "__pycache__", ".venv", "site-packages",
     "runner", "packages",
     "resources", "Resources",
+    "res", "assets.xcassets",
 }
+
+EXCLUDE_DIRS_LOWER = {d.lower() for d in EXCLUDE_DIRS}
 
 dead_refs = []   # (md_file, line_no, path)
 md_refs = set()  # 全仓库被引用的规范化磁盘路径集合
@@ -68,7 +73,8 @@ def collect_md_files(root, skips):
     for dirpath, dirnames, filenames in os.walk(root):
         # 排除隐藏目录与依赖/构建产物目录（EXCLUDE_DIRS）+ 用户 --skip-dir
         dirnames[:] = [d for d in dirnames
-                       if d not in EXCLUDE_DIRS and not d.startswith(".") and d not in skips]
+                       if d.lower() not in EXCLUDE_DIRS_LOWER
+                       and not d.startswith(".") and d not in skips]
         for fn in filenames:
             if fn.lower().endswith(".md"):
                 found.append(os.path.join(dirpath, fn))
@@ -113,7 +119,8 @@ def collect_img_files(root, skips):
     imgs = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames
-                       if d not in EXCLUDE_DIRS and not d.startswith(".") and d not in skips]
+                       if d.lower() not in EXCLUDE_DIRS_LOWER
+                       and not d.startswith(".") and d not in skips]
         for fn in filenames:
             if fn.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")):
                 imgs.append(norm(os.path.join(dirpath, fn)))
