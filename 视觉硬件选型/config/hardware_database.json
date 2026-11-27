@@ -1,16 +1,22 @@
 {
   "_metadata": {
     "description": "机器视觉硬件参数数据库",
-    "version": "1.1.0",
-    "last_updated": "2026-11-20",
-    "notes": "所有型号必须能在对应品牌官网查证，禁止编造型号；光源条目必须含 angle/outer_diameter。镜头必须含 mod（最近摄距）、wd_range（可用工作距离范围）、distortion（可为 null 但键必须存在）；mod/wd_range/畸变未知时显式 null 并注明待核验。库外型号核查结果记入 external_candidates，禁止以\"库内无此型号\"代替官网核查结论。 非远心镜头若厂家给 WD-倍率表，必须记入 wd_mag_table；单点 magnification 不能覆盖全部 WD。",
+    "version": "1.2.0",
+    "last_updated": "2026-11-27",
+    "notes": "所有型号必须能在对应品牌官网查证，禁止编造型号；光源条目必须含 angle/outer_diameter。镜头必须含 mod（最近摄距）、wd_range（可用工作距离范围）、distortion（可为 null 但键必须存在）；mod/wd_range/畸变未知时显式 null 并注明待核验。库外型号核查结果记入 external_candidates，禁止以\"库内无此型号\"代替官网核查结论。 非远心镜头若厂家给 WD-倍率表，必须记入 wd_mag_table；单点 magnification 不能覆盖全部 WD。 3D相机表（three_d_cameras）参数全部来自厂商官网/官方数据表；guidance_accuracy_mm 为厂商官方“视觉引导抓取精度”经验值（scope=system，含抓取链路），无该字段的型号用 z_repeatability/vdi_accuracy + 0.5×xy_resolution 估算，估算值必须在方案中标注“估算，待样件实测”。",
     "verification_urls": {
       "海康威视": "https://www.hikrobotics.com/cn/machinevision/product/detail",
       "视清科技": "https://coolens.cn/product/",
       "大恒图像": "https://www.daheng-imaging.com/products/",
       "华睿科技": "https://www.irayple.com/products/",
       "OPT": "https://www.opt-e.com/products/",
-      "孚根": "https://www.fugenmv.com/products/"
+      "孚根": "https://www.fugenmv.com/products/",
+      "梅卡曼德": "https://docs.mech-mind.net/zh/eye-3d-camera/latest/hardware/specifications-pro-s-pro-m.html",
+      "Zivid": "https://www.zivid.com/hubfs/User%20guides%20and%20datasheets/Zivid%202+%20M60%20Datasheet.pdf",
+      "Photoneo": "https://www.photoneo.com/products/phoxi-scan-m/",
+      "迁移科技": "https://www.transfer3d.com/product",
+      "Cognex": "https://www.cognex.com/en/products/3d-machine-vision-systems/3d-a5000",
+      "图漾": "https://www.percipio.xyz/product/hardware/dot-pattern-structured-light-camera/p-series/58"
     }
   },
   "cameras": [
@@ -1440,6 +1446,604 @@
       "verdict": "rejected",
       "reason": "MOD 1100mm（∞~1.1m），MOD 处倍率仅 0.077x；要达 WD300/0.3x 需约 28mm 接圈，官网无接圈表、不支持，且 1.5MP/6.2μm 像元，属明显超规格",
       "verification_url": "https://www.fujifilm.com/us/en/business/optical-devices/mvlens/hf-ha-1s-series"
+    }
+  ],
+  "three_d_cameras": [
+    {
+      "brand": "梅卡曼德",
+      "series": "Mech-Eye PRO",
+      "model": "PRO M-V4D1200M",
+      "technology": "结构光（蓝光LED，双目）",
+      "color": "黑白",
+      "working_distance_mm": [
+        1000,
+        1300
+      ],
+      "optimal_working_distance_mm": 1200,
+      "fov_near": {
+        "width": 800,
+        "height": 450,
+        "distance": 1000
+      },
+      "fov_far": {
+        "width": 1500,
+        "height": 890,
+        "distance": 2000
+      },
+      "resolution": {
+        "width": 1920,
+        "height": 1200
+      },
+      "xy_resolution_mm": 0.417,
+      "z_repeatability_mm": 0.2,
+      "z_repeatability_distance_mm": 2000,
+      "vdi_accuracy_mm": 0.2,
+      "vdi_distance_mm": 2000,
+      "dimension_trueness_pct": null,
+      "guidance_accuracy_mm": 1.5,
+      "guidance_accuracy_scope": "system",
+      "capture_time_s": [
+        0.3,
+        0.6
+      ],
+      "interface": "GigE",
+      "ip_rating": "IP65",
+      "software": [
+        "Mech-Vision",
+        "Mech-Viz",
+        "Mech-Eye Viewer"
+      ],
+      "robot_integration": "官方机器人接口（ABB/FANUC/KUKA/YASKAWA等）",
+      "verified": true,
+      "verification_url": "https://docs.mech-mind.net/zh/eye-3d-camera/latest/hardware/specifications-pro-s-pro-m.html",
+      "guidance_url": "https://docs.mech-mind.net/zh/eye-3d-camera/latest/hardware/camera-models.html",
+      "notes": "官方选型指南标注视觉引导抓取精度 ±1.5mm（WD 1000-1300mm，经验值）；VDI 0.2mm@2m、Z重复0.2mm@2m。参数为V4系列，采购前需确认具体规格型号。",
+      "fov_model": "two_point_linear",
+      "capture_time_typical_s": 0.45,
+      "data_confidence": "high",
+      "needs_vendor_confirmation": []
+    },
+    {
+      "brand": "梅卡曼德",
+      "series": "Mech-Eye PRO",
+      "model": "PRO S-V4D500M",
+      "technology": "结构光（蓝光LED，双目）",
+      "color": "黑白",
+      "working_distance_mm": [
+        500,
+        600
+      ],
+      "optimal_working_distance_mm": 550,
+      "fov_near": {
+        "width": 370,
+        "height": 240,
+        "distance": 500
+      },
+      "fov_far": {
+        "width": 800,
+        "height": 450,
+        "distance": 1000
+      },
+      "resolution": {
+        "width": 1920,
+        "height": 1200
+      },
+      "xy_resolution_mm": 0.193,
+      "z_repeatability_mm": 0.05,
+      "z_repeatability_distance_mm": 1000,
+      "vdi_accuracy_mm": 0.1,
+      "vdi_distance_mm": 1000,
+      "dimension_trueness_pct": null,
+      "guidance_accuracy_mm": 0.5,
+      "guidance_accuracy_scope": "system",
+      "capture_time_s": [
+        0.3,
+        0.6
+      ],
+      "interface": "GigE",
+      "ip_rating": "IP65",
+      "software": [
+        "Mech-Vision",
+        "Mech-Viz",
+        "Mech-Eye Viewer"
+      ],
+      "robot_integration": "官方机器人接口（ABB/FANUC/KUKA/YASKAWA等）",
+      "verified": true,
+      "verification_url": "https://docs.mech-mind.net/zh/eye-3d-camera/latest/hardware/specifications-pro-s-pro-m.html",
+      "guidance_url": "https://docs.mech-mind.net/zh/eye-3d-camera/latest/hardware/camera-models.html",
+      "notes": "官方引导精度 ±0.5mm（WD 500-600mm，经验值），是梅卡曼德全线中唯一接近0.5mm的型号；但该WD下FOV 370×240~444×288，短边不足以覆盖300×300产品。",
+      "fov_model": "two_point_linear",
+      "capture_time_typical_s": 0.45,
+      "data_confidence": "high",
+      "needs_vendor_confirmation": []
+    },
+    {
+      "brand": "梅卡曼德",
+      "series": "Mech-Eye PRO",
+      "model": "PRO S-V4D700M",
+      "technology": "结构光（蓝光LED，双目）",
+      "color": "黑白",
+      "working_distance_mm": [
+        600,
+        800
+      ],
+      "optimal_working_distance_mm": 700,
+      "fov_near": {
+        "width": 444,
+        "height": 288,
+        "distance": 600
+      },
+      "fov_far": {
+        "width": 592,
+        "height": 384,
+        "distance": 800
+      },
+      "resolution": {
+        "width": 1920,
+        "height": 1200
+      },
+      "xy_resolution_mm": 0.231,
+      "z_repeatability_mm": 0.05,
+      "z_repeatability_distance_mm": 1000,
+      "vdi_accuracy_mm": 0.1,
+      "vdi_distance_mm": 1000,
+      "dimension_trueness_pct": null,
+      "guidance_accuracy_mm": 0.7,
+      "guidance_accuracy_scope": "system",
+      "capture_time_s": [
+        0.3,
+        0.6
+      ],
+      "interface": "GigE",
+      "ip_rating": "IP65",
+      "software": [
+        "Mech-Vision",
+        "Mech-Viz",
+        "Mech-Eye Viewer"
+      ],
+      "robot_integration": "官方机器人接口（ABB/FANUC/KUKA/YASKAWA等）",
+      "verified": true,
+      "verification_url": "https://docs.mech-mind.net/zh/eye-3d-camera/latest/hardware/specifications-pro-s-pro-m.html",
+      "guidance_url": "https://docs.mech-mind.net/zh/eye-3d-camera/latest/hardware/camera-models.html",
+      "notes": "官方引导精度 ±0.7mm（WD 600-800mm，经验值）；FOV在750mm附近约555×360，可覆盖300×300但短边余量仅20%。",
+      "fov_model": "two_point_linear",
+      "capture_time_typical_s": 0.45,
+      "data_confidence": "high",
+      "needs_vendor_confirmation": []
+    },
+    {
+      "brand": "梅卡曼德",
+      "series": "Mech-Eye NANO",
+      "model": "NANO-V4D550M",
+      "technology": "结构光（蓝光LED，双目）",
+      "color": "黑白",
+      "working_distance_mm": [
+        450,
+        600
+      ],
+      "optimal_working_distance_mm": 550,
+      "fov_near": {
+        "width": 330,
+        "height": 225,
+        "distance": 450
+      },
+      "fov_far": {
+        "width": 440,
+        "height": 300,
+        "distance": 600
+      },
+      "resolution": {
+        "width": 1280,
+        "height": 1024
+      },
+      "xy_resolution_mm": 0.344,
+      "z_repeatability_mm": 0.1,
+      "z_repeatability_distance_mm": 500,
+      "vdi_accuracy_mm": 0.1,
+      "vdi_distance_mm": 500,
+      "dimension_trueness_pct": null,
+      "guidance_accuracy_mm": null,
+      "guidance_accuracy_scope": null,
+      "capture_time_s": [
+        0.6,
+        1.1
+      ],
+      "interface": "GigE",
+      "ip_rating": "IP65",
+      "software": [
+        "Mech-Vision",
+        "Mech-Viz",
+        "Mech-Eye Viewer"
+      ],
+      "robot_integration": "官方机器人接口（ABB/FANUC/KUKA/YASKAWA等）",
+      "verified": true,
+      "verification_url": "https://docs.mech-mind.net/zh/eye-3d-camera/latest/hardware/specifications-v4.html",
+      "guidance_url": "https://docs.mech-mind.net/zh/eye-3d-camera/latest/hardware/camera-models.html",
+      "notes": "官方未给视觉引导抓取精度；FOV远端440×300@0.6m，短边刚好300mm，无来料余量；Z重复0.1mm@0.5m。",
+      "fov_model": "two_point_linear",
+      "capture_time_typical_s": 0.8,
+      "data_confidence": "medium",
+      "needs_vendor_confirmation": [
+        "官方未给视觉引导抓取精度，需厂商确认"
+      ]
+    },
+    {
+      "brand": "Zivid",
+      "series": "Zivid 2+",
+      "model": "2+ M60",
+      "technology": "结构光（5MP，彩色）",
+      "color": "彩色",
+      "working_distance_mm": [
+        350,
+        900
+      ],
+      "optimal_working_distance_mm": 600,
+      "fov_near": {
+        "width": 570,
+        "height": 460,
+        "distance": 600
+      },
+      "fov_far": null,
+      "resolution": {
+        "width": 2448,
+        "height": 2048
+      },
+      "xy_resolution_mm": 0.24,
+      "z_repeatability_mm": 0.08,
+      "z_repeatability_distance_mm": 600,
+      "vdi_accuracy_mm": 0.1,
+      "vdi_distance_mm": 600,
+      "dimension_trueness_pct": 0.16,
+      "guidance_accuracy_mm": null,
+      "guidance_accuracy_scope": null,
+      "capture_time_s": [
+        0.05,
+        1.5
+      ],
+      "interface": "10GigE",
+      "ip_rating": "IP65",
+      "software": [
+        "Zivid Studio",
+        "Zivid SDK（C++/C#/Python）"
+      ],
+      "robot_integration": "SDK/第三方集成（提供手眼标定工具）",
+      "verified": true,
+      "verification_url": "https://www.zivid.com/hubfs/User%20guides%20and%20datasheets/Zivid%202+%20M60%20Datasheet.pdf",
+      "guidance_url": null,
+      "notes": "点精度80μm、局部平面度100μm、全局平面度<0.10mm、尺寸正确度0.16%@600mm；FOV 570×460@600mm；10GigE（兼容1GigE但降速）。参数为典型值，实际受工件材质/环境光影响。",
+      "fov_model": "single_point_scaled",
+      "capture_time_typical_s": 0.3,
+      "data_confidence": "high",
+      "needs_vendor_confirmation": [
+        "VDI 精度需向 Zivid 索取该型号正式 VDI/VDE 报告"
+      ]
+    },
+    {
+      "brand": "Photoneo",
+      "series": "PhoXi 3D Scanner M",
+      "model": "PhoXi M Gen3",
+      "technology": "结构光（蓝色激光，5.1MP）",
+      "color": "彩色/灰度",
+      "working_distance_mm": [
+        458,
+        1118
+      ],
+      "optimal_working_distance_mm": 655,
+      "fov_near": {
+        "width": 623,
+        "height": 467,
+        "distance": 655
+      },
+      "fov_far": null,
+      "resolution": {
+        "width": 2472,
+        "height": 2064
+      },
+      "xy_resolution_mm": 0.23,
+      "z_repeatability_mm": 0.03,
+      "z_repeatability_distance_mm": 655,
+      "vdi_accuracy_mm": 0.1,
+      "vdi_distance_mm": 655,
+      "dimension_trueness_pct": null,
+      "guidance_accuracy_mm": null,
+      "guidance_accuracy_scope": null,
+      "capture_time_s": [
+        0.25,
+        2.5
+      ],
+      "interface": "GigE",
+      "ip_rating": "IP65",
+      "software": [
+        "PhoXi Control",
+        "PhoXi SDK",
+        "Bin Picking Studio"
+      ],
+      "robot_integration": "SDK/第三方集成（提供手眼标定工具）",
+      "verified": true,
+      "verification_url": "https://www.photoneo.com/products/phoxi-scan-m/",
+      "guidance_url": null,
+      "notes": "Gen3数据表：扫描范围458-1118mm、最佳655mm、FOV 623×467@655mm、点距0.23mm、相对距离精度1.25‰、校准精度0.1mm、时间噪声0.03mm、扫描250-2500ms、1Gbit Ethernet/PoE、IP65。",
+      "fov_model": "single_point_scaled",
+      "capture_time_typical_s": 0.5,
+      "data_confidence": "high",
+      "needs_vendor_confirmation": [
+        "RDA 1.25‰ 与校准精度 0.1mm 的适用条件需厂商书面确认"
+      ]
+    },
+    {
+      "brand": "迁移科技",
+      "series": "Epic Eye Pixel",
+      "model": "Epic Eye Pixel Pro",
+      "technology": "结构光（蓝光LED，双目）",
+      "color": "黑白/彩色",
+      "working_distance_mm": [
+        600,
+        1500
+      ],
+      "optimal_working_distance_mm": 1100,
+      "fov_near": {
+        "width": 575,
+        "height": 350,
+        "distance": 600
+      },
+      "fov_far": {
+        "width": 1410,
+        "height": 860,
+        "distance": 1500
+      },
+      "resolution": {
+        "width": 1920,
+        "height": 1200
+      },
+      "xy_resolution_mm": 0.299,
+      "z_repeatability_mm": 0.06,
+      "z_repeatability_distance_mm": 1100,
+      "vdi_accuracy_mm": 0.1,
+      "vdi_distance_mm": 1100,
+      "dimension_trueness_pct": 0.15,
+      "guidance_accuracy_mm": null,
+      "guidance_accuracy_scope": null,
+      "capture_time_s": [
+        0.2,
+        0.7
+      ],
+      "interface": "GigE",
+      "ip_rating": "IP65",
+      "software": [
+        "Epic Pro",
+        "Epic Eye",
+        "ATOM算法平台"
+      ],
+      "robot_integration": "官方机器人接口（ABB/FANUC/YASKAWA/KUKA等）",
+      "verified": true,
+      "verification_url": "https://www.transfer3d.com/product",
+      "guidance_url": null,
+      "notes": "官网：WD 600-1500mm、最佳1100mm、FOV 575×350@0.6m~1410×860@1.5m、VDI 0.1mm@1.1m、Z重复0.06mm@1.1m、准度<0.15%、230万、GigE、IP65。FOV短边350@0.6m，覆盖300×300需WD≥617mm。",
+      "fov_model": "two_point_linear",
+      "capture_time_typical_s": 0.4,
+      "data_confidence": "medium",
+      "needs_vendor_confirmation": [
+        "VDI 0.1mm@1.1m 为官网标称，需书面数据表确认测试条件"
+      ]
+    },
+    {
+      "brand": "迁移科技",
+      "series": "Epic Eye Laser",
+      "model": "Epic Eye Laser M V3",
+      "technology": "激光结构光（五模合一，800万）",
+      "color": "彩色",
+      "working_distance_mm": [
+        500,
+        1500
+      ],
+      "optimal_working_distance_mm": 900,
+      "fov_near": {
+        "width": 625,
+        "height": 650,
+        "distance": 500
+      },
+      "fov_far": {
+        "width": 1730,
+        "height": 1840,
+        "distance": 1500
+      },
+      "resolution": {
+        "width": 2840,
+        "height": 2840
+      },
+      "xy_resolution_mm": 0.22,
+      "z_repeatability_mm": 0.04,
+      "z_repeatability_distance_mm": 700,
+      "vdi_accuracy_mm": 0.06,
+      "vdi_distance_mm": 1500,
+      "dimension_trueness_pct": 0.15,
+      "guidance_accuracy_mm": null,
+      "guidance_accuracy_scope": null,
+      "capture_time_s": [
+        0.3,
+        0.9
+      ],
+      "interface": "GigE",
+      "ip_rating": "IP65/IP67",
+      "software": [
+        "Epic Pro",
+        "Epic Eye",
+        "ATOM算法平台"
+      ],
+      "robot_integration": "官方机器人接口（ABB/FANUC/YASKAWA/KUKA等）",
+      "verified": true,
+      "verification_url": "https://www.transfer3d.com/product/epic-eye-laser-m-v3",
+      "guidance_url": null,
+      "notes": "官网：WD 500-1500mm、最佳900mm、FOV 625×650@0.5m~1730×1840@1.5m、VDI 0.06mm@1.5m、Z重复0.04mm@0.7m、准度<0.15%、800万/200万、GigE、IP65/IP67、抗环境光强。800万模式XY=625/2840≈0.22mm@0.5m。",
+      "fov_model": "two_point_linear",
+      "capture_time_typical_s": 0.5,
+      "data_confidence": "low",
+      "needs_vendor_confirmation": [
+        "VDI 0.06mm@1.5m 与激光三角测量物理规律不符，疑为近距离值或重复性指标，必须厂商书面确认后再定型"
+      ]
+    },
+    {
+      "brand": "Cognex",
+      "series": "3D-A5000",
+      "model": "3D-A5060",
+      "technology": "结构光（3D LightBurst）",
+      "color": "彩色",
+      "working_distance_mm": [
+        1400,
+        1800
+      ],
+      "optimal_working_distance_mm": 1400,
+      "fov_near": {
+        "width": 520,
+        "height": 390,
+        "distance": 1400
+      },
+      "fov_far": {
+        "width": 645,
+        "height": 490,
+        "distance": 1800
+      },
+      "resolution": {
+        "width": 1280,
+        "height": 1024
+      },
+      "xy_resolution_mm": 0.406,
+      "z_repeatability_mm": 0.125,
+      "z_repeatability_distance_mm": 1400,
+      "vdi_accuracy_mm": null,
+      "vdi_distance_mm": null,
+      "dimension_trueness_pct": null,
+      "guidance_accuracy_mm": null,
+      "guidance_accuracy_scope": null,
+      "capture_time_s": [
+        0.2,
+        0.2
+      ],
+      "interface": "10GigE",
+      "ip_rating": "IP65",
+      "software": [
+        "VisionPro",
+        "Cognex Designer"
+      ],
+      "robot_integration": "SDK/第三方集成",
+      "verified": true,
+      "verification_url": "https://www.cognex.com/en/products/3d-machine-vision-systems/3d-a5000",
+      "guidance_url": null,
+      "notes": "官网：3D-A5060标准工作体积CD 1400mm/MR 400mm、近端FOV 520×390、远端645×490、XY 361-454μm、Z重复100-150μm、1.3MP、采集200ms、10GigE、IP65。VDI精度官网未给，需向厂商索取。",
+      "fov_model": "two_point_linear",
+      "capture_time_typical_s": 0.2,
+      "data_confidence": "medium",
+      "needs_vendor_confirmation": [
+        "官网未给 VDI/VDE 精度，需向 Cognex 索取"
+      ]
+    },
+    {
+      "brand": "图漾",
+      "series": "PS系列",
+      "model": "PS800-E1",
+      "technology": "主动双目散斑结构光",
+      "color": "彩色",
+      "working_distance_mm": [
+        400,
+        800
+      ],
+      "optimal_working_distance_mm": 500,
+      "fov_near": {
+        "width": 327,
+        "height": 268,
+        "distance": 300
+      },
+      "fov_far": {
+        "width": 1190,
+        "height": 895,
+        "distance": 1000
+      },
+      "resolution": {
+        "width": 1280,
+        "height": 960
+      },
+      "xy_resolution_mm": 0.93,
+      "z_repeatability_mm": 0.51,
+      "z_repeatability_distance_mm": 500,
+      "vdi_accuracy_mm": null,
+      "vdi_distance_mm": null,
+      "dimension_trueness_pct": null,
+      "guidance_accuracy_mm": null,
+      "guidance_accuracy_scope": null,
+      "capture_time_s": [
+        0.57,
+        1.78
+      ],
+      "interface": "GigE",
+      "ip_rating": "IP65",
+      "software": [
+        "Percipio Camport SDK",
+        "RVS"
+      ],
+      "robot_integration": "SDK/第三方集成",
+      "verified": true,
+      "verification_url": "https://www.percipio.xyz/product/hardware/dot-pattern-structured-light-camera/p-series/58",
+      "guidance_url": null,
+      "notes": "官网：WD 400-800mm、Z精度0.51mm@500mm/2.01mm@1000mm、XY精度1.14mm@500mm、FOV 327×268@300mm~1190×895@1000mm、1280×960、GigE、IP65。Z精度已等于0.5mm总要求，不适用于本精度等级。",
+      "fov_model": "two_point_linear",
+      "capture_time_typical_s": 1.0,
+      "data_confidence": "high",
+      "needs_vendor_confirmation": []
+    },
+    {
+      "brand": "图漾",
+      "series": "VMD系列",
+      "model": "VMD03-1230(C)",
+      "technology": "双目+条纹结构光",
+      "color": "彩色",
+      "working_distance_mm": [
+        1200,
+        2400
+      ],
+      "optimal_working_distance_mm": 1200,
+      "fov_near": {
+        "width": 1146,
+        "height": 906,
+        "distance": 1200
+      },
+      "fov_far": {
+        "width": 2463,
+        "height": 2243,
+        "distance": 3000
+      },
+      "resolution": {
+        "width": 2048,
+        "height": 1536
+      },
+      "xy_resolution_mm": 0.56,
+      "z_repeatability_mm": 0.08,
+      "z_repeatability_distance_mm": 1200,
+      "vdi_accuracy_mm": null,
+      "vdi_distance_mm": null,
+      "dimension_trueness_pct": null,
+      "guidance_accuracy_mm": null,
+      "guidance_accuracy_scope": null,
+      "capture_time_s": [
+        1.68,
+        2.24
+      ],
+      "interface": "GigE",
+      "ip_rating": "IP65",
+      "software": [
+        "Percipio Camport SDK",
+        "RVS"
+      ],
+      "robot_integration": "SDK/第三方集成",
+      "verified": true,
+      "verification_url": "https://www.percipio.xyz/product/hardware/dot-pattern-structured-light-camera/p-series/58",
+      "guidance_url": null,
+      "notes": "官网/渠道参数：WD 1200-2400mm、Z精度0.08mm@1200mm、XY精度0.6mm@1200mm、FOV 1146×906@1200mm~2463×2243@3000mm、2048×1536、GigE、IP65。XY 0.6mm偏粗，仅作备选。",
+      "fov_model": "two_point_linear",
+      "capture_time_typical_s": 1.8,
+      "data_confidence": "medium",
+      "needs_vendor_confirmation": [
+        "参数来自渠道页，需官网数据表复核"
+      ]
     }
   ]
 }

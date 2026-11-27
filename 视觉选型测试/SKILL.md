@@ -21,7 +21,7 @@ python "C:\Users\Administrator\.config\opencode\skills\视觉选型测试\tests\
 | smoke | `--layer smoke` | ~3s | 文件齐全、依赖可导入、JSON 可解析、无临时脚本混入 |
 | data | `--layer data` | ~2s | 硬件库 schema、verified 必须有官网链接、无假型号回流、角度/数值合法 |
 | doc | `--layer doc` | ~3s | SKILL.md/README 引用的脚本与参数真实存在、模板字段真被代码消费、红线在案 |
-| core | `--layer core` | ~40s | 选型算法/精度链/口径/光源角度品牌/文本解析/图片获取 |
+| core | `--layer core` | ~40s | 选型算法/精度链/口径/光源角度品牌/文本解析/图片获取/3D 引导选型 |
 | ppt | `--layer ppt` | ~10s | check_ppt_quality 判定边界（旧型号误杀/假型号漏放） |
 | workflow | `--layer workflow` | ~2min | 端到端退出码 0/1/2、产物 schema、幂等、验收隔离 |
 

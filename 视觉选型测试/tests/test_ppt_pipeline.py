@@ -120,6 +120,47 @@ class TestPptPipeline(unittest.TestCase):
             vt_common.rmtree(tmp)
 
 
+    def test_default_output_dir_named_after_ppt(self):
+        """不传 --output：在 config 所在目录建「<PPT名>/<PPT名>.pptx」，目录名与 PPT 同名。
+
+        背景：此前固定输出到 tools/../output，所有项目产物混在一个目录，
+        用户分不清哪份 PPT 属于哪个项目。约定改动后锁死防回退。
+        cwd 故意不在 config 目录：AI 用绝对路径从任意目录调用很常见，
+        产物必须跟着工作区（config）走，不能落在调用处的 cwd。
+        """
+        tmp = vt_common.temp_dir('vt_pptdef_')
+        try:
+            proj = os.path.join(tmp, 'proj')
+            elsewhere = os.path.join(tmp, 'elsewhere')
+            os.makedirs(proj)
+            os.makedirs(elsewhere)
+            cfg = os.path.join(proj, 'project_config.json')
+            tpl = os.path.join(proj, 'template.pptx')
+            write_config(cfg)
+            write_template(tpl)
+            cmd = [sys.executable, GENERATOR, '--config', cfg,
+                   '--template', tpl, '--auto']
+            p = subprocess.run(cmd, capture_output=True, text=True,
+                               encoding='utf-8', errors='replace',
+                               timeout=300, cwd=elsewhere)
+            combined = (p.stdout or '') + (p.stderr or '')
+            self.assertEqual(p.returncode, 0, f'退出码{p.returncode}\n{combined[-1500:]}')
+            stem = CONFIG['project_name']
+            out = os.path.join(proj, stem)
+            pptx = os.path.join(out, f'{stem}.pptx')
+            self.assertTrue(os.path.isfile(pptx),
+                            f'PPT 应在「{stem}\\{stem}.pptx」\n{combined[-800:]}')
+            self.assertFalse(os.path.isdir(os.path.join(elsewhere, stem)),
+                             '产物不得落到调用时的 cwd')
+            self.assertFalse(os.path.isdir(os.path.join(tmp, 'output')),
+                             '不得再生成固定的 output 目录')
+            self.assertTrue(os.path.isfile(os.path.join(out, 'selection_result.json')),
+                            'selection_result.json 必须与 PPT 同目录')
+            self.assertTrue(os.path.isfile(os.path.join(out, 'acceptance_report.txt')),
+                            '验收报告必须与 PPT 同目录')
+        finally:
+            vt_common.rmtree(tmp)
+
     def test_hardware_page_out_of_range_fails_loudly(self):
         """回归: --hardware_page 语义是\"第N个硬件页\"而非幻灯片页码，越界此前
         只打印一行错误并 return None，上层继续走验收，用户只看到\"跑完没PPT\"。

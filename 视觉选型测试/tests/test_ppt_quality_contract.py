@@ -376,5 +376,50 @@ class TestHardwareSlideDetection(unittest.TestCase):
         self.assertNotIn('未识别到光源类型标注', out)
 
 
+class TestOverflowMultiline(unittest.TestCase):
+    """C4 多行正文豁免（2026-11-27：3D 方案说明段落整页误报 FAIL）。
+
+    规则：长正文（>20 字）且框高足够容纳估算行数 → 正常多行排版，不报；
+    短标注（≤20 字）或框高不足 → 仍按原规则抓断行/溢出。
+    """
+
+    def _slide(self, text, w_in, h_in, fs=10.5):
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+        prs = Presentation()
+        prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        tb = s.shapes.add_textbox(Inches(0.5), Inches(0.5),
+                                  Inches(w_in), Inches(h_in))
+        tb.text_frame.word_wrap = True
+        p = tb.text_frame.paragraphs[0]
+        r = p.add_run()
+        r.text = text
+        r.font.size = Pt(fs)
+        return prs, s
+
+    def test_long_body_with_tall_box_not_flagged(self):
+        """整段说明文字 + 框高足够 → 不得报断行"""
+        from check_ppt_quality import check_overflow
+        text = ('RSS 为统计合成，不是最坏情况相加；验收按 3σ 或双方约定口径执行。'
+                '现场某一项超预算时，优先压缩该项而不是换相机。')
+        prs, s = self._slide(text, 5.15, 1.15)
+        self.assertEqual(check_overflow([(1, s)]), [])
+
+    def test_long_body_with_short_box_flagged(self):
+        """框高只够一行却塞长正文 → 仍须报"""
+        from check_ppt_quality import check_overflow
+        text = ('这是一段很长的说明文字，用来验证框高不足时仍然会报断行风险，'
+                '不能被豁免逻辑放过。')
+        prs, s = self._slide(text, 1.2, 0.18)
+        self.assertTrue(check_overflow([(1, s)]))
+
+    def test_short_label_still_flagged(self):
+        """短标注（≤20 字）不受多行豁免影响"""
+        from check_ppt_quality import check_overflow
+        prs, s = self._slide('LED环形光光源', 0.9, 0.4, fs=11)
+        self.assertTrue(check_overflow([(1, s)]))
+
+
 if __name__ == '__main__':
     unittest.main()

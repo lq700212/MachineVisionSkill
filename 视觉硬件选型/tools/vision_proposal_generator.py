@@ -33,6 +33,24 @@ from camera_selector import CameraSelector
 from lens_selector import LensSelector
 from generate_ppt import generate_ppt
 
+
+def _safe_name(name: str, fallback: str = '视觉检测项目') -> str:
+    """把项目名清洗成合法的文件/目录名（Windows 非法字符 + 长度限制）。
+
+    输出目录与 PPT 同名，项目名里的 < > : " / \\ | ? * 不能进路径；
+    中文括号、逗号、× 等合法字符保留。
+    """
+    s = (name or '').strip()
+    for ch in '<>:"/\\|?*':
+        s = s.replace(ch, '')
+    s = ''.join(c for c in s if ord(c) >= 32)
+    s = ' '.join(s.split())
+    s = s.rstrip('. ')
+    if not s:
+        s = fallback
+    return s[:80]
+
+
 class VisionProposalGenerator:
     """视觉方案生成器"""
     
@@ -164,14 +182,14 @@ class VisionProposalGenerator:
         
         # 7. 生成PPT
         print("\n[步骤6] 生成方案PPT...")
-        if output_dir is None:
-            output_dir = os.path.join(os.path.dirname(__file__), '..', 'output')
-        
-        os.makedirs(output_dir, exist_ok=True)
-        
         project_name = validated_params.get('project_name', '视觉检测项目')
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = os.path.join(output_dir, f"{project_name}_{timestamp}.pptx")
+        stem = _safe_name(project_name)
+        if output_dir is None:
+            # 默认输出到「当前目录/<PPT名>/」，目录名与 PPT 同名
+            output_dir = os.path.join(os.getcwd(), stem)
+
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"{stem}.pptx")
         
         # 8. 保存选型结果（无论是否有模板，selection_result.json 都要落盘）
         result_json = self._save_selection_result(validated_params, selection_result, algorithm_design, output_dir)
@@ -203,7 +221,7 @@ class VisionProposalGenerator:
         # 9. 自动验收（规则自查+渲染导出）；未通过则产物已隔离，不得继续交付
         if not self._run_acceptance(ppt_path, output_dir):
             print("\n[失败] PPT 未通过生成后规则自查（FAIL 项见 acceptance_report.txt），"
-                  "已隔离到 output\\_rejected\\，禁止交付")
+                  f"已隔离到 {os.path.join(output_dir, '_rejected')}\\，禁止交付")
             return None
 
         print("\n" + "=" * 60)
@@ -412,10 +430,16 @@ class VisionProposalGenerator:
         algorithm_design = self._design_algorithm(validated_params, selection_result)
         
         # 确定输出目录并保存选型结果（dry-run 也要落盘，便于复核）
-        if output_dir is None:
-            output_dir = os.path.join(os.path.dirname(__file__), '..', 'output')
-        os.makedirs(output_dir, exist_ok=True)
         project_name = validated_params.get('project_name', '视觉检测项目')
+        stem = _safe_name(project_name)
+        if output_dir is None:
+            # 默认输出到「<基准目录>/<PPT名>/」，目录名与 PPT 同名。
+            # 基准目录：config 链取 config 所在目录（即用户工作区），
+            # 这样 AI 从任意 cwd 用绝对路径调用也不会把产物落错地方；
+            # text/files 链没有 config_dir，退回当前工作目录。
+            base_dir = config_dir or os.getcwd()
+            output_dir = os.path.join(base_dir, stem)
+        os.makedirs(output_dir, exist_ok=True)
         self._save_selection_result(validated_params, selection_result, algorithm_design, output_dir)
 
         # dry-run：选型+核验已完成并落盘，弱模型可先确认口径/解，再决定是否生成PPT
@@ -427,8 +451,7 @@ class VisionProposalGenerator:
 
         # 生成PPT
         print("\n[步骤4] 生成方案PPT...")
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = os.path.join(output_dir, f"{project_name}_{timestamp}.pptx")
+        output_path = os.path.join(output_dir, f"{stem}.pptx")
 
         # 无模板：不在终端留错误，输出选型结果正常结束（用户放模板后重跑即可生成PPT）
         if not self.template_ppt:
@@ -458,7 +481,7 @@ class VisionProposalGenerator:
         # 自动验收（规则自查+渲染导出）；未通过则产物已隔离，不得继续交付
         if not self._run_acceptance(ppt_path, output_dir):
             print("\n[失败] PPT 未通过生成后规则自查（FAIL 项见 acceptance_report.txt），"
-                  "已隔离到 output\\_rejected\\，禁止交付")
+                  f"已隔离到 {os.path.join(output_dir, '_rejected')}\\，禁止交付")
             return None
 
         print("\n" + "=" * 60)
@@ -879,7 +902,7 @@ class VisionProposalGenerator:
     
     def _discover_template(self, search_dir: str) -> Optional[str]:
         """
-        在工作目录自动扫描模板PPT（排除output子目录与Office临时文件）
+        在工作目录自动扫描模板PPT（只扫顶层，不递归；生成的 PPT 在项目子目录里，不会被当成模板）
         多个候选时取修改时间最新的一个（弱模型无需决策）
         """
         if not search_dir or not os.path.isdir(search_dir):
@@ -1558,7 +1581,7 @@ class VisionProposalGenerator:
         """生成后自动验收：规则自查 + 渲染导出（把AI临场验收行为固化为脚本）
 
         Returns:
-            True  = 验收通过（或显式 --no_verify），PPT 在 output 根目录可交付
+            True  = 验收通过（或显式 --no_verify），PPT 在输出目录根可交付
             False = 验收未通过/无法验收，PPT 已被隔离到 _rejected\\，禁止交付
         """
         if getattr(self, 'no_verify', False):
@@ -1595,7 +1618,7 @@ class VisionProposalGenerator:
             print("[验收] 处理对照见 acceptance_report.txt；修复后重跑同一命令")
             return False
 
-        # 验收通过 → 自动清理 output 下旧版本PPT（弱模型无需判断清理）
+        # 验收通过 → 自动清理输出目录下旧版本PPT（弱模型无需判断清理）
         out_dir = output_dir or os.path.dirname(ppt_path)
         ppt_path_abs = os.path.abspath(ppt_path)
         removed = 0
@@ -1728,7 +1751,8 @@ def main():
 三种入口（按手上资料选一个）:
   A. 有需求文字/图纸数字 → --config（推荐，参数可复核）
      先校验: python vision_proposal_generator.py --check-config project_config.json
-     再选型: python vision_proposal_generator.py --config project_config.json --auto --output output
+     再选型: python vision_proposal_generator.py --config project_config.json --auto
+             （默认输出到「当前目录/<PPT名>/」，目录名与 PPT 同名）
   B. 只有一段口述需求 → --text "检测20x16区域圆孔，公差±0.5mm，节拍1s"
   C. 有图纸/文档/图片 → --files 图纸.pdf 工件.jpg --auto
 
@@ -1753,7 +1777,8 @@ def main():
                         help='只跑选型+核验并保存 selection_result.json，不生成PPT')
     parser.add_argument('--wizard', action='store_true', help='使用向导模式（交互式输入）')
     parser.add_argument('--template', type=str, help='模板PPT路径（用于继承母版样式）')
-    parser.add_argument('--output', type=str, help='输出目录')
+    parser.add_argument('--output', type=str,
+                        help='输出目录（默认：当前目录下与 PPT 同名的目录）')
     parser.add_argument('--auto', action='store_true',
                         help='自动模式：非交互选择最优方案（脚本调用必加）')
     parser.add_argument('--hardware_page', type=int, default=None,

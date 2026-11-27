@@ -31,6 +31,37 @@
 3. **模板继承** - 支持继承模板PPT的母版样式
 4. **自动识别** - 自动识别工件尺寸、检测区域、视野
 5. **型号可查证** - 所有硬件型号都有官网链接
+6. **3D 视觉引导** - 独立分支：6D 位姿、RSS 误差预算、ETH/EIH、换型、客户交付版方案
+
+---
+
+## 3D 视觉引导选型（独立分支）
+
+**什么时候用**：需要 6D 位姿引导机器人/夹爪角度、客户给的是"引导抓取精度"、
+工件无序摆放需点云配准、需测高度/平面度。**不要拿 2D 相机+测高凑。**
+
+> 与 2D 的口径区别：2D 看"像素当量够不够"，3D 看"**6D 位姿总误差够不够**"。
+> 把相机 Z 重复精度当引导精度是 3D 选型最常见的错误（差 3~10 倍）。
+
+```bash
+# 一条命令：FOV 校核 + 误差预算 + 候选排序 + 方案
+# （默认输出到 ./<项目名>/，目录名与方案同名）
+python tools/three_d_selector.py --part-size 300x300 --precision 0.5 \
+    --precision-basis guidance_accuracy --cycle-time 3 --installation ETH
+
+# 配置文件方式（推荐，字段见 config_template_3d.json）
+python tools/three_d_selector.py --config project_config_3d.json --customer
+```
+
+输出：`three_d_selection.json` + `3D视觉引导方案.md`（选型分析）+
+`3D视觉引导抓取系统技术方案_客户版.md`（BOM/标定/换型/验收，`--customer` 时生成）。
+
+关键规则（详见 SKILL.md）：
+- 精度口径必须声明，未声明直接 exit 2，禁止自行补口径
+- 误差预算按**设计目标 = 要求 × 80%** 分配，剩余 20% 是工程余量
+- 厂商 `guidance_accuracy_mm` 优先于自算；自算必须标"估算，待样件实测"
+- `data_confidence=low` 的型号**不得作为推荐首选**，只能列"待确认潜力候选"
+- 产品可能任意旋转时加 `--part-may-rotate`，FOV 按外接圆校核（300×300 → Ø424mm）
 
 ---
 
@@ -51,7 +82,7 @@
 ```bash
 python tools/vision_proposal_generator.py \
   --text "设备精度≤0.03mm，生产节拍3秒，检测区域38.5x22mm，检测CD尺寸38.50±0.25..." \
-  --output ./output --auto
+  --auto
 ```
 
 漏填参数不会静默出错方案：脚本报`【缺少XX】`+可执行修正指引（exit=2），照提示补齐重跑即可。
@@ -60,7 +91,7 @@ python tools/vision_proposal_generator.py \
 
 ```bash
 python tools/vision_proposal_generator.py \
-  --config project_config.json --output ./output --auto
+  --config project_config.json --auto
 ```
 
 模板可省略：依次找 `--template` 参数 → config 的 `template` 字段（相对路径按 config
@@ -71,7 +102,7 @@ python tools/vision_proposal_generator.py \
 
 ```bash
 python tools/vision_proposal_generator.py \
-  --files 用户资料.jpg --template 模板.pptx --output ./output --auto
+  --files 用户资料.jpg --template 模板.pptx --auto
 ```
 
 ### 方式3：使用配置向导
@@ -124,7 +155,7 @@ python tools/vision_proposal_generator.py --config project_config.json --auto
 | `--text` | 需求原始文字（从0入口，原样抄录数字信息） | `--text "设备精度≤0.03mm，节拍3s，检测区域38.5x22mm"` |
 | `--config` | 配置文件路径 | `--config project_config.json` |
 | `--template` | 模板PPT路径（可省略：config字段/工作目录自动发现） | `--template 模板.pptx` |
-| `--output` | 输出目录 | `--output ./output` |
+| `--output` | 输出目录（默认：config 所在目录下与 PPT 同名的目录） | `--output ./我的方案` |
 | `--auto` | 自动模式，**AI/弱模型调用必加**（非交互自动选最优方案） | `--auto` |
 | `--hardware_page N` | 多视角模板只替换第N个硬件选型页（缺省全部） | `--hardware_page 1` |
 | `--no_verify` | 跳过生成后自动验收（**仅限人工排障，产物不得交付**） | `--no_verify` |
@@ -132,11 +163,11 @@ python tools/vision_proposal_generator.py --config project_config.json --auto
 
 ---
 
-## 输出文件（output\ 下）
+## 输出文件（`<PPT名>\` 下，目录名与 PPT 同名）
 
 | 文件 | 说明 |
 |------|------|
-| `方案PPT_时间戳.pptx` | 继承模板母版样式的方案PPT（验收通过后自动只保留最新版） |
+| `<PPT名>.pptx` | 继承模板母版样式的方案PPT（验收通过后自动只保留最新版；不再加时间戳） |
 | `selection_result.json` | 选型明细 + 19项核验结果（validation_passed 可信） |
 | `acceptance_report.txt` | PPT规则自查报告（FAIL=0 才可交付，尾部带故障处置对照表） |
 | `ppt_review\slide_N.png` | 每页渲染原图（1600px） |

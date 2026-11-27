@@ -1,6 +1,6 @@
 ---
 name: vision-hardware-selection
-description: "机器视觉硬件选型专家，根据检测需求自动完成工业相机、镜头、光源的选型计算与方案文档生成。当用户提到机器视觉选型、工业相机选型、镜头选型、光源选型、视觉检测方案、AOI硬件选型、尺寸测量硬件选型、缺陷检测硬件选型时使用。"
+description: "机器视觉硬件选型专家，根据检测需求自动完成工业相机、镜头、光源的选型计算与方案文档生成，支持 2D 检测与 3D 视觉引导抓取（含误差预算、ETH/EIH 手眼标定、换型）。当用户提到机器视觉选型、工业相机选型、镜头选型、光源选型、视觉检测方案、AOI硬件选型、尺寸测量硬件选型、缺陷检测硬件选型、3D相机选型、3D视觉引导、机器人抓取引导、6D位姿、点云引导、手眼标定方案时使用。"
 ---
 # 视觉硬件选型技能
 
@@ -243,15 +243,16 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 
 **第1步 一条命令生成**（自动选型→核验→PPT→规则自查→导页面图→清理旧版本）：
 ```bash
-python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_proposal_generator.py" --config "<工作区>\project_config.json" --output "<工作区>\output" --auto
+python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_proposal_generator.py" --config "<工作区>\project_config.json" --auto
 ```
+> 默认输出目录 = `<config 所在目录>\<PPT名>\`（目录名与 PPT 文件名一致，不含扩展名），无需显式 `--output`。
 
 **第2步 只看退出码 + 验收结论行**（以退出码为准，不靠读日志猜）：
 
 | 退出码 | 含义 | 你要做的 |
 |:---:|------|----------|
-| `0` | 成功：PPT 在 `output\` 根目录，规则自查 FAIL=0 | 交付，跳第3步 |
-| `1` | 未生成或未通过验收（PPT 若已生成也已被移入 `output\_rejected\`） | 读 `output\acceptance_report.txt` 尾部对照表处置；处置不了就原样报告用户并停止 |
+| `0` | 成功：PPT 在 `<工作区>\<PPT名>\` 根目录，规则自查 FAIL=0 | 交付，跳第3步 |
+| `1` | 未生成或未通过验收（PPT 若已生成也已被移入 `<PPT名>\_rejected\`） | 读 `<PPT名>\acceptance_report.txt` 尾部对照表处置；处置不了就原样报告用户并停止 |
 | `2` | 缺字段 / 口径需用户拍板（脚本已给出原话问法） | 把脚本里的问题**原样转问用户**，答复前不要重跑 |
 
 > 核验报告里的 `[INFO]` 是"厂家未给数据、无法判定"的待确认项（如镜头没给
@@ -259,17 +260,17 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 > "待确认"即可，禁止自己补一个数字把它变成 PASS。
 
 - `[无解诊断]` / `✅ 标准口径有解` → 按 ⛔ 防死循环铁律处理
-- **`output\_rejected\` 里的任何文件都不是交付物**：禁止改名、复制回 `output\` 或写进汇报
+- **`<PPT名>\_rejected\` 里的任何文件都不是交付物**：禁止改名、复制回输出目录或写进汇报
 - **禁止加 `--no_verify`**：跳过验收 ≠ 通过，只用于人工排障，产物不得交付
 - **禁止自行填 `precision_basis: "measurement_accuracy"`**：该字段只能由用户明确回答
   “是测量/检测精度、不是公差”后填写。模型自己加 = 发明口径
-- **禁止读取 `output\ppt_review\` 里的图片**（slide_N.png/overview.png）——那是给用户
+- **禁止读取 `<PPT名>\ppt_review\` 里的图片**（slide_N.png/overview.png）——那是给用户
   看的预览；质量把关靠规则自查（纯文本机检），模型读图浪费大量 token 且不需要
 
 **第3步 按此模板汇报**（仅退出码=0 时使用，不要展开更多细节）：
-> 已生成视觉检测方案PPT：`output\<文件名>`（验收 FAIL=0）。
+> 已生成视觉检测方案PPT：`<PPT名>\<PPT名>.pptx`（验收 FAIL=0）。
 > 选型：<相机型号> + <镜头型号>（倍率X，像素精度X mm/pixel）+ <光源型号>。
-> 页面预览图在 `output\ppt_review\`，可抽查。
+> 页面预览图在 `<PPT名>\ppt_review\`，可抽查。
 
 ### 禁止事项（违反即事故）
 1. **禁止口述/手写方案代替脚本生成；禁止用代码手改 PPT**——方案只能由一条命令产出
@@ -279,7 +280,7 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 4. **禁止拼造光源型号**（"品牌+尺寸+角度+颜色"拼出来的型号官网通常不存在）。光源只能
    来自 `hardware_database.json.light_sources`；库内无匹配时必须输出"待选型（需扩库）"，
    并向用户说明需扩库或送样打光验证，**不得兜底填一个型号**
-5. **禁止用 `--no_verify` 交付**；**禁止把 `output\_rejected\` 里的文件改名/复制当成果**
+5. **禁止用 `--no_verify` 交付**；**禁止把 `<PPT名>\_rejected\` 里的文件改名/复制当成果**
    ——那是被规则自查判 FAIL 的产物，只作排障留证
 6. **禁止自行填 `precision_basis: "measurement_accuracy"`**。脚本因"精度口径偏大"中止(exit 2)时，
    只能把确认问题转问用户；用户明确说"是测量/检测精度、不是公差"后才可填
@@ -289,7 +290,7 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 1. **--text 模式（推荐）**：AI 读用户图片/文档/口述后，把其中的数字信息**原样抄录**给脚本
    （不要自己解读成参数），脚本负责解析与口径判断：
    ```bash
-   python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_proposal_generator.py" --text "视觉精度≤0.03mm，生产节拍3秒，检测区域38.5x22mm，检测XX尺寸38.50±0.25..." --output "<工作区>\output" --auto
+   python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_proposal_generator.py" --text "视觉精度≤0.03mm，生产节拍3秒，检测区域38.5x22mm，检测XX尺寸38.50±0.25..." --auto
    ```
    图片必须 AI 直接读图抄字（勿依赖 OCR）。
 2. **config 模式**：复制 skill 目录的 `config_template.json` 为工作区 `project_config.json`，
@@ -324,9 +325,9 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 ### 生成过程说明（最短路径第1步在做什么）
 一条命令自动包含：需求校验 → 选型 → 全项核验（FAIL自动中止）→ 模板PPT替换 →
 规则自查（check_ppt_quality）→ 页面渲染导出（export_ppt_images）→ 清理旧版本PPT。
-**只有规则自查 FAIL=0，PPT 才留在 `output\` 根目录**；FAIL 时自动移入
-`output\_rejected\` 并让主流程非零退出（物理上防止误交付）。
-完整自查报告：`output/acceptance_report.txt`；`--no_verify` 仅限人工排障，禁止用于交付。
+**只有规则自查 FAIL=0，PPT 才留在 `<PPT名>\` 根目录**；FAIL 时自动移入
+`<PPT名>\_rejected\` 并让主流程非零退出（物理上防止误交付）。
+完整自查报告：`<PPT名>\acceptance_report.txt`；`--no_verify` 仅限人工排障，禁止用于交付。
 
 ### FAIL 详细处置对照表（退出码非 0 时查这里）
 | 报告症状 | 原因与处置 |
@@ -340,7 +341,7 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 处置不了的新问题 → 原样报告用户并停止。需终审时（可选）：把 ppt_review 页面图交视觉评审复核。
 
 ### 交付物清单
-`output/` 下：方案PPT（验收通过自动只留最新版）、`selection_result.json`（选型明细+核验
+`<PPT名>/` 下：方案PPT（验收通过自动只留最新版）、`selection_result.json`（选型明细+核验
 结果）、`acceptance_report.txt`（自查报告）、`ppt_review/`（页面图+总览图+预览页）。
 
 ### 本次沉淀的教训（已固化进脚本，此处留档供理解）
@@ -359,8 +360,8 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
   用户确认非公差后填 `precision_basis_confirmed` 放行
 - **口径提示曾"只提示不阻断"**（2026-11-20 复盘）：弱模型会忽略提示直接交付低配方案 →
   现改为硬阻断，且禁止模型自行添加确认字段绕过
-- **验收 FAIL 的 PPT 曾留在 `output\` 根目录**：弱模型看到文件就交付 → 现 FAIL 自动移入
-  `output\_rejected\`，主流程返回 None/exit 1，物理上杜绝误交付
+- **验收 FAIL 的 PPT 曾留在输出目录根**：弱模型看到文件就交付 → 现 FAIL 自动移入
+  `<PPT名>\_rejected\`，主流程返回 None/exit 1，物理上杜绝误交付
 - **追光者型号曾被质检误杀**：`FL-R-` 既是模板旧型号前缀、也是追光者真实型号前缀，
   前缀匹配无法区分 → 现按"本次选中型号"白名单放行，旧型号/历史假型号仍拦截
 - WD数值替换变长会在窄框断行（"51.1m/m"）→ 已对标注框关自动换行
@@ -382,13 +383,14 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
 python tools/vision_proposal_generator.py \
   --files 用户资料.jpg \
   --template 视觉检测方案.pptx \
-  --output ./output --auto
+  --auto
 ```
+> 不加 `--output` 时默认建在 config 所在目录：`<工作区>\<PPT名>\`，目录名与 PPT 同名。
 
 ### 方式2：JSON配置 + 模板（多视角模板用 --hardware_page 指定页）
 ```bash
 python tools/vision_proposal_generator.py --config project_config.json \
-  --template 视觉检测方案.pptx --output ./output --auto --hardware_page 2
+  --template 视觉检测方案.pptx --auto --hardware_page 2
 ```
 - 模板可省略（--template/config的template字段都不给时）：自动扫描工作目录的 *.pptx
   （取修改时间最新）；工作目录也没有模板时**只输出选型方案结果并正常结束**
@@ -396,7 +398,7 @@ python tools/vision_proposal_generator.py --config project_config.json \
 
 ### 方式2b：需求文本从0入口（弱模型推荐：读图抄字，解析交给脚本）
 ```bash
-python tools/vision_proposal_generator.py --text "视觉精度≤0.03mm，生产节拍3秒，检测区域38.5x22mm，检测CD尺寸38.50±0.25..." --output ./output --auto
+python tools/vision_proposal_generator.py --text "视觉精度≤0.03mm，生产节拍3秒，检测区域38.5x22mm，检测CD尺寸38.50±0.25..." --auto
 ```
 AI 把图片/文档/口述中的数字信息**原样抄录**给 --text（精度/公差/节拍/检测区域等），
 脚本负责正则解析、口径判断与校验；漏填时脚本报`【缺少XX】`+可执行修正指引（exit=2）。
@@ -414,15 +416,15 @@ config_template.json 的示例值均为 null——禁止直接复制不改就跑
 
 ### 方式3：仅核验已有选型结果
 ```bash
-python tools/validate_selection.py --selection output/selection_result.json \
-  --json_out output/validation_report.json
+python tools/validate_selection.py --selection "<PPT名>/selection_result.json" \
+  --json_out "<PPT名>/validation_report.json"
 ```
 
 ### 方式4：仅对已生成的PPT做规则自查/导出预览
 ```bash
-python tools/check_ppt_quality.py --pptx output/方案.pptx \
-  --selection output/selection_result.json --out output/acceptance_report.txt
-python tools/export_ppt_images.py output/方案.pptx          # 加 --open 自动打开预览页
+python tools/check_ppt_quality.py --pptx "<PPT名>/方案.pptx" \
+  --selection "<PPT名>/selection_result.json" --out "<PPT名>/acceptance_report.txt"
+python tools/export_ppt_images.py "<PPT名>/方案.pptx"   # 加 --open 自动打开预览页
 ```
 预览产物（`ppt_review\`，主流程生成后自动产出）：`slide_N.png` 每页原图、
 `overview.png` 全页联系表总览（一眼看全）、`index.html` 浏览器预览页（双击翻看）。
@@ -499,7 +501,7 @@ python tools/clean_ppt_shadows.py 文件.pptx [-o 输出.pptx]
 
 # 仅做模板替换（已有选型JSON时）
 python tools/generate_ppt.py --template 模板.pptx --output 输出.pptx \
-  --selection_json output/selection_result.json --fov 24x20 --hardware_page 2
+  --selection_json "<PPT名>/selection_result.json" --fov 24x20 --hardware_page 2
 ```
 
 ---
@@ -607,11 +609,116 @@ python tools/fetch_product_image.py map --add 条光 --alias 条形光 --alias �
 - 0处替换（旧图对不上/锚定不到）→ 诚实报错并列出各页图片清单，禁止瞎猜
 - 预览件仅换图：页面文字仍是原选型内容，不可当作正式方案交付（换型号须重新走选型链）
 
+## 3D 视觉引导选型（three_d_selector.py）
+
+### 何时走 3D 分支
+
+满足任一条件就走 3D，不要拿 2D 相机+测高凑：
+
+- 需要输出 **6D 位姿**（XYZ + RX/RY/RZ）引导机器人/夹爪角度
+- 客户给的是**引导抓取精度**（如 ±0.5mm），不是像素当量或图纸公差
+- 工件**无序摆放**、需要点云配准/CAD 模板匹配
+- 需要测量**高度/平面度/体积**，或底部/表面状态影响抓取
+
+### 与 2D 的本质区别（选型口径不能混）
+
+| | 2D 选型 | 3D 引导选型 |
+|---|---|---|
+| 核心问题 | 像素当量够不够 | **6D 位姿误差够不够** |
+| 精度来源 | 精度 ÷ 亚像素因子 → 分辨率/倍率 | 总误差 RSS 分解 → 相机/标定/机器人/夹爪/工件 |
+| 决定因素 | 分辨率 × 镜头倍率 | Z 精度 + XY 点距 + 点云配准 + 手眼标定 |
+| 常见错误 | 把公差当视觉精度 | **把相机 Z 重复精度当引导精度**（差 3~10 倍） |
+
+### 一条命令选型
+
+```bash
+# 命令行（默认输出到「当前目录/<项目名>/」，目录名与 PPT 同名）
+python tools/three_d_selector.py --part-size 300x300 --precision 0.5 \
+    --precision-basis guidance_accuracy --cycle-time 3 --installation ETH
+
+# 配置文件（推荐，字段见 config_template_3d.json）
+python tools/three_d_selector.py --config project_config_3d.json
+
+# 客户交付版（含 BOM/标定/换型/验收计划，额外输出 *_客户版.md）
+python tools/three_d_selector.py --config project_config_3d.json --customer
+
+# 产品可能任意旋转：FOV 按外接圆直径校核（300×300 → Ø424mm）
+python tools/three_d_selector.py --part-size 300x300 --precision 0.5 --part-may-rotate
+```
+
+输出：`three_d_selection.json`（机器可读，含逐台 reasons/warnings）+ `3D视觉引导方案.md`（选型分析报告）+ `--customer` 时额外生成 `3D视觉引导抓取系统技术方案_客户版.md`。
+
+退出码：`0` 有 PASS 方案；`1` 全部 FAIL；`2` 参数缺失/口径未声明（脚本给出原话问法，**禁止自行补口径**）。
+
+### 七条硬规则（已固化进脚本）
+
+1. **精度口径必须声明**：`guidance_accuracy`（抓取总误差）/ `measurement_accuracy`（测量精度）/ `drawing_tolerance`（图纸公差）。未声明直接 exit 2。客户说"精度 0.5mm"时先问清是哪种。
+2. **FOV 余量 ≥ 5%，默认 ×1.2**：300×300 产品按 360×360 校核。余量 <5% 记 WARN——来料偏移/装配误差会直接出视野。
+3. **误差预算按设计目标分配，不按规格上限**：设计目标 = 要求 × 80%，剩余 20% 是工程余量。按上限分配 = 设计零余量，样机任一项超标即违约。
+4. **厂商"引导精度"优先于自算**：梅卡曼德等厂商给的 `guidance_accuracy_mm`（scope=system）已含抓取链路，直接采用；无此字段才用 `max(Z重复, VDI) + 0.5×点距` 估算，且必须标"估算，待样件实测"。
+5. **数据置信度参与评分，且 low 不得当首选**：`data_confidence: high/medium/low`，low 乘 0.78 且排除在推荐之外（只能列为"确认后潜力候选"）。数值与物理规律不符（如 1.5m 处 VDI 0.06mm）必须列"定型前书面确认"，不能纸面最优直接胜出。
+6. **工作点从最佳工作距离起搜**：厂家标称 Z 精度/VDI 都是在 optimal WD 下测的，脚本若从最近端搜索会系统性偏向近距离（点距小→误差小），但实际离最佳越远精度越差。因此搜索起点 = max(WD下限, optimal)，FOV 不够才向近端回退。
+7. **旋转包络**：`part_may_rotate=true` 时 FOV 按外接圆直径校核（300×300 → Ø424mm）。方形件 45° 摆放时外接宽度是边长的 1.414 倍，按边长校核会漏判出视野。
+
+### 误差预算默认值（可按现场覆盖）
+
+| 环节 | 默认 | 说明 |
+|---|---|---|
+| 手眼标定 | 0.10 mm | 标定点 ≥20 组、覆盖视野四角+中心 |
+| 机器人绝对定位 | 0.10 mm | **不是重复定位精度**，是绝对定位（含减速机背隙/连杆误差） |
+| 夹爪/TCP | 0.05 mm | 加工+装配+夹持变形 |
+| 工件位姿/形变 | 0.05 mm | 放置误差、来料一致性 |
+
+相机侧预算 = `sqrt(设计目标² - 其余四项RSS²)`。若四项 RSS 已超设计目标，脚本报 `budget_infeasible`——此时换任何相机都无解，必须先压缩标定/机器人/夹爪。
+
+### 底部不平整 / 6D 位姿（本项目关键风险）
+
+单相机从上方**只能看到上表面**，底部不可见：
+
+- 倾斜（RX/RY）可由上表面平面拟合估计，但**绕法向旋转（RZ）在无特征平面上不可观测**
+- RZ 必须靠：外轮廓角点 / 2D 纹理 / CAD 模板匹配 / 机械定位（挡块、V 型槽）
+- 底部不平导致的倾斜若超过夹爪容差，需"先调姿、再下爪"两步动作，或增加侧视相机
+- 方案中必须写清：**上表面是否有可辨识轮廓**，这是 RZ 能否解出的前提
+
+### ETH（Eye-to-Hand）标定要点
+
+- 固定安装，标定一次长期稳定；0.5mm 级要求标定残差 ≤0.10mm
+- 标定点 ≥20 组，覆盖视野四角+中心+常用抓取区
+- 每班/每周用标定球复检；温漂明显现场启用漂移自校正
+- ETH 缺点：视野固定、易受环境光/遮挡；优点：无负载、无拖链、标定稳定
+
+### 3D 常见坑
+
+| 坑 | 后果 | 对策 |
+|---|---|---|
+| 拿 Z 重复精度当引导精度 | 选型差 5~10 倍，现场抓不准 | 用厂商 guidance 值或完整 RSS 预算 |
+| 只看 FOV 中心，不看四角 | 边角点云缺失/畸变 | 按最差角校核，留 20% 余量 |
+| 忽略机器人绝对定位 | 视觉 0.2mm，机器人 1mm，总误差 1mm | 预算里必须单列机器人绝对精度 |
+| 深色/反光/透明工件直接套标称精度 | 点云空洞，精度骤降 | 样件打样，测空洞率与位姿重复性 |
+| 换型只换模板不换参数 | 曝光/滤波/阈值不匹配，点云质量差 | 每型号独立参数集，与模板绑定版本号 |
+| 10GigE 相机配 1G 网卡 | 采集降速，节拍不够 | 采购清单里写明网卡/交换机规格 |
+
+### 3D 方案 PPT（客户版）
+
+3D 客户版 PPT 没有 2D 的镜头/光源标注框，生成规则与 2D 模板替换不同：
+
+- **数据源唯一**：所有型号/精度/误差/视野从 `three_d_selection.json` 读，正文口径与 `*_客户版.md` 对齐；禁止在 PPT 脚本里另写一套数字
+- **示意图**：相机机身与光窗画成两个实体，工作距离一律 `ppt_diagram.add_wd_dim(光窗, 产品上表面)`，构建期 `self_check()` 不合格直接抛错
+- **机检**：`check_ppt_quality.py` 可直接跑——硬件页标题必须是"硬件选型"且位于页面顶部（<1.5in），否则按目录页排除；3D 页无标注框时 C2/C3/C7 自动跳过，C1/C4/C6/C8 仍生效
+- **C4 口径**：长正文（>20 字）且框高足够容纳估算行数时豁免，不算断行；短标注（≤20 字）和框高不足仍严格抓
+- **页面骨架**（14 页）：封面 / 目录 / 需求与假设 / 系统方案（ETH 示意图）/ 硬件选型 / 精度链 / 视野与 WD / 为什么不是厂商推荐型号 / 底部不平与 6D / 标定与换型 / 节拍触发通讯 / 验收计划 / 风险与待确认 / 结束
+
 ## 硬件数据库
 `config/hardware_database.json`：
-- **相机**：海康威视 CS/CA 系列
+- **2D 相机**：海康威视 CS/CA 系列
+- **3D 相机**（`three_d_cameras`）：梅卡曼德 PRO S/PRO M/NANO、Zivid 2+ M60、Photoneo PhoXi M Gen3、迁移科技 Epic Eye Pixel Pro/Laser M V3、Cognex 3D-A5060、图漾 PS800-E1/VMD03-1230(C)
 - **镜头**：视清科技远心（WWK/WWH/DTCM，0.3~1.5x）、海康 FA/微距
 - **光源**：追光者 FL-R 环形光（高角度 60/75/90°、低角度 15/30/45°，含内外径）、孚根 FG-DR（参数待补）
+
+3D 相机条目字段约定：`working_distance_mm`、`fov_near/fov_far`、`xy_resolution_mm`、
+`z_repeatability_mm`、`vdi_accuracy_mm`、`guidance_accuracy_mm`（厂商引导精度，无则 null）、
+`data_confidence`（high/medium/low）、`needs_vendor_confirmation`（定型前必须书面确认的项）。
+`guidance_accuracy_mm` 只填厂商官方口径，**禁止把自算值写进库**；自算在脚本里做。
 
 所有型号带 verified 标记与官网链接，**扩展数据库时必须用官网可查证的型号**。
 光源条目必须含 `angle`/`outer_diameter`；内径与推荐 WD 范围缺失时显式写 `null`
@@ -620,7 +727,7 @@ python tools/fetch_product_image.py map --add 条光 --alias 条形光 --alias �
 
 ## 环境与输出
 - 依赖：python-pptx、Pillow、numpy（easyocr可选）；首次运行自动检查安装
-- 输出：`--output` 指定目录（PPT、selection_result.json、validation_report.json）
+- 输出：默认 `<config 所在目录>/<项目名>/`（目录名与 PPT 同名）；`--output` 可显式改目录（PPT、selection_result.json、validation_report.json）
 
 ## 注意事项
 1. AI调用脚本一律加 `--auto`（非交互自动选最优方案）

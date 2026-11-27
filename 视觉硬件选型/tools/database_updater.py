@@ -21,7 +21,7 @@
 
 用法：
   python database_updater.py gap --fov 63x42 --precision 0.025
-  python database_updater.py gap --selection output/selection_result.json
+  python database_updater.py gap --selection <PPT名>/selection_result.json
   python database_updater.py fetch --model WWK08-110C-111 --url https://... [--type lens]
   python database_updater.py add --draft draft.json [--db 自定义路径]
   python database_updater.py verify --model WWK08-110C-111

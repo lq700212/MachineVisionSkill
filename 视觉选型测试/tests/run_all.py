@@ -5,7 +5,7 @@
   smoke    秒级结构自检：文件/依赖/JSON 合法性
   data     硬件库完整性：schema/可查证/无假型号
   doc      文档契约：SKILL.md/README/模板与代码一致
-  core     选型算法单元：精度链/镜头/光源/文本解析/图片
+  core     选型算法单元：精度链/镜头/光源/文本解析/图片/3D引导
   ppt      PPT 质检规则契约（check_ppt_quality 判定边界）
   workflow 端到端工作流：退出码/产物/幂等/验收隔离
   all      全部（默认）
@@ -39,7 +39,7 @@ LAYERS = {
     'doc': ['test_doc_contract.py'],
     'core': ['test_selection_core.py', 'test_text_entry.py',
              'test_channel3.py', 'test_image_fetch.py',
-             'test_industry_compliance.py'],
+             'test_industry_compliance.py', 'test_3d_selection.py'],
     'ppt': ['test_ppt_quality_contract.py'],
     'workflow': ['test_workflow_contract.py', 'test_ppt_pipeline.py'],
 }

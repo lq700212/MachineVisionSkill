@@ -21,7 +21,7 @@
                     且端点与实体形状上/下边界对齐（示意图标注脱节是常见事故）
 
 用法：
-  python check_ppt_quality.py --pptx 方案.pptx --selection output/selection_result.json
+  python check_ppt_quality.py --pptx 方案.pptx --selection <PPT名>/selection_result.json
   python check_ppt_quality.py --pptx 方案.pptx --selection ... --out 验收报告.txt
 
 退出码：0=无FAIL（可交付）；1=存在FAIL（按报告处理）；2=输入错误
@@ -72,6 +72,9 @@ def is_hardware_slide(slide):
     仅看标题会误伤目录页——目录里"03"和"硬件选型"是两个独立文本框，
     "硬件选型"本身精确命中标题（2026-11-20 实测）。目录页既无标注框
     也无参数内容，据此排除。
+
+    2026-11-27 补充：目录页描述含"工作距离/视野"时会命中参数词，仍会
+    误判；标题必须在页面顶部（<1.5in）才认，目录条目都在正文区。
     """
     has_title = False
     texts = []
@@ -83,7 +86,7 @@ def is_hardware_slide(slide):
             if not t:
                 continue
             texts.append(t)
-            if t in HW_TITLES:
+            if t in HW_TITLES and shape.top is not None and shape.top < 1371600:
                 has_title = True
     if not has_title:
         return False
@@ -294,6 +297,14 @@ def check_overflow(hw_slides):
                                       f"（字号继承主题无法精估），建议人工确认显示完整")
                     continue
                 est = est_text_width_pt(t, fs)
+                # 长正文（>20 字）且框高足够容纳估算行数 → 属于正常多行排版，
+                # 不算断行事故。C4 只抓"短标注单行放不下"和"框高不足"。
+                # 2026-11-27 补充：3D 方案的说明段落整段都是多行正文，
+                # 旧规则按单行宽度判定会整页误报 FAIL。
+                if len(t) > 20 and shape.height is not None:
+                    n_lines = math.ceil(est / max(box_pt, 1.0))
+                    if Emu(shape.height).pt >= n_lines * fs * 1.3:
+                        continue
                 if est > box_pt * 1.25:
                     if wrap_off:
                         issues.append(f"[WARN] 第{idx}页 {t[:24]!r} 估算宽{est:.0f}pt"

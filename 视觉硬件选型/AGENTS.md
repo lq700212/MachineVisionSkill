@@ -50,10 +50,12 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 ├── validate_selection.py     13类选型核验（FAIL中止），含光源WD、远心回退、景深/MTF/衍射、
 │                             接口带宽、快门类型、飞拍频闪三态
 ├── generate_ppt.py           模板数据替换（触发词规则；WD显示优先wd_spec）
-├── check_ppt_quality.py      PPT规则自查7项（历史缺陷全部机检化）
+├── check_ppt_quality.py      PPT规则自查8项（C1~C8，历史缺陷全部机检化）
 ├── export_ppt_images.py      预览三件套（PNG/联系表/index.html；COM→LibreOffice降级）
 ├── database_updater.py       官网查证扩库：gap/fetch三级通道/add强校验/verify/check-db/refresh
 ├── fetch_product_image.py    官网产品图自动获取（海康API通道）：防串行→下载原图→合成横幅→写库
+├── three_d_selector.py       3D视觉引导选型（独立分支）：FOV/旋转包络校核、RSS误差预算、
+│                             厂商guidance优先、数据置信度降权、ETH/EIH、客户版方案生成
 └── clean_ppt_shadows.py      阴影清理（历史污染修复工具）
 ```
 
@@ -73,7 +75,10 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 | verified | 官网人工对照过=true | fetch自动提取=false，选型参与但带警告 |
 | detection_type / is_measurement_scene | 测量场景判定（单点函数：类型关键词/application/精度≤0.01mm） | 选型远心分层与核验判定必须共用同一函数，两链各写一套必漂移 |
 | telecentric_fallback | 测量场景远心无匹配回退普通镜头的标记 | 是权宜方案不是错误：核验WARNING提示透视误差，交用户拍板，不FAIL拦死 |
-| 库=官网缓存 | 选中超龄条目主流程自动官网refresh（无变化续期/有变化入库重跑选型） | 官网才是数据源；联网失败WARN降级用库内值，不阻断交付 |
+| guidance_accuracy_mm | 厂商官方"视觉引导抓取精度"经验值（含抓取链路，scope=system） | 不是相机Z重复精度！无此字段才用 max(Z重复,VDI)+0.5×点距 自算，且必须标"估算" |
+| data_confidence | 3D相机参数可信度 high/medium/low | low 只降权不够，必须排除出首选；纸面最优不可信数据不得当推荐结论 |
+| design_target_mm | 3D误差预算分配基准=规格上限×80% | 不是规格上限！按上限分配=设计零余量，样机任一项超标即违约 |
+| part_may_rotate | 产品可能任意旋转时FOV按外接圆校核 | 方形件45°外接宽度是边长1.414倍，按边长校核会漏判出视野 || 库=官网缓存 | 选中超龄条目主流程自动官网refresh（无变化续期/有变化入库重跑选型） | 官网才是数据源；联网失败WARN降级用库内值，不阻断交付 |
 | strobe | 光源频闪能力三态：true=已核验支持 / false=明确不支持 / null=厂商资料未给、未核验 | 缺字段≠不支持！旧逻辑 `if not light.get('strobe')` 把未核验当不支持，飞拍查询恒空 |
 | 接口带宽 | 需求帧率下数据率 ≤ 接口有效带宽（GigE≈110MB/s、USB3≈350、10GigE≈1100） | max_fps 是标称上限，不是工作点；5MP@24fps 黑白在 GigE 上约 121MB/s，跑不到满帧 |
 | 快门类型 | 运动/飞拍必须全局快门；卷帘逐行曝光会拖影/果冻 | 静态工位卷帘可用，但提速后必须复评；缺字段=WARN 不得默认全局 |
@@ -82,9 +87,9 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 ## 运行时工作区约定（开发测试时也要遵守）
 
 - 用户工作区（如 E:\Agent工作空间\视觉方案\）只有数据没有代码：用户资料图片、模板
-  `视觉检测方案.pptx`（只读不写）、`project_config.json`（口径字段禁改）、`output\` 交付物
-- 交付物在 `output\`：方案PPT（验收通过自动只留最新版）、selection_result.json、
-  acceptance_report.txt、ppt_review\ 预览三件套；中间失败版本由脚本自动清理
+  `视觉检测方案.pptx`（只读不写）、`project_config.json`（口径字段禁改）、`<PPT名>\` 交付物
+- 交付物在 `<PPT名>\`（目录名与 PPT 同名）：方案PPT（验收通过自动只留最新版）、
+  selection_result.json、acceptance_report.txt、ppt_review\ 预览三件套；中间失败版本由脚本自动清理
 - 工作区不再有 AGENTS.md（已并入本 skill）：运行时入口=SKILL.md「标准作业流程·最短路径」，
   project_config.json 内有 `_使用指引` 兜底字段指向它
 
@@ -120,10 +125,11 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 | 光源型号 `OPT RL-150-120-W` 进交付PPT（官网无此命名） | `light_selector.py` 把 6 条光源硬编码在代码里，型号由"品牌+尺寸+角度+颜色"拼造，且无 verified/官网链接；核验只查相机/镜头，CLI 连 light 都没传给 validator | 光源库改读 `hardware_database.json.light_sources`；库空/无匹配返回空型号并写"待选型（需扩库）"；新增光源可查证性+内径覆盖两项核验；CLI 补传 light；入库真实追光者/孚根型号 |
 | 客户"偏差≤0.5mm"被填成 precision_requirement，需 144px 的荒谬结论 | 公差与设备精度口径混淆，精度链松 10 倍；原实现只提示不阻断，弱模型会忽略提示继续交付 | `_validate_params` 改为**硬阻断(exit 2)**：给出"公差/设备精度"原话问法 + `precision_basis_confirmed` 确认出口；禁止模型自行添加；SKILL.md 增加判别三问 |
 | `--hardware_page 5` 越界后静默不生成PPT | 参数语义是"第N个硬件页"而非页码，越界只打印一行错误并 return None，上层继续验收 | 越界打印每个硬件页的真实页码；上层检查 None 并中止，main exit 非零 |
-| 验收 FAIL 的 PPT 仍留在 `output\` 根目录 | `_run_acceptance` 只打印一句"处理前不要交付"，不改变文件位置，主流程仍 exit 0，弱模型看到文件就交付 | FAIL/验收异常 → PPT 移入 `output\_rejected\`，`_run_acceptance` 返回 False，主流程 return None / exit 1 |
+| 验收 FAIL 的 PPT 仍留在输出目录根 | `_run_acceptance` 只打印一句"处理前不要交付"，不改变文件位置，主流程仍 exit 0，弱模型看到文件就交付 | FAIL/验收异常 → PPT 移入 `<PPT名>\_rejected\`，`_run_acceptance` 返回 False，主流程 return None / exit 1 |
 | 弱模型用 `--no_verify` 跳过验收，或从 `_rejected` 取文件改名交付 | 只靠文档提醒，无硬约束 | `--no_verify` 打印"产物不得作为交付依据"；SKILL.md 禁止事项第5条；汇报模板仅限退出码=0 |
 | 追光者正确型号 `FL-R-10045-W` 被质检判"旧型号残留" | `FL-R-` 既是模板旧型号前缀，也是追光者真实型号前缀，前缀匹配无法区分 | 选中型号白名单放行；旧型号/历史假型号仍拦截；新增 `test_ppt_quality_contract.py` 锁边界 |
-| 目录页 / 选型计算页被当成硬件展示页 | 目录里"硬件选型"是独立文本框（精确命中标题），计算页标题相同但无实物标注框 | 标题精确 + (标注框≥2 或 含硬件参数词) 才判硬件页；展示页专属检查（光源类型/两页一致/相机图）只对带标注框的页执行 |
+| 目录页 / 选型计算页被当成硬件展示页 | 目录里"硬件选型"是独立文本框（精确命中标题），计算页标题相同但无实物标注框 | 标题精确 + **文本框在页面顶部（<1.5in）** + (标注框≥2 或 含硬件参数词) 才判硬件页；展示页专属检查（光源类型/两页一致/相机图）只对带标注框的页执行。目录条目在正文区，加顶部约束后不再误判 |
+| 3D 方案说明段落整段被 C4 判"断行 FAIL" | C4 只按单行估算宽度判定，正文段落天然是多行；3D 客户版一页 3~4 段全中，机检直接不可用 | 长正文（>20 字）且框高 ≥ 估算行数 × 字号 × 1.3 时豁免；短标注（≤20 字）与框高不足仍严格抓（v1.16.1） |
 | `validate_selection` 在只填 `tolerance` 时 TypeError | `precision_requirement` 显式 null 时 `.get(k, 0)` 返回 None，`None <= 0` 直接崩 | `resolve_precision_mm()` 统一解析（优先设备精度，否则公差/10），四处共用；`--params` 用 selection 的 project_info 补齐视野 |
 | MOD=500mm 的镜头在 WD=300mm 项目里"中选" | WD 没进配置模板、没进选型参数、没进核验；`distortion` 缺失时评分默认 1.0、显式 null 时崩溃 | `working_distance` 进配置模板；`lens_wd_status()` 单点判定；选型/核验两链共用同一口径；数据库补 `mod`/`wd_range`/`resolution_mp`；null 安全处理 |
 | 客户型号 `MVL-KF7528M-12MP` 被"库里没有"排除；把锁紧螺钉说成微距专属 | 库被当成全集；凭印象给结构项定性，没查官网规格书 | 新增 `lens_audit.py` 库外核查工具 + `external_candidates` 留档；锁紧/接口/靶面等结构项一律以官网规格书为准，禁止凭印象断言 |

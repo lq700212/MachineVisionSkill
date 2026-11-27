@@ -39,7 +39,7 @@ mklink /J "C:\Users\Administrator\.config\opencode\skills\视觉硬件选型" "D
 python 视觉选型测试/tests/run_all.py
 ```
 
-当前基线 **233/233 通过、0 跳过**；只改了一层时可 `--layer smoke|data|doc|core|ppt|workflow`
+当前基线 **277/277 通过、0 跳过**；只改了一层时可 `--layer smoke|data|doc|core|ppt|workflow`
 按需快跑，交付前再跑全量。分层说明见 [视觉选型测试/SKILL.md](视觉选型测试/SKILL.md)。
 
 ### 挂到 DeepSeek Harness（DSH）：整仓零拷贝
@@ -72,8 +72,8 @@ mklink /J "C:\Users\Administrator\.agents\skills" "C:\Users\Administrator\.confi
 
 | Skill 目录 | DSH 调用名 | 说明 | 使用文档 |
 |-------|------|------|----------|
-| [视觉硬件选型](视觉硬件选型/) | `vision-hardware-selection` | 机器视觉选型专家：相机/镜头/光源选型计算、方案 PPT 生成、官网产品图自动获取；光源只认官网库且型号可查证，口径歧义硬阻断，接口带宽/快门/景深/MTF/频闪纳入硬核验，`--check-config`/`--dry-run` 先自检再生成，示意图尺寸标注走内置 `ppt_diagram` 模块 + C8 对齐机检（工作距离固定从镜头前端面起算），验收 FAIL 自动隔离 | [SKILL.md](视觉硬件选型/SKILL.md) |
-| [视觉选型测试](视觉选型测试/) | `vision-selection-test` | 视觉硬件选型专用分层测试套件：smoke/data/doc/core/ppt/workflow 六层，233 条回归 + 注入用例（含行业规范：带宽/快门/景深/MTF/频闪三态、测量精度与公差口径语义、PPT 尺寸标注对齐与画法模块契约），按改动选层快跑 | [SKILL.md](视觉选型测试/SKILL.md) |
+| [视觉硬件选型](视觉硬件选型/) | `vision-hardware-selection` | 机器视觉选型专家：相机/镜头/光源选型计算、方案 PPT 生成、官网产品图自动获取；光源只认官网库且型号可查证，口径歧义硬阻断，接口带宽/快门/景深/MTF/频闪纳入硬核验，`--check-config`/`--dry-run` 先自检再生成，示意图尺寸标注走内置 `ppt_diagram` 模块 + C8 对齐机检（工作距离固定从镜头前端面起算），验收 FAIL 自动隔离；另含 3D 视觉引导独立分支（点云相机/6D 位姿、RSS 误差预算、ETH/EIH 标定、换型、客户交付版方案，精度口径未声明直接 exit 2） | [SKILL.md](视觉硬件选型/SKILL.md) |
+| [视觉选型测试](视觉选型测试/) | `vision-selection-test` | 视觉硬件选型专用分层测试套件：smoke/data/doc/core/ppt/workflow 六层，277 条回归 + 注入用例（含行业规范：带宽/快门/景深/MTF/频闪三态、测量精度与公差口径语义、PPT 尺寸标注对齐与画法模块契约、3D 引导选型 FOV/误差预算/置信度排序），按改动选层快跑 | [SKILL.md](视觉选型测试/SKILL.md) |
 | [git自动提交推送](git自动提交推送/) | `git-auto-commit-push` | 本地工程一键 commit + push：自动读 CHANGELOG 生成 message（含要点提炼），提交前安全检查（可联动仓库卫生体检），现场目录用显式暂存 | [SKILL.md](git自动提交推送/SKILL.md) |
 | [winforms-ui-debug](winforms-ui-debug/) | `winforms-ui-debug` | 跨项目 WinForms 界面像素级调试：harness 指哪打哪直启目标窗体，反射探查 + 截图 + 像素扫描，附矩形枚举/置顶截图脚本 | [SKILL.md](winforms-ui-debug/SKILL.md) |
 | [上位机通讯封装](上位机通讯封装/) | `hmi-comm-wrapper` | 上位机设备通讯范式：PLC/相机/仪表/Modbus 连接管理、心跳重连、UI 解耦 | [SKILL.md](上位机通讯封装/SKILL.md) |
@@ -124,7 +124,7 @@ mklink /J "C:\Users\Administrator\.agents\skills" "C:\Users\Administrator\.confi
 | 选型核验 | 光源可查证性、内径覆盖、光源 WD < 镜头 WD、工作距离/MOD、倍率依据、接口带宽、快门类型、景深/MTF/衍射、频闪三态、口径歧义硬阻断（exit 2） | 假型号进 PPT；客户公差被当成设备精度，算出 144px 的荒谬方案；5MP 相机在 GigE 上跑标称帧率；运动场景选卷帘；景深不足/镜头解析力不够 |
 | PPT 质检 | 当前选中型号白名单 + 旧型号/历史假型号黑名单 | 正确型号被误杀、旧型号残留、待选型占位符漏放 |
 | 验收隔离 | 规则自查 FAIL 或验收异常 → PPT 自动移入 `output/_rejected/`，主流程非零退出 | "文件还在 output 里就被交付" |
-| 分层测试 | 六层 233 条用例，bug → 用例一一沉淀，注入用例只迁移不删除 | 改 A 坏 B、文档与代码漂移、历史缺陷回流 |
+| 分层测试 | 六层 277 条用例，bug → 用例一一沉淀，注入用例只迁移不删除 | 改 A 坏 B、文档与代码漂移、历史缺陷回流 |
 
 原则：**脚本为主、AI 为辅**——每个可执行环节都有脚本，弱模型照脚本输出的 SOP 执行，
 即得与强模型同款结果；AI 只做判断与文案，不碰"参数从哪来"。
@@ -157,7 +157,7 @@ graph LR
 
 ```text
 MachineVisionSkill/
-├── 视觉硬件选型/            # 相机·镜头·光源选型 + 方案 PPT + 官网产品图（光源唯一数据源）
+├── 视觉硬件选型/            # 2D 相机·镜头·光源 + 3D 引导选型 + 方案 PPT + 官网产品图（光源唯一数据源）
 ├── 视觉选型测试/            # 六层分层测试：smoke/data/doc/core/ppt/workflow
 ├── 上位机报价/              # 报价六步法 + IO/代码体检 + 核验脚本
 ├── 上位机通讯封装/          # 设备通讯范式（纯文档沉淀）
