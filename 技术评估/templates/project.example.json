@@ -1,0 +1,144 @@
+{
+  "project": {
+    "name": "示例：产线数据采集与看板",
+    "date": "2026-01-01",
+    "type": "工业上位机",
+    "client": "某制造厂",
+    "deadline": "2026-02-15",
+    "owner": "",
+    "confidential": true
+  },
+  "images": [
+    {
+      "src": "assets/raw/img_001.jpg",
+      "out": "assets/ui_annotated.png",
+      "crop": [155, 535, 1190, 1238],
+      "scale": 1.5,
+      "side": 330,
+      "font_size": 21,
+      "sub_font_size": 16,
+      "annotations": [
+        {
+          "box": [4, 540],
+          "color": "#1E6EDC",
+          "label": "设备接入区",
+          "sub": "PLC / 扫码枪 / 仪表",
+          "label_y": 272
+        },
+        {
+          "box": [540, 825],
+          "color": "#2E9660",
+          "label": "第二网段 / 专网",
+          "sub": "串口服务器 / 仪表",
+          "label_y": 682
+        },
+        {
+          "box": [825, 949],
+          "color": "#C97A1E",
+          "label": "服务器地址",
+          "sub": "IP : 端口",
+          "label_y": 887
+        },
+        {
+          "box": [949, 1050],
+          "color": "#8250BE",
+          "label": "业务参数",
+          "sub": "过滤 / 重发 / 起始工位",
+          "label_y": 999
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "type": "architecture",
+      "out": "assets/architecture.png",
+      "left_nodes": [
+        {"label": "PLC A   192.168.1.10 : 502", "color": "#2E6FBF", "fill": "#E8F1FB"},
+        {"label": "PLC B   192.168.1.11 : 502", "color": "#2E6FBF", "fill": "#E8F1FB"},
+        {"label": "扫码枪   192.168.1.20 : 9004", "color": "#2E9660", "fill": "#E6F5EC"},
+        {"label": "电子秤   192.168.1.30 : 4001", "color": "#2E9660", "fill": "#E6F5EC"}
+      ],
+      "center": {
+        "title": "工控机  上位机",
+        "subtitle": "采集服务 + 本地缓存",
+        "lines": ["双网卡", "4 路 TCP 客户端", "断线重连 / 去重 / 补传"],
+        "color": "#3A8F3A",
+        "fill": "#EAF6EA"
+      },
+      "right": {
+        "title": "MES / 数据库",
+        "lines": ["10.0.0.20 : 6001", "（接口待确认）"],
+        "color": "#C97A1E",
+        "fill": "#FDF0E3"
+      },
+      "link_left": "Modbus TCP / TCP",
+      "link_right": "HTTP / SQL",
+      "footer": [
+        "蓝色：工厂内网设备    绿色：设备专网 / 串口服务器",
+        "工位映射：通道 → 工位，起始工位 1",
+        "去重 120s / 重发 30s × 2"
+      ]
+    },
+    {
+      "type": "workload",
+      "out": "assets/workload.png",
+      "title": "编码工作量对比：传统 24 人天 → AI 辅助 10.5 人天",
+      "unit": "人天",
+      "series": ["传统估算", "AI 辅助"],
+      "items": [
+        {"name": "设备通讯层", "values": [5, 2]},
+        {"name": "业务逻辑", "values": [3, 1]},
+        {"name": "MES 接口", "values": [3, 1.5]},
+        {"name": "UI 复刻", "values": [4, 1.5]},
+        {"name": "配置 / 部署", "values": [2, 1]},
+        {"name": "测试 / 联调", "values": [5, 3]},
+        {"name": "文档", "values": [2, 0.5]}
+      ]
+    },
+    {
+      "type": "timeline",
+      "out": "assets/timeline.png",
+      "title": "现实档排期",
+      "tasks": [
+        {"name": "信息收集", "start": "2026-01-01", "end": "2026-01-08", "color": "#9AA7B8"},
+        {"name": "评估 / POC", "start": "2026-01-05", "end": "2026-01-10", "color": "#4C78A8"},
+        {"name": "签约", "start": "2026-01-08", "end": "2026-01-12", "color": "#8E6BB8"},
+        {"name": "开发", "start": "2026-01-12", "end": "2026-01-25", "color": "#F58518"},
+        {"name": "现场联调", "start": "2026-01-26", "end": "2026-02-05", "color": "#E45756"},
+        {"name": "试产验收", "start": "2026-02-06", "end": "2026-02-15", "color": "#54A24B"}
+      ],
+      "milestones": [
+        {"date": "2026-01-08", "label": "信息截止", "color": "#C0392B"},
+        {"date": "2026-02-05", "label": "一期可上线", "color": "#D68910"},
+        {"date": "2026-02-15", "label": "最终上线", "color": "#1E8449"}
+      ]
+    },
+    {
+      "type": "risk_matrix",
+      "out": "assets/risk_matrix.png",
+      "title": "风险矩阵",
+      "risks": [
+        {"name": "接口文档缺失", "probability": 0.6, "impact": 0.95, "color": "#E45756"},
+        {"name": "设备协议不明", "probability": 0.5, "impact": 0.8, "color": "#F58518"},
+        {"name": "现场无远程", "probability": 0.4, "impact": 0.75, "color": "#8E6BB8"},
+        {"name": "需求蔓延", "probability": 0.55, "impact": 0.5, "color": "#4C78A8"}
+      ]
+    },
+    {
+      "type": "scenario",
+      "out": "assets/scenario.png",
+      "title": "可行性分场景",
+      "items": [
+        {"name": "A. 配置修复即可", "probability": 0.35, "effort": "0.5~1 人天", "color": "#54A24B"},
+        {"name": "B. 缺依赖 / 授权", "probability": 0.25, "effort": "1~3 人天", "color": "#4C78A8"},
+        {"name": "C. 可反编译 + 可抓包", "probability": 0.25, "effort": "8~15 人天", "color": "#F58518"},
+        {"name": "D. 私有协议 + 文档缺失", "probability": 0.15, "effort": "20 人天以上", "color": "#E45756"}
+      ]
+    }
+  ],
+  "numbers": [
+    {"key": "总投入", "value": "15~20 人天"},
+    {"key": "建议报价", "value": "14.8 万"}
+  ]
+}

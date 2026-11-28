@@ -2,6 +2,80 @@
 
 本 skill 的所有版本变动统一记录在此。格式参考 Keep a Changelog。
 
+## [v1.18.1]（2026-11-28）
+### 新增：3D 点云图缺省素材（三级回退）
+
+> 触发：3D 方案未提供实拍点云图时，P7 只剩"点云素材待补"占位框，整册看起来像
+> 半成品。用户要求把已验收项目的三张点云图沉淀为 skill 缺省素材。
+
+- **新增 `assets/pointcloud_default/`**：`pc_top.png` / `pc_slant_a.png` /
+  `pc_slant_b.png`（PRO M-V4D1200M 同型号典型成像），随 skill 分发
+- **`three_d_ppt.py` 图位三级回退**：用户实拍图 → skill 内置缺省图 → 占位框；
+  逐张独立判断，部分实拍也能补齐
+- **诚实标注**（关键）：三张全部实拍才标"实采"；用了缺省图标"同型号典型成像"，
+  右侧要点同步改为不绑定本工件尺寸的通用表述（如"单帧完整覆盖工件"），
+  避免把缺省图当本工件实测结论
+- **新增 `--no-default-pointcloud`**：禁用缺省图、退回占位框（仅排障/内部评审）
+- **文档**：SKILL.md 3D 参数表 + 三级回退说明；AGENTS.md 资源目录说明
+  （缺省素材不是实拍证据）
+
+验证：
+- 无实拍图 + 缺省图 → 12 页 PASS，P7 三图齐全，页眉"同型号典型成像"
+- `--no-default-pointcloud` → 12 页 PASS，P7 占位框
+- 正式项目（有实拍图）→ 12 页 PASS，页眉仍为"实采"，文案与旧版一致
+
+## [v1.18.0]（2026-11-28）
+### 新增：2D 客户版 12 页生成器 + 弱模型链路加固
+
+> 触发：用户要求 2D 方案也整理成可直发客户的版本，且"换其他模型（特别是弱模型）
+> 后 PPT 质量不变"。按弱模型视角实跑后，发现主路径指向旧版式、机检 FAIL 仍 exit 0、
+> selection 缺失断链等 11 个坑，全部修复。
+
+#### 一、2D 客户版生成器固化
+
+- **新增 `tools/two_d_ppt.py`**：2D 定位/贴片客户版 12 页整册生成器。
+  - 与 3D 共用 `ppt_layout.py` 的 `STANDARD_PAGES` / `STANDARD_SECTIONS` / `toc_items()` /
+    `page_title()`，页序完全一致：封面 / 目录 / 项目需求 / 系统方案 / 工作流程 /
+    硬件选型 / 选型计算 / 视觉算法 / 精度分析 / **系统架构（新增）** / 实施与验收 / 谢谢
+  - 母版硬件页**值替换**（不重建）：shape 契约集中在 `HW_PIC_SLOTS` 与 `_fill_hardware_page()`；
+    `--hardware-page` 可指定索引
+  - 数据源唯一：型号/分辨率/像元/倍率/工作距离/光源全部读 `selection_result.json`
+  - 可选 config 字段：`output_dir` / `scene`（7 个文案键）/ `precision_chain` / `field_control_mm`
+  - 合成误差按 RSS 动态计算，不再写死；精度格式 `<1mm` 两位、`>=1mm` 一位
+- **`ppt_layout.py` 上移共享能力**：`discover_template()`（支持向上找 1 层）、
+  `run_quality_check(pptx, selection=None)`、`export_preview()`；3D 改为复用
+- **`ppt_layout.py` 页序文档同步为 12 页**；2D/3D 专项页内容层不同、骨架层同一份
+
+#### 二、弱模型链路加固（11 项）
+
+- **主入口统一**：SKILL.md 顶部新增「30 秒执行卡」；「最短路径」由单一路径改为
+  **按交付物三选一**表格（2D 整册 / 3D 整册 / 仅模板硬件页），明确"产物同名，
+  后跑覆盖，只跑一条"
+- **退出码修正**：`two_d_ppt.py` 机检 FAIL 时 `return 1`（原为 0），与 3D 对齐
+- **机检白名单**：`run_quality_check` 透传 `--selection`，修复"正确追光者光源被误判
+  FL-R- 残留"（2D 输出目录与 selection 目录分叉时必现）
+- **自动补选型**：`two_d_ppt.py` / `three_d_ppt.py` 新增 `auto_select()`；selection 缺失时
+  内部调 `--auto --dry-run` / `three_d_selector.py`，失败原样透出后停止，不兜底填数字
+- **`--text` 落 config**：`generate_from_text` 解析成功即写 `project_config.json`
+  （已存在不覆盖），打通"一句话需求 → 12 页客户版"链路
+- **配置误传拦截**：3D config 进 2D `--check-config` → 识别并指路（exit 2）；
+  2D/3D config 互传生成器 → 双向拦截并给正确命令
+- **字段校验**：`scene` 未知键打印可用键清单；`precision_chain` 校验三项+数字并给示例
+- **报错指路**：无参数运行、selection 缺失均补完整命令示例
+- **文档**：SKILL.md 注意事项补"PowerShell 乱码只看退出码"；禁止事项新增
+  "禁止修改 skill 目录任何 `.py`/`.md`"
+- **AGENTS.md**：铁律新增第 8 条（生成器上线必须同提交改主入口文档）、
+  第 9 条（两步操作必须能自动补前一步）；事故档案新增 11 条
+
+#### 三、验证
+
+- 2D 正式项目：12 页，机检 FAIL=0 WARN=0，exit 0
+- 3D 正式项目：12 页，机检 FAIL=0 WARN=0，exit 0
+- 弱模型模拟（干净目录 + 一句话需求 → 12 页客户版）：通过，机检 PASS
+- 换项目回归（0.3mm / 2s / 30×24 视野 + 尺寸测量 scene）：通过，文案随 config 切换
+- 注入测试：3D config 误传、2D/3D config 互传、`scene` 键错、`precision_chain` 格式错，
+  均按预期拦截/提示，不崩溃
+
 ## [v1.17.0]（2026-11-27）
 ### 变更：输出目录改为与 PPT 同名，不再固定 `output`
 

@@ -3,6 +3,58 @@
 > 用于 git 提交时快速确认**本次改动了哪些 skill、各改了什么**。
 > 记录按时间倒序排列（新版本在上）。各 skill 的详细历史见其目录下 `CHANGELOG.md`。
 
+## 2026-11-28（本次·技术评估 v1.1.0 新 skill + 视觉硬件选型 2D/3D 客户版整册 + 弱模型加固）
+
+### 改动范围
+
+1. **技术评估**（新增，v1.1.0）：
+   - 新增内部技术评估全流程 skill `tech-assessment`，沉淀自 RFID 过账项目（泰国工厂）内部评估。
+   - 脚本 6 个：`init_project.py`（目录 + project.json）、`extract_images.py`（opencode 会话图片提取）、
+     `crop_annotate.py`（裁剪 + 右侧标签标注 + 未裁剪警告）、`make_charts.py`（架构 / 工作量 / 甘特 / 风险矩阵 / 场景）、
+     `new_report.py`（按模板生成文档骨架）、`verify_report.py`（17 项核验，含内容级检查）。
+   - 模板 3 个：`project.example.json`、`report_template.md`（12 节通用结构）、`example_report.md`（合格样例，15 PASS）。
+   - 覆盖项目类型：工业上位机、机器视觉、嵌入式、数据采集、网络改造、旧系统迁移、软件集成。
+   - 三条铁律：必须标内部、每个数字有出处、每个未知项有验证动作。
+   - **弱模型加固**：核验从“结构完整”升级到“内容不空洞”——结论禁空话、未知项要责任人和截止、
+     风险对策禁“加强管理”、行动要有负责人/截止/产出；SKILL.md 增加执行卡与模型分工。
+2. **视觉硬件选型**（v1.17.0 → v1.18.1）：
+   - **v1.18.0 新增 2D 客户版 12 页生成器** `tools/two_d_ppt.py`（与 3D 共用
+     `ppt_layout.py` 的页序/章节/目录构件；母版硬件页值替换；数据只读 `selection_result.json`；
+     `scene`/`precision_chain`/`output_dir` 可配置；机检 FAIL 时退出码 1）。
+   - **`ppt_layout.py` 上移共享能力**：`discover_template()` / `run_quality_check(pptx, selection=...)` /
+     `export_preview()`；3D 改为复用，页序文档同步为 12 页。
+   - **弱模型链路加固 11 项**：主入口改「按交付物三选一」+ 30 秒执行卡；机检透传 `--selection`
+     修复追光者光源误判；2D/3D 生成器 selection 缺失自动补选型；`--text` 解析成功即落
+     `project_config.json`；2D/3D config 互传双向拦截；`scene`/`precision_chain` 字段校验；
+     无参数运行与 selection 缺失补完整命令示例；AGENTS.md 新增铁律 8/9 与 11 条事故档案。
+   - **v1.18.1 新增 3D 点云缺省素材**：`assets/pointcloud_default/`（`pc_top`/`pc_slant_a`/`pc_slant_b`）；
+     `three_d_ppt.py` 图位三级回退（实拍 → 缺省 → 占位），逐张独立判断；用缺省图标
+     “同型号典型成像”且右侧要点改通用表述（不冒充本工件实测）；`--no-default-pointcloud` 可禁用。
+3. **根文档**：README Skill 一览 14→15、目录树、仓库范围白名单同步；视觉硬件选型一览补
+   2D 客户版整册与点云缺省素材；`.gitignore` 放行 `技术评估/`；`AGENTS.md` 放行清单同步。
+
+### 验证结论
+
+- **技术评估**：脚本全链路烟测通过：init → extract（从真实会话取回 373262B 原图）→ crop（1882×1054）→
+  charts（5/5）→ new_report → verify。正样本：RFID 评估文档 `verify_report.py --strict`
+  **15 PASS / 0 WARN / 0 FAIL**；合格样例 `example_report.md` **15 PASS / 0 WARN / 0 FAIL**。
+  负样本：弱模型空洞文档 **14 PASS / 21 FAIL**（结论空话、责任方待定、对策空泛、行动未落实）；
+  空骨架 **11 PASS / 1 WARN / 25 FAIL**；缺风险章节正确报 FAIL。
+- **视觉硬件选型**：2D 正式项目 12 页、机检 FAIL=0 WARN=0、exit 0；3D 正式项目 12 页、
+  机检 FAIL=0 WARN=0、exit 0；弱模型模拟（干净目录 + 一句话需求 → 12 页客户版）通过；
+  换项目回归（0.3mm / 2s / 30×24 视野 + 尺寸测量 scene）文案随 config 切换；
+  注入测试（3D config 误传、2D/3D config 互传、`scene` 键错、`precision_chain` 格式错）均按预期拦截。
+  v1.18.1 三条：无实拍+缺省图 12 页 PASS（P7 三图齐全、页眉“同型号典型成像”）；
+  `--no-default-pointcloud` 12 页 PASS（P7 占位框）；有实拍图 12 页 PASS（页眉仍为“实采”）。
+- **README 更新判断**：需要并已更新（新增 skill、视觉选型能力边界与交付物变化）。
+- **README 卫生核验**：`check_readme.py .` 见提交前结果。
+
+### 建议 commit message
+
+```
+feat(技术评估,视觉硬件选型): 新增 tech-assessment v1.1.0（6 脚本+3 模板+内容级核验）；视觉选型 v1.18.0~v1.18.1 新增 2D/3D 客户版 12 页整册 + 点云缺省素材三级回退 + 弱模型链路 11 项加固
+```
+
 ## 2026-11-27（本次·视觉硬件选型 3D 引导分支 + 输出目录同名；视觉选型测试 277 用例）
 
 ### 改动范围

@@ -268,6 +268,19 @@ class VisionProposalGenerator:
                 "如原文确实没有某项，改用 --config 手工登记。")
         print(f"  解析出参数: {', '.join(sorted(parsed_data.keys()))}")
 
+        # 落盘 project_config.json：文本模式解析出的就是 config 核心字段。
+        # 12 页客户版生成器（two_d_ppt.py）只认 config，不落盘就会断链，
+        # 弱模型只能交付模板替换版。已存在则不覆盖（用户手写配置优先）。
+        cfg_path = os.path.join(os.getcwd(), 'project_config.json')
+        if not os.path.exists(cfg_path):
+            cfg_out = dict(parsed_data)
+            cfg_out.setdefault('project_name', '视觉检测项目')
+            with open(cfg_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg_out, f, ensure_ascii=False, indent=2)
+                f.write('\n')
+            print(f"[配置] 已写出 {cfg_path}"
+                  "（可直接给 two_d_ppt.py --config 用）")
+
         # 走统一校验与生成链（缺必填项时 _validate_params 会给出可执行的填写指引）
         return self.generate_from_config_data(parsed_data, output_dir, template_path,
                                               dry_run=dry_run)
@@ -1710,6 +1723,18 @@ def check_config_only(config_path: str) -> int:
             config = json.load(f)
     except (OSError, json.JSONDecodeError) as e:
         print(f"[配置校验] 读取失败: {e}")
+        return 2
+
+    # 3D 配置误传给 2D 入口：2D 的口径规则会误判"精度偏大"，必须先拦住。
+    # 3D 独有的 installation / 误差预算字段足以区分，不必解析全部结构。
+    if config.get("installation") or config.get("calibration_error_mm"):
+        print("=" * 60)
+        print("配置校验：这是 3D 配置，走错了入口")
+        print("=" * 60)
+        print("\n2D 的 --check-config 不适用于 3D 配置（会误报精度口径问题）。")
+        print("3D 直接用下面这条命令，它会自动补选型并做机检：")
+        print('  python "<skill>\\tools\\three_d_ppt.py" '
+              '--config "<工作区>\\project_config_3d.json"')
         return 2
 
     print("=" * 60)

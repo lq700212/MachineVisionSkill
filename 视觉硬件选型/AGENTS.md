@@ -34,6 +34,15 @@
    全文（全文回退遇多型号页必须拒绝并提示 --html 通道）。
 7. **诚实降级优于编造**：通道取不到数据就报错退出（exit 2），绝不猜值填库；
    型号在官网下架/查证URL失效 → verified 回退 false 待人工确认。
+8. **生成器上线/改名必须同提交改"主入口"文档**（曾犯：2D 12 页生成器已交付，
+   SKILL.md「最短路径」仍指向模板替换，弱模型照文档走必交付 13 页旧版式）。
+   任何新生成器、新入口、新默认路径上线时，同一次改动内必须更新：
+   SKILL.md 顶部「30 秒执行卡」+「最短路径」表格 + CHANGELOG。
+   **只改脚本不改文档 = 交付错版本**，且弱模型不会自己发现矛盾。
+9. **弱模型链路必须"一条命令闭环"**：凡是需要"先跑 A 再跑 B"的两步操作，
+   B 必须能自动补 A（如 selection 缺失自动选型、--text 自动落 config）。
+   曾犯：`--text` 只出模板版不落 config，弱模型无法接 12 页生成器；
+   2D 生成器要求先手动选型，两步之间无强制，弱模型只跑第一条就断链。
 
 ## 架构地图（tools/）
 
@@ -50,6 +59,12 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 ├── validate_selection.py     13类选型核验（FAIL中止），含光源WD、远心回退、景深/MTF/衍射、
 │                             接口带宽、快门类型、飞拍频闪三态
 ├── generate_ppt.py           模板数据替换（触发词规则；WD显示优先wd_spec）
+├── ppt_layout.py             **PPT 骨架与版式唯一入口**：Deck 构件库 + STANDARD_PAGES/SECTIONS
+│                             + run_quality_check/export_preview/discover_template（2D/3D 共用）
+├── two_d_ppt.py              2D 客户版 12 页生成器（骨架生成 + 母版硬件页替换；
+│                             自动补选型；scene/precision_chain 可配置）
+├── three_d_ppt.py            3D 客户版 12 页生成器（骨架生成；自动补选型；
+│                             点云图三级回退：实拍 → 内置缺省 → 占位）
 ├── check_ppt_quality.py      PPT规则自查8项（C1~C8，历史缺陷全部机检化）
 ├── export_ppt_images.py      预览三件套（PNG/联系表/index.html；COM→LibreOffice降级）
 ├── database_updater.py       官网查证扩库：gap/fetch三级通道/add强校验/verify/check-db/refresh
@@ -59,9 +74,29 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 └── clean_ppt_shadows.py      阴影清理（历史污染修复工具）
 ```
 
-数据流：用户资料 → project_config.json（口径拍板）→ 选型（倍率窗口=相机×镜头联动）
-→ selection_result.json（validation_passed 必须True）→ 模板PPT替换 → check_ppt_quality
-（FAIL=0 才可交付）→ ppt_review 预览。
+资源目录（非脚本）：
+
+```
+assets/pointcloud_default/   3D 缺省点云图（pc_top / pc_slant_a / pc_slant_b，同型号典型成像）
+assets/part_images/          工件/镜头示意图（2D 场景示意用）
+images/                      相机产品图（按型号命名，database_updater 自动下载）
+config/                      hardware_database.json 等数据文件
+```
+
+> `assets/pointcloud_default/` 是**缺省素材**，不是实拍证据：生成器用了它就标
+> “同型号典型成像”，禁止当“实采”写进 PPT 或对外话术。
+
+数据流（三条，按交付物选一条）：
+1. **2D 客户版整册**：用户资料 → project_config.json（口径拍板）→ 选型
+   （倍率窗口=相机×镜头联动）→ selection_result.json（validation_passed 必须 True）
+   → `two_d_ppt.py` 12 页骨架生成 + 母版硬件页替换 → check_ppt_quality（FAIL=0 才可交付）
+   → ppt_review 预览
+2. **3D 客户版整册**：project_config_3d.json → `three_d_selector.py` →
+   three_d_selection.json → `three_d_ppt.py` 12 页骨架生成 → 机检 → 预览
+3. **仅模板硬件页替换**（内部/快速）：project_config.json → 选型 → `generate_ppt.py`
+   母版数据替换 → 验收
+
+> 三条产物默认同名同目录，后跑覆盖；弱模型只跑需要的那条（SKILL.md 执行卡已写明）。
 
 ## 关键语义表（改代码前先对齐认知）
 
@@ -90,6 +125,9 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
   `视觉检测方案.pptx`（只读不写）、`project_config.json`（口径字段禁改）、`<PPT名>\` 交付物
 - 交付物在 `<PPT名>\`（目录名与 PPT 同名）：方案PPT（验收通过自动只留最新版）、
   selection_result.json、acceptance_report.txt、ppt_review\ 预览三件套；中间失败版本由脚本自动清理
+- **例外**：`project_config.json` 写了 `output_dir` 时（如 `output_贴片`），2D 整册产物
+  落在该目录，而 selection 仍在 `<PPT名>\`——机检必须用 `--selection` 显式指定，
+  否则型号白名单丢失会误判旧型号残留（v1.18.0 已修）
 - 工作区不再有 AGENTS.md（已并入本 skill）：运行时入口=SKILL.md「标准作业流程·最短路径」，
   project_config.json 内有 `_使用指引` 兜底字段指向它
 
@@ -145,3 +183,13 @@ vision_proposal_generator.py  主流程编排：需求校验→选型→库保�
 | 默认分配 1/10 再÷3=公差÷30，比行业严 3 倍 | 行业常规是视觉占 1/3（×3像素≈÷9~10），旧默认把"保守"叠成了双重折扣 | `DEFAULT_PRECISION_MODEL.allocation_ratio` 0.1→0.3；核验/模板/wizard 文案统一 30%；config 显式 0.1~0.2 保留为严格档 |
 | 示意图 320mm/220mm 标注线与实体脱节（客户退回） | 标注端点写死 1.72/4.67，与相机顶 1.40、工件面 4.55 无关；220mm 只有竖线没刻度；无任何机检覆盖；且 `build_ppt.py` 是每项目新生成，只改项目脚本换个工作区必复现 | 画法收敛到 skill 模块 `tools/ppt_diagram.py`：`add_dim_v()` 直接收实体 shape 自动读边界（刻度+界线+居中内置，端点传反/None 立即报错），项目 `build_ppt.py` 只 import 并在构建期 `self_check`；`check_ppt_quality` 新增 C8 机检：纯数字 mm 标注端点须与实体边界对齐、两端须有刻度，否则 WARN；SKILL.md 定为硬规则，禁止项目内自写标注函数 |
 | 工作距离 320mm 从相机顶面起算（客户退回） | 物理定义错：WD 是镜头前端面→检测面，相机机身高度不计入；C8 只能查"贴没贴实体"，查不出"贴错实体" | 新增 `add_wd_dim()` 强制 `optic.bottom → target.top`（传入 `top_edge` 直接 TypeError，无法改回相机顶）；SKILL.md 写明相机与镜头必须独立成块、附正确/错误对照表；回归 4 条（镜头底/光源底/生成即过C8/禁止覆盖边） |
+| 2D 12 页客户版已交付，SKILL.md 主路径仍指向模板替换（13 页） | 新生成器固化后未同步主入口；文档里"一条命令生成"与"整册生成"两处并存，弱模型只会读最短路径 | SKILL.md 顶部加「30 秒执行卡」；最短路径改为**按交付物三选一**表格；铁律 8：生成器上线必须同提交改文档 |
+| 2D 生成器机检 FAIL 时退出码仍为 0 | `run_quality_check` 返回值没参与 `sys.exit`；3D 有、2D 漏 | `two_d_ppt.py` 改为 `return 0 if ok else 1` + `sys.exit(main())`；与 3D 对齐 |
+| 正确的追光者光源被机检判"FL-R- 旧型号残留" | 机检只在 PPT 同目录找 selection；2D 的 `output_dir` 与 `<project_name>/` 分叉，型号白名单丢失，`FL-R-` 前缀误命中 | `ppt_layout.run_quality_check(pptx, selection=...)` 透传 `--selection`；2D/3D 都传真实路径 |
+| 弱模型跑 12 页生成器时 selection 缺失即断链 | 生成器要求先手动跑选型，两步之间无强制，弱模型只跑第一条 | 两个生成器加 `auto_select()`：缺失时内部调 `--auto --dry-run` / `three_d_selector.py`；失败原样透出后停止，**不兜底填数字**（铁律 9） |
+| `--text` 模式不落 config，弱模型无法从一句话需求走到 12 页客户版 | `generate_from_text` 只把 parsed_data 传给生成链，不落盘 | 解析成功即写 `project_config.json`（已存在不覆盖）；SKILL.md 改为 `--dry-run` 两步法 |
+| 3D 配置传给 2D `--check-config` 被误判"精度口径偏大" | 2D 校验只认自己的字段，不认识 `installation`/误差预算，把 3D 的合法指标当口径错误 | `check_config_only` 先识别 3D 特征并指路 `three_d_ppt.py`（exit 2）；反向也拦（2D config 进 3D 生成器） |
+| 弱模型把 `scene` 键名写错（`partFeature`）静默回落贴片文案 | `scene.update()` 不校验键名；`precision_chain` 格式错则直接崩 | `scene` 未知键打印可用键清单；`precision_chain` 校验三项+数字，报错给正确示例 |
+| 弱模型无参数运行只看到"至少给 --config"不知下一步 | 报错只说缺什么，不说怎么给 | 补完整命令示例（含相对路径写法） |
+| PowerShell 中文乱码被误认为脚本报错 | Windows 控制台编码与 UTF-8 输出不一致 | SKILL.md 注意事项：只看退出码与 `FAIL=` 数字，不因乱码改脚本/config |
+| 弱模型可能改 skill 脚本"修 bug" | 只有"禁止在工作区写脚本"，没禁止改 skill 目录 | SKILL.md 禁止事项第 4 条：禁止修改 skill 目录任何 `.py`/`.md`，只能按对照表处置或报告 |

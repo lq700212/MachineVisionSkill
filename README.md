@@ -2,9 +2,9 @@
 
 # MachineVisionSkill
 
-**AI 代理 skills 集合——覆盖工业上位机（视觉选型 / 报价 / 通讯 / 培训文档 / UI 设计稿与调试）与办公自动化（盖章 / PPT / docx / PDF / git 提交），兼容 OpenCode / DSH 的 skills 机制。**
+**AI 代理 skills 集合——覆盖工业上位机（技术评估 / 视觉选型 / 报价 / 通讯 / 培训文档 / UI 设计稿与调试）与办公自动化（盖章 / PPT / docx / PDF / git 提交），兼容 OpenCode / DSH 的 skills 机制。**
 
-![Skills](https://img.shields.io/badge/skills-14-orange)
+![Skills](https://img.shields.io/badge/skills-15-orange)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue?logo=windows)
 ![Scripts](https://img.shields.io/badge/scripts-Python%20%7C%20PowerShell-informational)
 ![Tests](https://img.shields.io/badge/tests-6%20layers-success)
@@ -68,16 +68,17 @@ mklink /J "C:\Users\Administrator\.agents\skills" "C:\Users\Administrator\.confi
 - **改了 frontmatter 即时生效**：DSH 监听 skill 根目录，改完 `name`/`description` 下一轮就进会话目录，**不用重启**；
 - **frontmatter 必须有 `name` + `description`**，缺任一项、或 `name` 不是 kebab-case ASCII（`^[a-z0-9]+(-[a-z0-9]+)*$`）的 skill 会被**静默丢弃**——中文名 skill 一律配一个 ASCII 调用名（见下表）。
 
-## Skill 一览（14 个入库 skill）
+## Skill 一览（15 个入库 skill）
 
 | Skill 目录 | DSH 调用名 | 说明 | 使用文档 |
 |-------|------|------|----------|
-| [视觉硬件选型](视觉硬件选型/) | `vision-hardware-selection` | 机器视觉选型专家：相机/镜头/光源选型计算、方案 PPT 生成、官网产品图自动获取；光源只认官网库且型号可查证，口径歧义硬阻断，接口带宽/快门/景深/MTF/频闪纳入硬核验，`--check-config`/`--dry-run` 先自检再生成，示意图尺寸标注走内置 `ppt_diagram` 模块 + C8 对齐机检（工作距离固定从镜头前端面起算），验收 FAIL 自动隔离；另含 3D 视觉引导独立分支（点云相机/6D 位姿、RSS 误差预算、ETH/EIH 标定、换型、客户交付版方案，精度口径未声明直接 exit 2） | [SKILL.md](视觉硬件选型/SKILL.md) |
+| [视觉硬件选型](视觉硬件选型/) | `vision-hardware-selection` | 机器视觉选型专家：相机/镜头/光源选型计算、方案 PPT 生成、官网产品图自动获取；光源只认官网库且型号可查证，口径歧义硬阻断，接口带宽/快门/景深/MTF/频闪纳入硬核验，`--check-config`/`--dry-run` 先自检再生成，示意图尺寸标注走内置 `ppt_diagram` 模块 + C8 对齐机检（工作距离固定从镜头前端面起算），验收 FAIL 自动隔离；2D/3D 客户版 12 页整册生成器（`two_d_ppt`/`three_d_ppt`，selection 缺失自动补选型，机检 FAIL 退出码 1），3D 点云图三级回退（实拍→缺省素材→占位，缺省图标“同型号典型成像”）；另含 3D 视觉引导独立分支（点云相机/6D 位姿、RSS 误差预算、ETH/EIH 标定、换型、客户交付版方案，精度口径未声明直接 exit 2） | [SKILL.md](视觉硬件选型/SKILL.md) |
 | [视觉选型测试](视觉选型测试/) | `vision-selection-test` | 视觉硬件选型专用分层测试套件：smoke/data/doc/core/ppt/workflow 六层，277 条回归 + 注入用例（含行业规范：带宽/快门/景深/MTF/频闪三态、测量精度与公差口径语义、PPT 尺寸标注对齐与画法模块契约、3D 引导选型 FOV/误差预算/置信度排序），按改动选层快跑 | [SKILL.md](视觉选型测试/SKILL.md) |
 | [git自动提交推送](git自动提交推送/) | `git-auto-commit-push` | 本地工程一键 commit + push：自动读 CHANGELOG 生成 message（含要点提炼），提交前安全检查（可联动仓库卫生体检），现场目录用显式暂存 | [SKILL.md](git自动提交推送/SKILL.md) |
 | [winforms-ui-debug](winforms-ui-debug/) | `winforms-ui-debug` | 跨项目 WinForms 界面像素级调试：harness 指哪打哪直启目标窗体，反射探查 + 截图 + 像素扫描，附矩形枚举/置顶截图脚本 | [SKILL.md](winforms-ui-debug/SKILL.md) |
 | [上位机通讯封装](上位机通讯封装/) | `hmi-comm-wrapper` | 上位机设备通讯范式：PLC/相机/仪表/Modbus 连接管理、心跳重连、UI 解耦 | [SKILL.md](上位机通讯封装/SKILL.md) |
 | [上位机报价](上位机报价/) | `hmi-quotation` | 上位机项目报价全流程：IO表摸底→参考程序体检→市场调研→两本账人力→报价阶梯→核验 | [SKILL.md](上位机报价/SKILL.md) |
+| [技术评估](技术评估/) | `tech-assessment` | 内部技术评估文档全流程：开工五问→截图裁剪标注→架构/工作量/甘特/风险图→模板成文→内容级核验；含合格样例与弱模型执行卡；适用工业上位机、视觉、嵌入式、数据采集、旧系统迁移 | [SKILL.md](技术评估/SKILL.md) |
 | [opencode-cache-cleaner](opencode-cache-cleaner/) | `opencode-cache-cleaner` | 清理 opencode 残留项目记录与孤儿快照：列出→选择→备份→删除→验证 | [SKILL.md](opencode-cache-cleaner/SKILL.md) |
 | [盖章专员](盖章专员/) | `seal-stamp-agent` | PDF 合同自动盖章：自动匹配现有印章的大小与位置；支持文本版/扫描件 PDF、图片（拍照件）、Excel 工作簿四类输入 | [SKILL.md](盖章专员/SKILL.md) |
 | [培训文档生成](培训文档生成/) | `training-doc-generator` | 工业上位机三份制培训文档：自动截图 → 操作员/客户技术工艺/内部版三份生成 | [SKILL.md](培训文档生成/SKILL.md) |
@@ -142,7 +143,7 @@ graph LR
         UR["用户级 ~/.agents/skills —— junction 指向本仓库"]
     end
     subgraph G3["本仓库（唯一真身）"]
-        SK["14 个入库 skill 目录：SKILL.md + 脚本 + CHANGELOG"]
+        SK["15 个入库 skill 目录：SKILL.md + 脚本 + CHANGELOG"]
     end
     OC --> PR
     DSH --> UR
@@ -157,9 +158,10 @@ graph LR
 
 ```text
 MachineVisionSkill/
-├── 视觉硬件选型/            # 2D 相机·镜头·光源 + 3D 引导选型 + 方案 PPT + 官网产品图（光源唯一数据源）
+├── 视觉硬件选型/            # 2D/3D 客户版 12 页 PPT + 相机·镜头·光源/3D 引导选型 + 官网产品图（光源唯一数据源）
 ├── 视觉选型测试/            # 六层分层测试：smoke/data/doc/core/ppt/workflow
 ├── 上位机报价/              # 报价六步法 + IO/代码体检 + 核验脚本
+├── 技术评估/                # 内部技术评估：裁剪标注/架构/工作量/甘特/核验
 ├── 上位机通讯封装/          # 设备通讯范式（纯文档沉淀）
 ├── 培训文档生成/            # 三份制培训文档 + 截图防卡住工具
 ├── 盖章专员/                # 盖章编排脚本 + 测试夹具
@@ -187,6 +189,6 @@ MachineVisionSkill/
 
 ## 仓库范围
 
-本仓库按白名单跟踪 skill 目录（见 `.gitignore`）：当前只跟踪 `视觉硬件选型`、`视觉选型测试`、`git自动提交推送`、`winforms-ui-debug`、`上位机通讯封装`、`上位机报价`、`opencode-cache-cleaner`、`盖章专员*`、`viewturbo-checkin`、`培训文档生成`、`软件卸载清理`、`readme`、`scanner-config`、`ui-mockup-studio`。新开发的 skill 需要入库时，在 `.gitignore` 加一行 `!目录名/` 并同步更新上表与根 `AGENTS.md` 放行清单；本机运行时缓存（如 `viewturbo-checkin/accounts.json`、`ui-mockup-studio/config.json`）单独忽略。
+本仓库按白名单跟踪 skill 目录（见 `.gitignore`）：当前只跟踪 `视觉硬件选型`、`视觉选型测试`、`git自动提交推送`、`winforms-ui-debug`、`上位机通讯封装`、`上位机报价`、`技术评估`、`opencode-cache-cleaner`、`盖章专员*`、`viewturbo-checkin`、`培训文档生成`、`软件卸载清理`、`readme`、`scanner-config`、`ui-mockup-studio`。新开发的 skill 需要入库时，在 `.gitignore` 加一行 `!目录名/` 并同步更新上表与根 `AGENTS.md` 放行清单；本机运行时缓存（如 `viewturbo-checkin/accounts.json`、`ui-mockup-studio/config.json`）单独忽略。
 
 > 上表 18 个 skill 是**本地安装、不入库**的第三方/自有 skill，保留在目录里供 opencode / DSH 直接引用。

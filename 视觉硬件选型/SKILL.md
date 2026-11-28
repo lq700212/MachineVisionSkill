@@ -4,6 +4,23 @@ description: "机器视觉硬件选型专家，根据检测需求自动完成工
 ---
 # 视觉硬件选型技能
 
+## ⚡ 30 秒执行卡（任何模型照此执行，不看下文也能交付）
+
+**在项目目录（`project_config.json` 所在目录）执行**；下面路径可直接照抄，不用替换占位符。
+
+| 你要做的事 | 命令 |
+|---|---|
+| 2D 客户版整册（12 页） | `python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\two_d_ppt.py" --config project_config.json` |
+| 3D 客户版整册（12 页） | `python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\three_d_ppt.py" --config project_config_3d.json` |
+| 只有需求文字、没有 config | 先跑 `python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_proposal_generator.py" --text "<原文抄录>" --auto --dry-run`（会落 `project_config.json`），再跑上表第一行 |
+| 只换模板硬件页（内部） | `python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_proposal_generator.py" --config project_config.json --auto` |
+
+**判定只看退出码**：`0`=可交付；`1`=机检未通过（读报告，别硬发）；`2`=缺字段/口径要用户拍板（原样转问用户）。
+
+**三条红线**：不改 config 的精度口径 · 不写/不改任何 Python 脚本 · 不用 `--no-check` 交付。
+
+> 详细规则见下方「标准作业流程」；本卡与详细规则冲突时，以详细规则为准。
+
 > **⚠️ 开发者入口**：如果你的任务是修改/迭代本 skill（代码、文档、硬件库），先读本目录
 > `AGENTS.md`（开发规范与事故档案），再动手。
 >
@@ -228,31 +245,36 @@ WD330 → β≈0.308x，视野 27.4mm（余量 14%）
 > 本节为弱模型防呆指引，也是**日常续跑的唯一入口**。计算/选型/PPT/验收全由脚本完成，
 > 模型只需要执行三步并看一行结论，不需要专业判断。
 
-### ⚡ 最短路径（工作区 project_config.json 已就绪的续跑场景）
+### ⚡ 最短路径（先按交付物选命令，再执行；三选一，禁止混用）
 
 前提：工作区 `project_config.json` 已就绪（口径由用户拍板，记录在 config 内）。
 满足前提直接执行下面步骤，**不要重新分析需求、不要改 config、不要自己算参数**：
 
-**第0步 配置自检（强烈建议，几秒出结论，不选型不生成PPT）**：
+**第0步 配置自检（仅 2D config；3D config 跳过本步直接进第1步）**：
 ```bash
 python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_proposal_generator.py" --check-config "<工作区>\project_config.json"
 ```
 退出码 0=参数合法（可继续）；2=口径/字段有问题（脚本已给修正指引）。
-想先确认"这个需求能不能选出硬件"，用同一命令加 `--dry-run`：只跑选型+核验并
-保存 `selection_result.json`，不生成PPT。
 
-**第1步 一条命令生成**（自动选型→核验→PPT→规则自查→导页面图→清理旧版本）：
-```bash
-python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_proposal_generator.py" --config "<工作区>\project_config.json" --auto
-```
-> 默认输出目录 = `<config 所在目录>\<PPT名>\`（目录名与 PPT 文件名一致，不含扩展名），无需显式 `--output`。
+**第1步 按交付物选一条命令（三选一，一次只跑一条）**：
+
+| 交付物 | 命令 | 页数 |
+|---|---|---|
+| **2D 客户版整册**（默认，发给客户） | `python "<skill>\tools\two_d_ppt.py" --config "<工作区>\project_config.json"` | 12 |
+| **3D 客户版整册**（发给客户） | `python "<skill>\tools\three_d_ppt.py" --config "<工作区>\project_config_3d.json"` | 12 |
+| 只更新模板硬件页（内部/快速核对） | `python "<skill>\tools\vision_proposal_generator.py" --config "<工作区>\project_config.json" --auto` | 母版页数 |
+
+> - `<skill>` = `C:\Users\Administrator\.agents\skills\视觉硬件选型`（即 `.config\opencode\skills\视觉硬件选型`，两者是同一个目录）。
+> - 两个 12 页生成器在 `selection` 缺失时会**自动补选型**（内部调 `--auto --dry-run`），不需要先单独跑选型。
+> - 三条命令的产物**默认同名同目录，后跑的覆盖前面的**——一次只跑需要的那条，不要"多跑几条保险"。
+> - 客户说"要一份方案"就走前两条；只有"把硬件型号换掉、其他页别动"才走第三条。
 
 **第2步 只看退出码 + 验收结论行**（以退出码为准，不靠读日志猜）：
 
 | 退出码 | 含义 | 你要做的 |
 |:---:|------|----------|
-| `0` | 成功：PPT 在 `<工作区>\<PPT名>\` 根目录，规则自查 FAIL=0 | 交付，跳第3步 |
-| `1` | 未生成或未通过验收（PPT 若已生成也已被移入 `<PPT名>\_rejected\`） | 读 `<PPT名>\acceptance_report.txt` 尾部对照表处置；处置不了就原样报告用户并停止 |
+| `0` | 成功：PPT 已生成，规则自查 FAIL=0（PPT 路径见输出 `[输出]` 行） | 交付，跳第3步 |
+| `1` | 机检未通过（2D/3D）或未生成（模板替换） | 读 `acceptance_report.txt` 或机检报告尾部对照表处置；处置不了就原样报告用户并停止 |
 | `2` | 缺字段 / 口径需用户拍板（脚本已给出原话问法） | 把脚本里的问题**原样转问用户**，答复前不要重跑 |
 
 > 核验报告里的 `[INFO]` 是"厂家未给数据、无法判定"的待确认项（如镜头没给
@@ -268,30 +290,38 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
   看的预览；质量把关靠规则自查（纯文本机检），模型读图浪费大量 token 且不需要
 
 **第3步 按此模板汇报**（仅退出码=0 时使用，不要展开更多细节）：
-> 已生成视觉检测方案PPT：`<PPT名>\<PPT名>.pptx`（验收 FAIL=0）。
+> 已生成方案 PPT：`<输出路径>`（12 页，机检 FAIL=0）。
 > 选型：<相机型号> + <镜头型号>（倍率X，像素精度X mm/pixel）+ <光源型号>。
-> 页面预览图在 `<PPT名>\ppt_review\`，可抽查。
+> 页面预览图在同目录 `ppt_review\`，可抽查。
 
 ### 禁止事项（违反即事故）
 1. **禁止口述/手写方案代替脚本生成；禁止用代码手改 PPT**——方案只能由一条命令产出
 2. **禁止修改** `project_config.json` 的 `precision_requirement` / `pixel_per_precision` /
    检测区域字段（那是用户拍板的口径，改了=发明口径）
 3. **禁止在工作区创建任何 Python 脚本**；所有逻辑都在 skill 里，只能调用不能重写
-4. **禁止拼造光源型号**（"品牌+尺寸+角度+颜色"拼出来的型号官网通常不存在）。光源只能
+4. **禁止修改 skill 目录下的任何 `.py` / `.md`**（`C:\Users\Administrator\.agents\skills\视觉硬件选型\`）。
+   报错只能按「FAIL 详细处置对照表」处置，或原样报告用户；改脚本 = 污染所有后续项目
+5. **禁止拼造光源型号**（"品牌+尺寸+角度+颜色"拼出来的型号官网通常不存在）。光源只能
    来自 `hardware_database.json.light_sources`；库内无匹配时必须输出"待选型（需扩库）"，
    并向用户说明需扩库或送样打光验证，**不得兜底填一个型号**
-5. **禁止用 `--no_verify` 交付**；**禁止把 `<PPT名>\_rejected\` 里的文件改名/复制当成果**
+6. **禁止用 `--no_verify` 交付**；**禁止把 `<PPT名>\_rejected\` 里的文件改名/复制当成果**
    ——那是被规则自查判 FAIL 的产物，只作排障留证
-6. **禁止自行填 `precision_basis: "measurement_accuracy"`**。脚本因"精度口径偏大"中止(exit 2)时，
+7. **禁止自行填 `precision_basis: "measurement_accuracy"`**。脚本因"精度口径偏大"中止(exit 2)时，
    只能把确认问题转问用户；用户明确说"是测量/检测精度、不是公差"后才可填
-7. 标准任务只读本节（最短路径三步）；本文件其余内容（使用方式/扩库/排障）按需查阅
+8. 标准任务只读本节（最短路径三步）；本文件其余内容（使用方式/扩库/排障）按需查阅
 
 ### 新项目从0：需求登记（唯一需要AI理解的环节）
 1. **--text 模式（推荐）**：AI 读用户图片/文档/口述后，把其中的数字信息**原样抄录**给脚本
    （不要自己解读成参数），脚本负责解析与口径判断：
    ```bash
-   python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_proposal_generator.py" --text "视觉精度≤0.03mm，生产节拍3秒，检测区域38.5x22mm，检测XX尺寸38.50±0.25..." --auto
+   # 第一步：解析需求 → 选型 → 落 project_config.json（--dry-run 不出 PPT）
+   python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_proposal_generator.py" --text "视觉精度≤0.03mm，生产节拍3秒，检测区域38.5x22mm，检测XX尺寸38.50±0.25..." --auto --dry-run
+   # 第二步：出 12 页客户版
+   python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\two_d_ppt.py" --config project_config.json
    ```
+   `--dry-run` 会把解析结果写成 `project_config.json`（已存在不覆盖）。
+   **非贴片/定位项目**要在第二步前补 `config.scene`，否则 P3/P8/P11 用默认贴片文案
+   （生成器会打印 `[提示] config 未写 scene` 警告，看到就必须补）。
    图片必须 AI 直接读图抄字（勿依赖 OCR）。
 2. **config 模式**：复制 skill 目录的 `config_template.json` 为工作区 `project_config.json`，
    把 null 换成真实值。**先跑 `--check-config` 自检**（几秒出结论，见最短路径第0步），
@@ -323,8 +353,15 @@ python "C:\Users\Administrator\.agents\skills\视觉硬件选型\tools\vision_pr
    禁止第3次重跑**
 
 ### 生成过程说明（最短路径第1步在做什么）
-一条命令自动包含：需求校验 → 选型 → 全项核验（FAIL自动中止）→ 模板PPT替换 →
-规则自查（check_ppt_quality）→ 页面渲染导出（export_ppt_images）→ 清理旧版本PPT。
+
+**2D / 3D 整册生成器**（`two_d_ppt.py` / `three_d_ppt.py`）：
+`selection` 缺失时自动补选型 → 读 selection + config → 生成 12 页 → 保存 →
+机检 `check_ppt_quality` → 逐页预览 `export_ppt_images` → 退出码 = 机检结果。
+机检 FAIL≠0 时退出码为 1（**不会**自动移文件，但禁止交付）。
+
+**模板替换生成器**（`vision_proposal_generator.py --auto`）：
+需求校验 → 选型 → 全项核验（FAIL自动中止）→ 模板PPT替换 →
+规则自查 → 页面渲染导出 → 清理旧版本PPT。
 **只有规则自查 FAIL=0，PPT 才留在 `<PPT名>\` 根目录**；FAIL 时自动移入
 `<PPT名>\_rejected\` 并让主流程非零退出（物理上防止误交付）。
 完整自查报告：`<PPT名>\acceptance_report.txt`；`--no_verify` 仅限人工排障，禁止用于交付。
@@ -398,10 +435,15 @@ python tools/vision_proposal_generator.py --config project_config.json \
 
 ### 方式2b：需求文本从0入口（弱模型推荐：读图抄字，解析交给脚本）
 ```bash
-python tools/vision_proposal_generator.py --text "视觉精度≤0.03mm，生产节拍3秒，检测区域38.5x22mm，检测CD尺寸38.50±0.25..." --auto
+# 第一步：解析需求 → 选型 → 落 project_config.json（--dry-run 不出 PPT）
+python tools/vision_proposal_generator.py --text "视觉精度≤0.03mm，生产节拍3秒，检测区域38.5x22mm，检测CD尺寸38.50±0.25..." --auto --dry-run
+# 第二步：出 12 页客户版（非贴片/定位项目先补 config.scene）
+python tools/two_d_ppt.py --config project_config.json
 ```
 AI 把图片/文档/口述中的数字信息**原样抄录**给 --text（精度/公差/节拍/检测区域等），
 脚本负责正则解析、口径判断与校验；漏填时脚本报`【缺少XX】`+可执行修正指引（exit=2）。
+`--dry-run` 会把解析结果写成 `project_config.json`（已存在不覆盖），
+这样弱模型不需要手写配置就能接上 12 页生成器。
 config_template.json 的示例值均为 null——禁止直接复制不改就跑。
 配置字段说明与口径决策表见 `config_template.json`（复制后填值即用）：
 ```json
@@ -502,7 +544,100 @@ python tools/clean_ppt_shadows.py 文件.pptx [-o 输出.pptx]
 # 仅做模板替换（已有选型JSON时）
 python tools/generate_ppt.py --template 模板.pptx --output 输出.pptx \
   --selection_json "<PPT名>/selection_result.json" --fov 24x20 --hardware_page 2
+
+# 3D 引导抓取客户版（12 页骨架，含机检 + 逐页预览）
+python tools/three_d_ppt.py --config "<工作区>/project_config_3d.json"
+
+# 2D 定位/贴片客户版（12 页骨架，含机检 + 逐页预览）
+python tools/two_d_ppt.py --config "<工作区>/project_config.json"
+
+# 逐页预览 / 规则自查（2D、3D 通用）
+python tools/export_ppt_images.py 方案.pptx --outdir 预览目录 --width 1600
+python tools/check_ppt_quality.py --pptx 方案.pptx
 ```
+
+---
+
+## PPT 统一编排规范（2D / 3D 共用骨架）
+
+> 为什么要有这一节：2D 贴片方案与 3D 引导抓取方案是同一家公司递给同一批客户的文档。
+> 若两份 PPT 的封面、目录、结论条、流程卡各写一套，客户会感觉出自两个团队。
+> **统一的是「怎么排」（骨架、字号、间距、配色、构件），不统一的是「排什么」（技术内容）。**
+
+**唯一入口**：`tools/ppt_layout.py` 的 `Deck` 类 + 骨架常量。新建方案脚本只描述内容，版式全部调用构件；
+**禁止在工作区写任何 PPT 生成脚本**（换项目会重写、必然漂移）：2D 用 `tools/two_d_ppt.py`，3D 用 `tools/three_d_ppt.py`，
+新方案类型才新建生成器（`tools/` 下按 `*_ppt.py` 命名），且只写特有页面。
+
+**页序只有一份定义**（`ppt_layout.py`）：
+
+```python
+from ppt_layout import STANDARD_PAGES, STANDARD_SECTIONS, toc_items, page_title, discover_template
+
+STANDARD_PAGES      # 12 个页面槽位，按顺序：cover, toc, requirements, ..., thanks
+STANDARD_SECTIONS   # 目录 6 章：requirements/system/hardware/special_b/special_c/delivery
+toc_items(SECTION_TEXT)   # 按标准章序生成目录项；SECTION_TEXT 由各方案填 (名称, 说明)
+page_title(SECTION_TEXT, key)  # 章节 key → 页面标题
+discover_template(cfg_dir)     # 工作区自动找母版 pptx（重建式生成器共用）
+```
+
+改页序只改 `STANDARD_PAGES`；新增方案类型不要复制骨架表。
+
+**生成器分工**：
+
+| 场景 | 生成器 | 方式 |
+|---|---|---|
+| 2D 模板替换（只换硬件页） | `tools/generate_ppt.py` | 母版数据替换，其余页不动 |
+| 2D 定位/贴片客户版整册（12 页） | `tools/two_d_ppt.py` | 骨架生成 + 母版硬件页替换 |
+| 3D 客户版整册（12 页） | `tools/three_d_ppt.py` | 骨架生成，config + selection 驱动 |
+| 线扫/其他 | 新建生成器（`*_ppt.py`） | 只写特有页面，骨架与构件从 `ppt_layout` 取 |
+
+```python
+import sys
+sys.path.insert(0, r'C:\Users\Administrator\.config\opencode\skills\视觉硬件选型\tools')
+from ppt_layout import Deck, BLUE_D, BLUE, BLUE_L, BLUE_LL, RED, RED_L, GRAY, BLACK, WHITE
+
+deck = Deck(TPL)                    # 母版 视觉检测方案.pptx，layout index 2
+prs, LAYOUT = deck.prs, deck.layout
+s = deck.new_slide("项目需求")        # 标题占位符自动定位；None = 无标题页（封面/谢谢）
+deck.cover(s, 标题, 副标题, 指标行, 公司, 日期)
+deck.toc(s, [(编号, 名称, 说明), ...])
+deck.section_label(s, x, y, "客户需求")
+deck.bullet_rows(s, x, y, w, [(标签, 说明), ...])
+deck.callout(s, x, y, w, h, "结论……", kind="info")   # info=浅蓝 / warn=浅红
+deck.step_cards(s, y, [(编号, 标题, 描述, 时间), ...], card_h=2.45)
+deck.col_cards(s, y, [(栏头, [条目...]), ...], h=4.50, item_size=12, space_after=27)
+deck.arch_row(s, y, [(层名, 模块名, 说明), ...], h=2.10)
+deck.thanks(s, 公司)
+deck.finalize("苏州华际光电科技有限公司")   # 页码从 1 起；页脚从第 2 页起，末页不加
+deck.save(OUT)
+```
+
+### 12 页标准骨架（按方案类型增删，页序不变）
+
+| 页 | 标题 | 主要构件 | 2D 内容 | 3D 内容 |
+|---|---|---|---|---|
+| 1 | 封面 | `cover` | 标题 / 副标题 / 红线 / 一行指标 / 公司日期 | 同左 |
+| 2 | 目录 | `toc` | 6 项两列 | 6 项两列 |
+| 3 | 项目需求 | 示意图 + `bullet_rows` + `callout` | 工件图 + 需求条目 + 红框核心目标 | 产品俯视 + 视野虚线框 + 6 条需求 |
+| 4 | 系统方案 | 布局示意图 + `bullet_rows` + `callout` | 相机/光源/工件布局 + 系统组成 | ETH 布局 + 4 条系统组成 |
+| 5 | 工作流程 | `step_cards` + 节拍分解 | 5 步（伺服→拍照→定位→转换→贴片） | 6 步（挡停→触发→采集→匹配→下发→抓取） |
+| 6 | 硬件选型 | 产品图 + 参数表 + 说明 | 相机 + 镜头 + 光源 | 3D 相机 + 参数表 |
+| 7 | 专项 A | 图 + 要点 | 选型计算链 | 点云成像效果 |
+| 8 | 专项 B | 流程条 + 表 + 要点 | 视觉算法 | 6D 位姿与 RZ 可观测性 |
+| 9 | 专项 C | 表 + 结论 | 精度分析（误差链） | 视野与工作距离校核 |
+| 10 | 系统架构 | `arch_row` | 4 层模块 | 4 层模块 |
+| 11 | 实施与验收 | `col_cards` + 说明条 | 实施/标定/验收三栏 | 实施/标定换型/验收三栏 |
+| 12 | 谢谢 | `thanks` | 谢 谢！+ 红线 + 公司名 | 同左 |
+
+### 硬规则
+
+1. **版心**：左 0.62、右 12.72（宽 12.10）；内容顶 1.02；结论条底 ≤7.00（页脚 7.09）。改版式只改 `ppt_layout.py` 常量。
+2. **配色**：只用 `Deck` 导出的常量，禁止在 build 脚本里写新的 RGB 值。
+3. **页码/页脚**：`finalize()` 统一加，末页只留页码、不加页脚文字；增删页不用手改页码。
+4. **表格 `row_h` 是最小行高**：LibreOffice 渲染中文会压到约 0.85×，目检留余量按实际渲染估。
+5. **三栏卡片铺满**：优先调 `space_after`（pt），不要用 `line_spacing`（会把首行也推开）；`item_size=12 + space_after=27` 是 6 条铺满 4.5in 卡的实测值。
+6. **尺寸标注**：仍走 `ppt_diagram.add_wd_dim` / `self_check`，不许因为用了 `Deck` 就手写标注坐标。
+7. **封面**：不加四指标块、不写"初步方案 / 供技术交流"；结尾页只留"谢 谢！+ 红线 + 公司名"。
 
 ---
 
@@ -698,15 +833,71 @@ python tools/three_d_selector.py --part-size 300x300 --precision 0.5 --part-may-
 | 换型只换模板不换参数 | 曝光/滤波/阈值不匹配，点云质量差 | 每型号独立参数集，与模板绑定版本号 |
 | 10GigE 相机配 1G 网卡 | 采集降速，节拍不够 | 采购清单里写明网卡/交换机规格 |
 
+### 2D 方案 PPT（客户版）
+
+**一条命令生成，不在项目里写 Python**：
+
+```bash
+python tools/two_d_ppt.py --config "<工作区>/project_config.json"
+```
+
+前置：`selection_result.json` 缺失时生成器会**自动补选型**（内部调 `--auto --dry-run`），无需先单独跑；母版 `视觉检测方案.pptx` 放工作区根目录（或用 `--template` 指定）。
+
+| 参数 | 说明 |
+|---|---|
+| `--config` | `project_config.json`（可省略，但建议给：项目名、输出目录、场景文案从这里取） |
+| `--selection` | 默认在 config 同目录依次找 `selection_result.json` → `output_贴片/` → `output/` → `<project_name>/` |
+| `--template` | 默认 `discover_template()` 在工作区找「视觉检测方案.pptx」 |
+| `--hardware-page` | 母版硬件页的 0 基索引，默认 3（第 4 页） |
+| `--company` | 默认 苏州华际光电科技有限公司 |
+| `--out` | 默认 `config.output_dir` 或 `<config目录>/<project_name>/<project_name>.pptx` |
+| `--no-auto-select` | selection 缺失时不自动补选型（仅排障） |
+| `--no-check` / `--no-preview` | 仅排障用，交付禁用 |
+
+- **数据源唯一**：型号/分辨率/像元/倍率/工作距离/光源全部从 `selection_result.json` 读；精度口径从 `project_info.precision_budget` 读，生成器不另写数字
+- **12 页骨架**：与 3D 共用 `STANDARD_PAGES`，专项页为「选型计算 / 视觉算法 / 精度分析」；目录由 `toc_items()` 生成
+- **母版硬件页替换**：保留母版第 4 页做值替换（相机/镜头/光源型号、三处 WD、参数表、产品图），不重建该页；shape 名契约集中在 `HW_PIC_SLOTS` 与 `_fill_hardware_page()`
+- **可选 config 字段**：
+  - `output_dir`：输出目录（相对 config 目录），用于保持旧交付路径
+  - `scene`：覆盖场景文案，换产品/工艺类型只改这里，不改代码：
+    `subtitle / part_feature / core_goal / target_label / accuracy_label / accuracy_item / acceptance_item`
+  - `precision_chain`：误差链 `[[误差源, 典型值mm, 说明], ...]`；合成误差按 RSS 自动算
+  - `field_control_mm`：现场控制值（默认 0.2），用于结论句余量倍数
+- **适用范围**：定位/贴片类 2D 方案（P4 布局、P5 流程、P8 算法为贴片场景）。
+  尺寸测量/缺陷检测等场景需改 `P5 工作流程`、`P8 视觉算法` 的页面代码（内容层不同），骨架仍复用
+- **机检 + 预览**：生成后自动调用 `run_quality_check` 与 `export_preview`（`ppt_layout` 共用函数），输出 `<out目录>/ppt_review/`；机检 FAIL≠0 时退出码为 1
+- **换项目**：只改 `project_config.json` + 重跑选型；禁止把 `two_d_ppt.py` 复制到工作区改
+
 ### 3D 方案 PPT（客户版）
 
-3D 客户版 PPT 没有 2D 的镜头/光源标注框，生成规则与 2D 模板替换不同：
+**一条命令生成，不在项目里写 Python**：
 
-- **数据源唯一**：所有型号/精度/误差/视野从 `three_d_selection.json` 读，正文口径与 `*_客户版.md` 对齐；禁止在 PPT 脚本里另写一套数字
+```bash
+python tools/three_d_ppt.py --config "<工作区>/project_config_3d.json"
+```
+
+前置：`three_d_selection.json` 缺失时生成器会**自动补选型**（内部调 `three_d_selector.py --config`），无需先单独跑；母版 `视觉检测方案.pptx` 放工作区根目录（或用 `--template` 指定）。
+
+| 参数 | 说明 |
+|---|---|
+| `--config` | 必填，`project_config_3d.json` |
+| `--selection` | 默认自动找 config 同目录或 `<project_name>/three_d_selection.json` |
+| `--template` | 默认 `discover_template()` 在工作区找「视觉检测方案.pptx」 |
+| `--pointcloud-dir` | 默认 `<project_name>/点云图/crop`；用户图缺失位置自动回退 skill 内置缺省图（`assets/pointcloud_default/`） |
+| `--no-default-pointcloud` | 禁用内置缺省图，缺图位置画占位框（仅排障/内部评审） |
+| `--company` | 默认 苏州华际光电科技有限公司 |
+| `--out` | 默认 `<config目录>/<project_name>/<project_name>.pptx` |
+| `--no-auto-select` | selection 缺失时不自动补选型（仅排障） |
+| `--no-check` / `--no-preview` | 仅排障用，交付禁用 |
+
+- **数据源唯一**：型号优先级 `internal_decision.locked_model` → `recommendation.model` → 第一台 PASS；视野/点距复用 `three_d_selector.ThreeDCameraSelector.fov_at_wd / xy_resolution`，不在 PPT 脚本里另写几何公式
+- **可选配置字段**：`point_count`（P7 点数标注，如 1392966）、`technology_short`（技术简称，如 "蓝光结构光"）；缺省时 P7 不写点数、技术名取 `technology` 括号前
+- **精度口径**：有厂商标称 `guidance_accuracy_mm` 时标“（标称）”；无标称按 `max(Z重复, VDI) + 0.5×点距` 估算并标“（估算）”，备注写明“以真实工件打样实测确认”
 - **示意图**：相机机身与光窗画成两个实体，工作距离一律 `ppt_diagram.add_wd_dim(光窗, 产品上表面)`，构建期 `self_check()` 不合格直接抛错
-- **机检**：`check_ppt_quality.py` 可直接跑——硬件页标题必须是"硬件选型"且位于页面顶部（<1.5in），否则按目录页排除；3D 页无标注框时 C2/C3/C7 自动跳过，C1/C4/C6/C8 仍生效
-- **C4 口径**：长正文（>20 字）且框高足够容纳估算行数时豁免，不算断行；短标注（≤20 字）和框高不足仍严格抓
-- **页面骨架**（14 页）：封面 / 目录 / 需求与假设 / 系统方案（ETH 示意图）/ 硬件选型 / 精度链 / 视野与 WD / 为什么不是厂商推荐型号 / 底部不平与 6D / 标定与换型 / 节拍触发通讯 / 验收计划 / 风险与待确认 / 结束
+- **机检 + 预览**：生成后自动调用 `check_ppt_quality.py` 与 `export_ppt_images.py`，输出 `<out目录>/ppt_review/`；机检 FAIL≠0 时退出码为 1
+- **页面骨架**：12 页，与 2D 共用「PPT 统一编排规范」；页面标题由 `PAGE_TITLES` 定义，目录由 `SECTION_TEXT` + `toc_items()` 生成
+- **点云图三级回退**：用户实拍图 → skill 内置缺省图（`assets/pointcloud_default/`，同型号典型成像）→ 占位框。三张全实拍才标“实采”；用了缺省图标“同型号典型成像”，且要点改为不绑定本工件尺寸的通用表述（不得把缺省图说成本工件实测）
+- **换项目**：只改 `project_config_3d.json` + 补点云图；禁止把 `three_d_ppt.py` 复制到工作区改
 
 ## 硬件数据库
 `config/hardware_database.json`：
@@ -730,6 +921,8 @@ python tools/three_d_selector.py --part-size 300x300 --precision 0.5 --part-may-
 - 输出：默认 `<config 所在目录>/<项目名>/`（目录名与 PPT 同名）；`--output` 可显式改目录（PPT、selection_result.json、validation_report.json）
 
 ## 注意事项
-1. AI调用脚本一律加 `--auto`（非交互自动选最优方案）
+1. AI调用脚本一律加 `--auto`（非交互自动选最优方案）；**不带 `--auto` 的交互式命令在 Agent 环境会 `EOFError` 崩溃**
 2. 精度计算预留安全余量：像素精度≤精度/3；帧率≥1.5×节拍
 3. 数据库查不到可行镜头时工具会**诚实报错**（列出原因），不要编造型号，应提示用户扩库或调整视野/精度
+4. **PowerShell 里中文输出可能显示为乱码**（如 `??` 或方块字符），这是控制台编码问题，不是脚本错误。
+   判断成败只看**退出码**与 `FAIL=` 数字；不要因为乱码去改脚本或改 config

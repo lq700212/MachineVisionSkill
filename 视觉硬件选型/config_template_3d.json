@@ -8,6 +8,7 @@
   "_字段6_节拍": "cycle_time(s/件) + processing_time_s(点云处理+匹配耗时估算，默认0.5s)。脚本用 capture_time_typical_s 校核，超过节拍60%记WARN。cycle_time_assumed=true 表示节拍是假设值（客户未提供），方案里会标注'假设值（待客户确认）'——不要把假设写成客户提供。",
   "_字段7_产品特性": "gripper_angle_required=true 表示需要输出 6D 位姿（XYZ+RX/RY/RZ）引导夹爪角度；product_variants=换型型号数量；bottom_flatness=底部状态描述（如'不平整，局部凹陷2mm'）；surface_condition=上表面材质/反光/颜色（如'黑色阳极氧化铝，哑光'），直接影响结构光点云质量。",
   "_字段8_FOV余量": "fov_margin 默认 1.2（20% 余量）。来料定位精度差、产品可能旋转、需要留抓取空间时取 1.25~1.3；来料精密定位可取 1.1，但不建议低于 1.05。part_may_rotate=true 时 FOV 按产品外接圆直径校核（300×300 → Ø424mm），而不是边长——方形件 45° 摆放时外接宽度是边长的 1.414 倍，按边长校核会漏判出视野。",
+  "_字段9_展示可选": "point_count=点云单帧点数（PPT 点云页标注用，如 1392966；无则省略）；technology_short=技术简称（如'蓝光结构光'；无则取 technology 括号前）。这两个字段只影响 PPT 展示，不参与选型计算。",
   "project_name": null,
   "application": "3d_robot_guidance",
   "part_size": null,
@@ -29,5 +30,7 @@
   "bottom_flatness": null,
   "surface_condition": null,
   "ip_rating": null,
-  "interface": null
+  "interface": null,
+  "point_count": null,
+  "technology_short": null
 }
